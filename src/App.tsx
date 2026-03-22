@@ -332,7 +332,11 @@ function InstallSection() {
   );
 }
 
+type LandingTab = 'features' | 'install';
+
 function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
+  const [activeTab, setActiveTab] = useState<LandingTab>('features');
+
   return (
     <main className="page">
       <header className="topbar">
@@ -358,12 +362,6 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
           </p>
           <div className="hero-actions">
             <button onClick={onOpenApp}>Start converting</button>
-            <a className="text-link" href="#features">
-              Explore features
-            </a>
-            <a className="text-link" href="#install">
-              Install as app
-            </a>
             <a className="text-link" href="#/privacy">
               Privacy policy
             </a>
@@ -391,62 +389,95 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
         </div>
       </section>
 
-      <section id="features" className="feature-grid">
-        <article className="feature-card">
-          <h2>Confidence through clarity</h2>
-          <p>
-            Users can see supported routes, current progress, selected formats, and whether the
-            app is using the native or ffmpeg pipeline.
-          </p>
-        </article>
-        <article className="feature-card">
-          <h2>Designed for GitHub Pages</h2>
-          <p>
-            Static deployment, React + TypeScript + Vite build, and a single-thread fallback path
-            that works without special server runtime infrastructure.
-          </p>
-        </article>
-        <article className="feature-card">
-          <h2>Better post-conversion workflow</h2>
-          <p>
-            Converted output is previewed inline so people can validate the result before they
-            download it.
-          </p>
-        </article>
-      </section>
-
-      <section className="workflow">
-        <h2>How the experience should feel</h2>
-        <div className="workflow-steps">
-          <div>
-            <span>1</span>
-            <h3>Choose a file</h3>
-            <p>We detect what it is and show the formats that make sense.</p>
-          </div>
-          <div>
-            <span>2</span>
-            <h3>See the route</h3>
-            <p>Users know before converting whether the browser can do it natively.</p>
-          </div>
-          <div>
-            <span>3</span>
-            <h3>Watch progress</h3>
-            <p>Clear status messaging and progress updates reduce uncertainty.</p>
-          </div>
-          <div>
-            <span>4</span>
-            <h3>Preview the result</h3>
-            <p>Image, audio, and video output is visualized directly in the app.</p>
-          </div>
+      <div className="landing-tabs">
+        <div className="tab-bar" role="tablist">
+          <button
+            id="tab-features"
+            role="tab"
+            aria-selected={activeTab === 'features'}
+            aria-controls="tabpanel-features"
+            className={`tab-btn${activeTab === 'features' ? ' tab-btn--active' : ''}`}
+            onClick={() => setActiveTab('features')}
+          >
+            Features
+          </button>
+          <button
+            id="tab-install"
+            role="tab"
+            aria-selected={activeTab === 'install'}
+            aria-controls="tabpanel-install"
+            className={`tab-btn${activeTab === 'install' ? ' tab-btn--active' : ''}`}
+            onClick={() => setActiveTab('install')}
+          >
+            Install
+          </button>
         </div>
-      </section>
 
-      <section className="cta-band">
-        <h2>Ready to try the full converter experience?</h2>
-        <button onClick={onOpenApp}>Go to the app workspace</button>
-      </section>
+        {activeTab === 'features' && (
+          <div id="tabpanel-features" role="tabpanel" aria-labelledby="tab-features">
+            <section className="feature-grid">
+              <article className="feature-card">
+                <h2>Confidence through clarity</h2>
+                <p>
+                  Users can see supported routes, current progress, selected formats, and whether
+                  the app is using the native or ffmpeg pipeline.
+                </p>
+              </article>
+              <article className="feature-card">
+                <h2>Designed for GitHub Pages</h2>
+                <p>
+                  Static deployment, React + TypeScript + Vite build, and a single-thread fallback
+                  path that works without special server runtime infrastructure.
+                </p>
+              </article>
+              <article className="feature-card">
+                <h2>Better post-conversion workflow</h2>
+                <p>
+                  Converted output is previewed inline so people can validate the result before
+                  they download it.
+                </p>
+              </article>
+            </section>
 
-      <InstallSection />
+            <section className="workflow">
+              <h2>How the experience should feel</h2>
+              <div className="workflow-steps">
+                <div>
+                  <span>1</span>
+                  <h3>Choose a file</h3>
+                  <p>We detect what it is and show the formats that make sense.</p>
+                </div>
+                <div>
+                  <span>2</span>
+                  <h3>See the route</h3>
+                  <p>Users know before converting whether the browser can do it natively.</p>
+                </div>
+                <div>
+                  <span>3</span>
+                  <h3>Watch progress</h3>
+                  <p>Clear status messaging and progress updates reduce uncertainty.</p>
+                </div>
+                <div>
+                  <span>4</span>
+                  <h3>Preview the result</h3>
+                  <p>Image, audio, and video output is visualized directly in the app.</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="cta-band">
+              <h2>Ready to try the full converter experience?</h2>
+              <button onClick={onOpenApp}>Go to the app workspace</button>
+            </section>
+          </div>
+        )}
+
+        {activeTab === 'install' && (
+          <div id="tabpanel-install" role="tabpanel" aria-labelledby="tab-install">
+            <InstallSection />
+          </div>
+        )}
+      </div>
 
       <Footer />
     </main>
