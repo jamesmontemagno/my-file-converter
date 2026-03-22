@@ -634,11 +634,8 @@ export default function App() {
       <section className="workspace-hero">
         <div>
           <span className="eyebrow">Converter workspace</span>
-          <h1>Convert locally with clear status and immediate preview.</h1>
-          <p className="hero-text compact">
-            Choose a file, select an output, and the app will tell you exactly how it plans to
-            convert it before you start.
-          </p>
+          <h1>Convert files locally.</h1>
+          <p className="hero-text compact">Choose a file, pick an output, and convert.</p>
         </div>
         <div className={`route-chip route-${routeDecision}`}>{routeLabel(routeDecision)}</div>
       </section>
