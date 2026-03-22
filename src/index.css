@@ -650,6 +650,54 @@ pre {
   border-color: rgba(248, 113, 113, 0.35);
 }
 
+.hamburger-menu {
+  position: relative;
+}
+
+.hamburger-button {
+  min-height: 36px;
+  padding: 0.4rem 0.7rem;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.hamburger-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+.hamburger-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 100;
+  min-width: 170px;
+  padding: 0.45rem;
+  display: grid;
+  gap: 0.2rem;
+  background: rgba(15, 23, 42, 0.97);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 32px rgba(2, 6, 23, 0.4);
+}
+
+.hamburger-dropdown a {
+  display: block;
+  padding: 0.55rem 0.85rem;
+  border-radius: 10px;
+  color: #cbd5e1;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.hamburger-dropdown a:hover {
+  background: rgba(148, 163, 184, 0.1);
+  text-decoration: none;
+  color: #e5eefc;
+}
+
 @keyframes pulse-dot {
   0%,
   100% {
@@ -774,7 +822,6 @@ pre {
     padding-inline: 0.85rem;
   }
 
-  .topbar,
   .hero-actions,
   .status-header,
   .meta-grid,

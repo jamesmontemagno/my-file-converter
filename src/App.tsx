@@ -24,7 +24,7 @@ import { convertWithWasmFallback } from './worker-client';
 
 const APP_NAME = 'LocalMorph';
 
-type Page = 'landing' | 'app' | 'privacy' | 'terms';
+type Page = 'landing' | 'app' | 'privacy' | 'terms' | 'docs';
 type StatusMode = 'idle' | 'ready' | 'working' | 'success' | 'error';
 type ActivityTone = 'info' | 'success' | 'error';
 type ActivityEntry = {
@@ -72,6 +72,7 @@ function getPageFromHash(): Page {
   if (window.location.hash === '#/app') return 'app';
   if (window.location.hash === '#/privacy') return 'privacy';
   if (window.location.hash === '#/terms') return 'terms';
+  if (window.location.hash === '#/docs') return 'docs';
   return 'landing';
 }
 
@@ -79,6 +80,7 @@ function titleForPage(page: Page) {
   if (page === 'app') return `${APP_NAME} | Browser File Converter`;
   if (page === 'privacy') return `${APP_NAME} | Privacy Policy`;
   if (page === 'terms') return `${APP_NAME} | Terms of Use`;
+  if (page === 'docs') return `${APP_NAME} | Documentation`;
   return `${APP_NAME} | Convert Files Locally in Your Browser`;
 }
 
@@ -89,6 +91,8 @@ function descriptionForPage(page: Page) {
     return 'LocalMorph privacy policy. Learn how we handle your data — spoiler: we never receive your files because all conversion happens locally in your browser.';
   if (page === 'terms')
     return 'LocalMorph terms of use. Review the conditions under which you may use this browser-based file converter.';
+  if (page === 'docs')
+    return 'LocalMorph documentation. Learn about supported file formats, how browser-native conversion works, and when ffmpeg.wasm is used as a fallback.';
   return 'LocalMorph converts images, audio, and video files directly in your browser — no uploads, no servers, no privacy risks. Free, fast, and 100% client-side.';
 }
 
@@ -97,6 +101,7 @@ function canonicalForPage(page: Page) {
   if (page === 'app') return `${base}#/app`;
   if (page === 'privacy') return `${base}#/privacy`;
   if (page === 'terms') return `${base}#/terms`;
+  if (page === 'docs') return `${base}#/docs`;
   return base;
 }
 
@@ -178,12 +183,45 @@ function statusCopyFor(mode: StatusMode) {
   };
 }
 
+function HamburgerMenu() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="hamburger-menu">
+      <button
+        className="hamburger-button ghost-button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label="Menu"
+      >
+        ☰
+      </button>
+      {open && (
+        <>
+          <div className="hamburger-overlay" onClick={() => setOpen(false)} />
+          <nav className="hamburger-dropdown">
+            <a href="#/docs" onClick={() => setOpen(false)}>
+              Documentation
+            </a>
+            <a href="#/privacy" onClick={() => setOpen(false)}>
+              Privacy
+            </a>
+            <a href="#/terms" onClick={() => setOpen(false)}>
+              Terms
+            </a>
+          </nav>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Footer() {
   return (
     <footer className="site-footer">
       <div className="footer-links">
         <a href="#">Home</a>
         <a href="#/app">Converter</a>
+        <a href="#/docs">Documentation</a>
         <a href="#/privacy">Privacy Policy</a>
         <a href="#/terms">Terms of Use</a>
       </div>
@@ -301,9 +339,12 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
         <a className="brand brand-link" href="#">
           {APP_NAME}
         </a>
-        <button className="ghost-button" onClick={onOpenApp}>
-          Open app
-        </button>
+        <nav className="nav-actions">
+          <button className="ghost-button" onClick={onOpenApp}>
+            Open app
+          </button>
+          <HamburgerMenu />
+        </nav>
       </header>
 
       <section className="hero">
@@ -415,10 +456,12 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
 function LegalLayout({
   title,
   summary,
+  eyebrow = 'Legal',
   children,
 }: {
   title: string;
   summary: string;
+  eyebrow?: string;
   children: ReactNode;
 }) {
   return (
@@ -428,18 +471,16 @@ function LegalLayout({
           {APP_NAME}
         </a>
         <nav className="nav-actions">
-          <a className="text-link" href="#">
-            Home
-          </a>
           <a className="text-link" href="#/app">
             Open app
           </a>
+          <HamburgerMenu />
         </nav>
       </header>
 
       <section className="legal-shell">
         <article className="card legal-card">
-          <span className="eyebrow">Legal</span>
+          <span className="eyebrow">{eyebrow}</span>
           <h1>{title}</h1>
           <p className="legal-summary">{summary}</p>
           {children}
@@ -597,6 +638,171 @@ function TermsPage() {
   );
 }
 
+function DocsPage() {
+  return (
+    <LegalLayout
+      eyebrow="Docs"
+      title="Documentation"
+      summary={`${APP_NAME} converts images, audio, and video files entirely in your browser. This page explains what formats are supported, how the conversion technology works, and what happens when a native browser route is not available.`}
+    >
+      <section>
+        <h2>1. Supported formats</h2>
+        <p>
+          {APP_NAME} supports the following file types. Exact output availability depends on your
+          browser and the codecs it has installed.
+        </p>
+        <h3>Images</h3>
+        <ul>
+          <li>
+            <strong>PNG (.png)</strong> — lossless raster format; exported via the Canvas{' '}
+            <code>toBlob</code> API in all modern browsers.
+          </li>
+          <li>
+            <strong>JPEG (.jpg)</strong> — lossy raster format with adjustable quality; supported
+            via Canvas in all modern browsers.
+          </li>
+          <li>
+            <strong>WebP (.webp)</strong> — modern format with both lossy and lossless modes;
+            supported in Chrome, Edge, Firefox, and recent Safari via Canvas.
+          </li>
+          <li>
+            <strong>AVIF (.avif)</strong> — next-generation format with excellent compression;
+            Canvas support varies by browser version.
+          </li>
+        </ul>
+        <h3>Audio</h3>
+        <ul>
+          <li>
+            <strong>WebM Opus (.webm)</strong> — open container with the Opus codec; supported
+            natively in most browsers via the MediaRecorder API.
+          </li>
+          <li>
+            <strong>Ogg Opus (.ogg)</strong> — alternative container for Opus audio; MediaRecorder
+            support varies by browser.
+          </li>
+          <li>
+            <strong>MP4 Audio (.m4a)</strong> — AAC audio in an MP4 container; typically requires
+            the ffmpeg.wasm fallback.
+          </li>
+        </ul>
+        <h3>Video</h3>
+        <ul>
+          <li>
+            <strong>WebM VP8+Opus (.webm)</strong> — open video format; MediaRecorder support is
+            broad across Chrome and Firefox.
+          </li>
+          <li>
+            <strong>WebM VP9+Opus (.webm)</strong> — higher-efficiency WebM variant; support varies
+            by browser.
+          </li>
+          <li>
+            <strong>MP4 H.264+AAC (.mp4)</strong> — widely compatible format; uses the ffmpeg.wasm
+            fallback path.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>2. How conversion works</h2>
+        <p>
+          {APP_NAME} uses two conversion paths: a native browser route and an optional ffmpeg.wasm
+          fallback. The app chooses the best path automatically based on your browser&apos;s
+          capabilities and the selected format combination.
+        </p>
+        <h3>Native browser route</h3>
+        <p>
+          For images, the app draws your file onto an HTML canvas element and exports it in the
+          target format using the browser&apos;s built-in <code>toBlob</code> API. This is fast,
+          requires no additional downloads, and keeps all data on your device.
+        </p>
+        <p>
+          For audio and video, the app decodes your source file using an HTML media element and
+          pipes the stream into the MediaRecorder API, which re-encodes it in the selected format.
+          This path works well for WebM output in Chrome and Firefox.
+        </p>
+        <h3>ffmpeg.wasm fallback</h3>
+        <p>
+          When the native route cannot handle a format combination — for example, producing MP4
+          output or applying trim settings — the app loads ffmpeg compiled to WebAssembly and runs
+          the conversion in a Web Worker. This keeps the main thread responsive and avoids uploading
+          your file to a server.
+        </p>
+        <p>
+          The ffmpeg.wasm module is loaded on demand. By default the bundled module URL is used, but
+          you can override it in the advanced settings if you prefer to host your own copy.
+        </p>
+      </section>
+
+      <section>
+        <h2>3. Conversion route selection</h2>
+        <p>
+          The converter shows a route indicator before and during conversion so you always know
+          which path is active:
+        </p>
+        <ul>
+          <li>
+            <strong>Native browser path</strong> — the selected format is supported directly by
+            your browser with no additional modules required.
+          </li>
+          <li>
+            <strong>ffmpeg.wasm fallback</strong> — the format requires the WebAssembly module,
+            which will be loaded automatically if the fallback is enabled.
+          </li>
+          <li>
+            <strong>Unsupported until fallback is enabled</strong> — the current format needs
+            ffmpeg but the fallback is turned off in the advanced settings panel.
+          </li>
+        </ul>
+        <p>
+          Trim settings always force the ffmpeg route because the native MediaRecorder API does not
+          support seeking before encoding.
+        </p>
+      </section>
+
+      <section>
+        <h2>4. Browser requirements</h2>
+        <p>
+          {APP_NAME} requires a modern browser released in the last two to three years. The
+          following capabilities are used:
+        </p>
+        <ul>
+          <li>
+            <strong>Canvas API</strong> — required for all image conversions.
+          </li>
+          <li>
+            <strong>MediaRecorder API</strong> — required for the native audio and video route.
+          </li>
+          <li>
+            <strong>Web Workers</strong> — required for the ffmpeg.wasm fallback to run off the
+            main thread.
+          </li>
+          <li>
+            <strong>Blob and URL APIs</strong> — used for generating download links and previewing
+            output in the browser.
+          </li>
+        </ul>
+        <p>
+          Chrome, Edge, and Firefox provide the broadest format coverage. Safari supports images and
+          some audio formats natively but has more limited MediaRecorder codec support.
+        </p>
+      </section>
+
+      <section>
+        <h2>5. Privacy and data flow</h2>
+        <p>
+          Files are processed in memory inside your browser tab. They are not sent to any server as
+          part of the conversion workflow. The only exception is if you configure a custom
+          ffmpeg.wasm module URL that points to a third-party host — in that case your browser will
+          request the module code from that host, though your files remain local.
+        </p>
+        <p>
+          See the <a href="#/privacy">Privacy Policy</a> for the full data handling disclosure.
+        </p>
+      </section>
+    </LegalLayout>
+  );
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>(getPageFromHash());
   const [file, setFile] = useState<File | null>(null);
@@ -741,6 +947,8 @@ export default function App() {
       window.location.hash = '/privacy';
     } else if (next === 'terms') {
       window.location.hash = '/terms';
+    } else if (next === 'docs') {
+      window.location.hash = '/docs';
     } else {
       window.location.hash = '';
     }
@@ -890,6 +1098,10 @@ export default function App() {
     );
   }
 
+  if (page === 'docs') {
+    return <DocsPage />;
+  }
+
   return (
     <>
       <UpdateNotification />
@@ -898,17 +1110,7 @@ export default function App() {
         <a className="brand brand-link" href="#">
           {APP_NAME}
         </a>
-        <nav className="nav-actions">
-          <button className="ghost-button" onClick={() => navigate('landing')}>
-            Back to landing
-          </button>
-          <a className="text-link" href="#/privacy">
-            Privacy
-          </a>
-          <a className="text-link" href="#/terms">
-            Terms
-          </a>
-        </nav>
+        <HamburgerMenu />
       </header>
 
       <section className="workspace-hero">
