@@ -1,57 +1,52 @@
 # My File Converter
 
-A static, client-side file converter website for image, audio, and video formats.
+A React + TypeScript + Vite client-side file converter for GitHub Pages.
 
-## What this starter includes
+## Stack
 
-- Native-first conversion routing:
-  - Image: `canvas.toBlob()`
-  - Audio/Video: `MediaRecorder` with `captureStream` when supported
-- Runtime capability detection panel (MediaRecorder, WebCodecs presence, image MIME checks)
-- Worker-based WASM fallback scaffold for `ffmpeg.wasm` integration
+- React 19
+- TypeScript
+- Vite
+- Native browser conversion paths first
+- `ffmpeg.wasm` single-thread fallback for unsupported conversions
+
+## Features
+
+- Dedicated landing page that explains privacy, performance, and the conversion flow
+- Separate converter workspace focused on upload, route clarity, status, and preview
+- Image conversion via Canvas export
+- Audio/video conversion via `MediaRecorder` when supported by the browser
+- Real `ffmpeg.wasm` fallback module (`src/ffmpeg-module.ts`)
+- Worker-based background processing
 - GitHub Pages deployment workflow
-
-## Important limitations
-
-- This project ships a **WASM integration scaffold**, not a bundled ffmpeg core.
-- GitHub Pages cannot set custom COOP/COEP headers easily for this site, so this starter is designed for **single-thread fallback**.
-- Native audio/video conversion support varies by browser MIME support and `captureStream` behavior.
 
 ## Local development
 
-Because this is a static starter, you can run any static server:
+```bash
+npm install
+npm run dev
+```
+
+## Production build
 
 ```bash
-python3 -m http.server 4173
+npm run build
 ```
 
-Then open `http://localhost:4173`.
+## Deployment
 
-## Deploy to GitHub Pages
+Push to `main` and GitHub Actions will build and publish `dist/` to GitHub Pages.
 
-1. Push this repository to GitHub.
-2. In repo settings, enable **Pages** with **GitHub Actions** as source.
-3. The included workflow publishes on pushes to `main`.
+## Manual smoke checklist
 
-## Manual browser smoke checklist
+1. Run `npm run dev` and verify the app loads.
+2. Convert PNG/JPEG/WebP image through the native route.
+3. Convert a small audio/video file where `MediaRecorder` support is reported.
+4. Force an unsupported conversion and verify the ffmpeg fallback path runs.
+5. Run the deployed site in Chromium, Firefox, and Safari.
 
-Run these checks after deployment in Chromium, Firefox, and Safari:
+## Known constraints
 
-1. Open site and verify runtime support panel renders without errors.
-2. Convert PNG/JPEG/WebP image with native route.
-3. Convert small audio/video file where MediaRecorder target MIME is reported supported.
-4. Attempt an unsupported target; verify fallback warning appears.
-5. Enable WASM fallback and provide module URL; verify worker route runs.
-
-## WASM fallback integration contract
-
-If you provide a module URL in the app, the worker expects:
-
-```js
-export async function convert({ file, targetMime, onProgress }) {
-  // ...your ffmpeg logic...
-  return { blob, outputName };
-}
-```
-
-The worker file is `src/conversion-worker.js`.
+- MediaRecorder-based audio/video conversion remains browser-dependent.
+- `ffmpeg.wasm` has a large first-load cost and is slower than native ffmpeg.
+- GitHub Pages hosting means this app uses the single-thread ffmpeg core.
