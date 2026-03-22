@@ -64,6 +64,10 @@ a:hover {
   letter-spacing: 0.02em;
 }
 
+.brand-link {
+  color: inherit;
+}
+
 .nav-actions {
   display: flex;
   gap: 0.75rem;
@@ -411,6 +415,55 @@ progress {
   margin-top: 0.8rem;
 }
 
+.legal-shell {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.legal-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1.35rem;
+}
+
+.legal-card section {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.legal-card ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #c9d7ee;
+}
+
+.legal-summary {
+  color: #c9d7ee;
+  font-size: 1.02rem;
+  line-height: 1.7;
+}
+
+.site-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.footer-links {
+  display: flex;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.footer-note {
+  max-width: 42rem;
+  margin-bottom: 0;
+}
+
 pre {
   overflow: auto;
   white-space: pre-wrap;
@@ -461,5 +514,9 @@ pre {
 
   .meta-grid {
     grid-template-columns: 1fr;
+  }
+
+  .site-footer {
+    flex-direction: column;
   }
 }

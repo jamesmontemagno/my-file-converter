@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   classifyMediaType,
   detectCapabilities,
@@ -14,7 +14,9 @@ import {
 } from './conversion';
 import { convertWithWasmFallback } from './worker-client';
 
-type Page = 'landing' | 'app';
+const APP_NAME = 'LocalMorph';
+
+type Page = 'landing' | 'app' | 'privacy' | 'terms';
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -24,7 +26,17 @@ function formatBytes(bytes: number) {
 }
 
 function getPageFromHash(): Page {
-  return window.location.hash === '#/app' ? 'app' : 'landing';
+  if (window.location.hash === '#/app') return 'app';
+  if (window.location.hash === '#/privacy') return 'privacy';
+  if (window.location.hash === '#/terms') return 'terms';
+  return 'landing';
+}
+
+function titleForPage(page: Page) {
+  if (page === 'app') return `${APP_NAME} | Browser File Converter`;
+  if (page === 'privacy') return `${APP_NAME} | Privacy Policy`;
+  if (page === 'terms') return `${APP_NAME} | Terms of Use`;
+  return `${APP_NAME} | Convert files locally in your browser`;
 }
 
 function routeLabel(route: 'native' | 'wasm' | 'blocked') {
@@ -49,11 +61,30 @@ function previewForResult(downloadUrl: string, result: ConversionResult) {
   return <p className="muted">Preview is not available for this output type.</p>;
 }
 
+function Footer() {
+  return (
+    <footer className="site-footer">
+      <div className="footer-links">
+        <a href="#">Home</a>
+        <a href="#/app">Converter</a>
+        <a href="#/privacy">Privacy Policy</a>
+        <a href="#/terms">Terms of Use</a>
+      </div>
+      <p className="muted footer-note">
+        {APP_NAME} is designed for browser-based local conversion. Review the legal pages before
+        using it in production or for sensitive workflows.
+      </p>
+    </footer>
+  );
+}
+
 function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
   return (
     <main className="page">
       <header className="topbar">
-        <div className="brand">My File Converter</div>
+        <a className="brand brand-link" href="#">
+          {APP_NAME}
+        </a>
         <button className="ghost-button" onClick={onOpenApp}>
           Open app
         </button>
@@ -62,16 +93,19 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
       <section className="hero">
         <div className="hero-copy">
           <span className="eyebrow">Private. Fast. Browser-native.</span>
-          <h1>Convert video, audio, and images without uploading your files.</h1>
+          <h1>Convert video, audio, and images locally without uploading your files.</h1>
           <p className="hero-text">
-            A modern converter that uses native browser APIs first and falls back to
-            `ffmpeg.wasm` only when needed. The UX is designed so users always know what is
-            happening, which route is being used, and what they can do next.
+            {APP_NAME} uses native browser APIs first and falls back to `ffmpeg.wasm` only when
+            needed. The experience is designed so people always know what route is being used, what
+            the browser supports, and what happens to their files.
           </p>
           <div className="hero-actions">
             <button onClick={onOpenApp}>Start converting</button>
             <a className="text-link" href="#features">
               Explore features
+            </a>
+            <a className="text-link" href="#/privacy">
+              Privacy policy
             </a>
           </div>
           <div className="hero-badges">
@@ -151,7 +185,194 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
         <h2>Ready to try the full converter experience?</h2>
         <button onClick={onOpenApp}>Go to the app workspace</button>
       </section>
+
+      <Footer />
     </main>
+  );
+}
+
+function LegalLayout({
+  title,
+  summary,
+  children,
+}: {
+  title: string;
+  summary: string;
+  children: ReactNode;
+}) {
+  return (
+    <main className="page">
+      <header className="topbar">
+        <a className="brand brand-link" href="#">
+          {APP_NAME}
+        </a>
+        <nav className="nav-actions">
+          <a className="text-link" href="#">
+            Home
+          </a>
+          <a className="text-link" href="#/app">
+            Open app
+          </a>
+        </nav>
+      </header>
+
+      <section className="legal-shell">
+        <article className="card legal-card">
+          <span className="eyebrow">Legal</span>
+          <h1>{title}</h1>
+          <p className="legal-summary">{summary}</p>
+          {children}
+        </article>
+      </section>
+
+      <Footer />
+    </main>
+  );
+}
+
+function PrivacyPage() {
+  return (
+    <LegalLayout
+      title="Privacy Policy"
+      summary={`${APP_NAME} is built for local, in-browser conversion. This policy explains what data stays on your device, what limited technical data may still be processed by hosting providers, and what to keep in mind when enabling optional external modules.`}
+    >
+      <section>
+        <h2>1. Local file processing</h2>
+        <p>
+          Files selected in {APP_NAME} are intended to be processed in your browser on your device.
+          The app does not require you to upload files to a managed application server to convert
+          them.
+        </p>
+      </section>
+
+      <section>
+        <h2>2. Information the app uses while running</h2>
+        <p>
+          While you use the converter, the app may read file metadata that is available in the
+          browser, such as the file name, size, and MIME type, so it can show route selection,
+          progress, and output details.
+        </p>
+        <p>
+          That information is used only within the running browser session unless your browser or an
+          extension stores it separately.
+        </p>
+      </section>
+
+      <section>
+        <h2>3. Hosting and technical logs</h2>
+        <p>
+          If this site is hosted on a platform such as GitHub Pages, the hosting provider may
+          collect standard technical logs like IP address, user agent, request time, and referrer as
+          part of delivering the site. Those logs are outside the in-browser conversion flow and are
+          governed by the hosting provider&apos;s own policies.
+        </p>
+      </section>
+
+      <section>
+        <h2>4. Optional external modules</h2>
+        <p>
+          {APP_NAME} lets you override the fallback module URL. If you choose to load a module from
+          another host, your browser will request code from that third party.
+        </p>
+        <ul>
+          <li>Your files are still intended to remain local in the browser workflow.</li>
+          <li>You should only use module URLs from parties you trust.</li>
+          <li>
+            Third-party code may have its own privacy, security, and licensing implications, which
+            you are responsible for reviewing.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>5. Cookies and storage</h2>
+        <p>
+          {APP_NAME} does not require an account and does not intentionally rely on advertising
+          cookies. The current app experience primarily uses in-memory session state while the page
+          is open.
+        </p>
+      </section>
+
+      <section>
+        <h2>6. Your choices</h2>
+        <p>
+          You can stop using the app at any time by closing the page. You should avoid using the app
+          with sensitive files unless you have reviewed the hosting setup, browser environment, and
+          any optional third-party modules you enable.
+        </p>
+      </section>
+    </LegalLayout>
+  );
+}
+
+function TermsPage() {
+  return (
+    <LegalLayout
+      title="Terms of Use"
+      summary={`These terms govern access to ${APP_NAME}. They are meant to set expectations for acceptable use, output limitations, and liability for a browser-based file conversion tool.`}
+    >
+      <section>
+        <h2>1. Use of the service</h2>
+        <p>
+          {APP_NAME} is provided as a browser-based file conversion tool. You may use it only in
+          compliance with applicable law and only for content you have the right to process.
+        </p>
+      </section>
+
+      <section>
+        <h2>2. Your content and permissions</h2>
+        <p>
+          You are responsible for the files you choose to convert and for confirming that you have
+          the rights, licenses, consents, and permissions needed to use and transform them.
+        </p>
+      </section>
+
+      <section>
+        <h2>3. Acceptable use</h2>
+        <ul>
+          <li>Do not use the app for unlawful, infringing, or abusive activity.</li>
+          <li>Do not attempt to interfere with the site, hosting platform, or other users.</li>
+          <li>
+            Do not rely on the app for regulated, safety-critical, or guaranteed archival workflows.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>4. Browser and output limitations</h2>
+        <p>
+          Conversion behavior depends on browser capabilities, codecs, file formats, memory limits,
+          and optional fallback modules. Some conversions may fail, be lossy, or produce different
+          results across browsers and devices.
+        </p>
+      </section>
+
+      <section>
+        <h2>5. No warranty</h2>
+        <p>
+          {APP_NAME} is provided on an &quot;as is&quot; and &quot;as available&quot; basis without warranties of any
+          kind, whether express or implied, including warranties of merchantability, fitness for a
+          particular purpose, non-infringement, availability, or accuracy of output.
+        </p>
+      </section>
+
+      <section>
+        <h2>6. Limitation of liability</h2>
+        <p>
+          To the maximum extent permitted by law, the app owner and contributors are not liable for
+          any indirect, incidental, special, consequential, or punitive damages, or for any loss of
+          data, profits, goodwill, or business interruption arising from your use of the app.
+        </p>
+      </section>
+
+      <section>
+        <h2>7. Changes</h2>
+        <p>
+          These terms may be updated as the product evolves. Continued use of the app after changes
+          are published means you accept the revised terms.
+        </p>
+      </section>
+    </LegalLayout>
   );
 }
 
@@ -177,6 +398,10 @@ export default function App() {
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
+
+  useEffect(() => {
+    document.title = titleForPage(page);
+  }, [page]);
 
   useEffect(() => {
     setCapabilities(detectCapabilities());
@@ -215,7 +440,16 @@ export default function App() {
   ];
 
   function navigate(next: Page) {
-    window.location.hash = next === 'app' ? '/app' : '';
+    if (next === 'app') {
+      window.location.hash = '/app';
+    } else if (next === 'privacy') {
+      window.location.hash = '/privacy';
+    } else if (next === 'terms') {
+      window.location.hash = '/terms';
+    } else {
+      window.location.hash = '';
+    }
+
     setPage(next);
   }
 
@@ -266,14 +500,30 @@ export default function App() {
     return <LandingPage onOpenApp={() => navigate('app')} />;
   }
 
+  if (page === 'privacy') {
+    return <PrivacyPage />;
+  }
+
+  if (page === 'terms') {
+    return <TermsPage />;
+  }
+
   return (
     <main className="page">
       <header className="topbar">
-        <div className="brand">My File Converter</div>
+        <a className="brand brand-link" href="#">
+          {APP_NAME}
+        </a>
         <nav className="nav-actions">
           <button className="ghost-button" onClick={() => navigate('landing')}>
             Back to landing
           </button>
+          <a className="text-link" href="#/privacy">
+            Privacy
+          </a>
+          <a className="text-link" href="#/terms">
+            Terms
+          </a>
         </nav>
       </header>
 
@@ -450,6 +700,8 @@ export default function App() {
           </div>
         </section>
       </section>
+
+      <Footer />
     </main>
   );
 }
