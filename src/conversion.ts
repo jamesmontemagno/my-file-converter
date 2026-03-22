@@ -122,17 +122,31 @@ export async function convertViaMediaRecorder(args: {
 
   recorder.start(500);
   onProgress?.(0.3, 'Recording converted stream');
+  const progressInterval = window.setInterval(() => {
+    const duration = Number.isFinite(element.duration) ? element.duration : 0;
+    if (duration > 0) {
+      const completion = Math.min(1, element.currentTime / duration);
+      onProgress?.(0.3 + completion * 0.65, 'Recording converted stream');
+    }
+  }, 250);
 
-  await new Promise<void>((resolve, reject) => {
-    element.onended = () => resolve();
-    element.onerror = () => reject(new Error('Playback failed for source media.'));
-    element.play().catch(reject);
-  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      element.onended = () => resolve();
+      element.onerror = () => reject(new Error('Playback failed for source media.'));
+      element.play().catch(reject);
+    });
 
-  recorder.stop();
-  await finished;
-  stream.getTracks().forEach((track) => track.stop());
-  URL.revokeObjectURL(element.src);
+    recorder.stop();
+    await finished;
+  } finally {
+    if (recorder.state !== 'inactive') {
+      recorder.stop();
+    }
+    window.clearInterval(progressInterval);
+    stream.getTracks().forEach((track) => track.stop());
+    URL.revokeObjectURL(element.src);
+  }
 
   return {
     blob: new Blob(chunks, { type: targetMime }),

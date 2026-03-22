@@ -17,12 +17,33 @@ import { convertWithWasmFallback } from './worker-client';
 const APP_NAME = 'LocalMorph';
 
 type Page = 'landing' | 'app' | 'privacy' | 'terms';
+type StatusMode = 'idle' | 'ready' | 'working' | 'success' | 'error';
+type ActivityTone = 'info' | 'success' | 'error';
+type ActivityEntry = {
+  id: number;
+  message: string;
+  progress: number;
+  tone: ActivityTone;
+  timestamp: string;
+};
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function formatEventTime(date: Date) {
+  return date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function clampProgress(value: number) {
+  return Math.max(0, Math.min(1, value));
 }
 
 function getPageFromHash(): Page {
@@ -59,6 +80,41 @@ function previewForResult(downloadUrl: string, result: ConversionResult) {
   }
 
   return <p className="muted">Preview is not available for this output type.</p>;
+}
+
+function statusCopyFor(mode: StatusMode) {
+  if (mode === 'working') {
+    return {
+      label: 'Converting now',
+      detail: 'Live updates are streaming while the browser works.',
+    };
+  }
+
+  if (mode === 'success') {
+    return {
+      label: 'Preview ready',
+      detail: 'Conversion finished and the download is ready below.',
+    };
+  }
+
+  if (mode === 'error') {
+    return {
+      label: 'Needs attention',
+      detail: 'The latest conversion hit an error. Check the live log for details.',
+    };
+  }
+
+  if (mode === 'ready') {
+    return {
+      label: 'Ready to convert',
+      detail: 'Configuration is loaded and waiting for you to start.',
+    };
+  }
+
+  return {
+    label: 'Waiting for input',
+    detail: 'Load a file and the converter will start reporting activity here.',
+  };
 }
 
 function Footer() {
@@ -382,12 +438,15 @@ export default function App() {
   const [quality, setQuality] = useState(0.9);
   const [status, setStatus] = useState('Select a file to begin.');
   const [progress, setProgress] = useState(0);
+  const [statusMode, setStatusMode] = useState<StatusMode>('idle');
   const [enableWasmFallback, setEnableWasmFallback] = useState(true);
   const [customModuleUrl, setCustomModuleUrl] = useState('');
   const [result, setResult] = useState<ConversionResult | null>(null);
   const [downloadUrl, setDownloadUrl] = useState('');
   const [capabilities, setCapabilities] = useState<CapabilityReport | null>(null);
   const [busy, setBusy] = useState(false);
+  const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
+  const [logOpen, setLogOpen] = useState(true);
 
   const mediaType: MediaKind = classifyMediaType(file);
   const targetOptions = useMemo(() => targetFormatsFor(mediaType), [mediaType]);
@@ -438,6 +497,8 @@ export default function App() {
     { label: 'Convert', state: busy ? 'current' : result ? 'done' : 'pending' },
     { label: 'Preview & download', state: result ? 'done' : 'pending' },
   ];
+  const statusIndicator = useMemo(() => statusCopyFor(statusMode), [statusMode]);
+  const activityEntries = useMemo(() => [...activityLog].reverse(), [activityLog]);
 
   function navigate(next: Page) {
     if (next === 'app') {
@@ -453,16 +514,56 @@ export default function App() {
     setPage(next);
   }
 
-  function handleProgress(nextProgress: number, message: string) {
-    setProgress(Math.max(0, Math.min(1, nextProgress)));
+  function handleProgress(nextProgress: number, message: string, tone: ActivityTone = 'info') {
+    const normalizedProgress = clampProgress(nextProgress);
     setStatus(message);
+    setProgress(normalizedProgress);
+    setActivityLog((previous) => {
+      const lastEntry = previous[previous.length - 1];
+      const timestamp = formatEventTime(new Date());
+
+      if (tone === 'info' && lastEntry && lastEntry.message === message && lastEntry.tone === tone) {
+        return [
+          ...previous.slice(0, -1),
+          {
+            ...lastEntry,
+            progress: normalizedProgress,
+            timestamp,
+          },
+        ];
+      }
+
+      const nextEntry: ActivityEntry = {
+        id: (lastEntry?.id ?? 0) + 1,
+        message,
+        progress: normalizedProgress,
+        tone,
+        timestamp,
+      };
+      return [...previous.slice(-24), nextEntry];
+    });
   }
 
   async function runConversion() {
     if (!file || !targetMime) return;
 
     setBusy(true);
+    setStatusMode('working');
+    setLogOpen(true);
     setResult(null);
+    setActivityLog((previous) => {
+      const lastEntry = previous[previous.length - 1];
+      return [
+        ...previous.slice(-24),
+        {
+          id: (lastEntry?.id ?? 0) + 1,
+          message: `Starting ${routeLabel(routeDecision).toLowerCase()} conversion`,
+          progress: 0,
+          tone: 'info',
+          timestamp: formatEventTime(new Date()),
+        },
+      ];
+    });
     handleProgress(0.05, 'Preparing conversion job');
 
     try {
@@ -485,11 +586,14 @@ export default function App() {
       }
 
       setResult(next);
-      handleProgress(1, 'Conversion complete — preview ready below');
+      setStatusMode('success');
+      handleProgress(1, 'Conversion complete — preview ready below', 'success');
     } catch (error) {
+      setStatusMode('error');
       handleProgress(
         0,
         `Conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'error',
       );
     } finally {
       setBusy(false);
@@ -552,8 +656,29 @@ export default function App() {
                   const nextFile = event.target.files?.[0] ?? null;
                   setResult(null);
                   setFile(nextFile);
-                  setStatus(nextFile ? 'File loaded. Configure your output format.' : 'Select a file to begin.');
                   setProgress(0);
+                  setStatus(nextFile ? 'File loaded. Configure your output format.' : 'Select a file to begin.');
+                  setStatusMode(nextFile ? 'ready' : 'idle');
+                  setActivityLog(
+                    nextFile
+                      ? [
+                          {
+                            id: 1,
+                            message: `Loaded ${nextFile.name} (${formatBytes(nextFile.size)})`,
+                            progress: 0,
+                            tone: 'info',
+                            timestamp: formatEventTime(new Date()),
+                          },
+                          {
+                            id: 2,
+                            message: 'Configure your output format and start conversion when ready.',
+                            progress: 0,
+                            tone: 'info',
+                            timestamp: formatEventTime(new Date()),
+                          },
+                        ]
+                      : [],
+                  );
                 }}
               />
             </label>
@@ -577,7 +702,16 @@ export default function App() {
               <span>Target format</span>
               <select
                 value={targetMime}
-                onChange={(event) => setTargetMime(event.target.value)}
+                onChange={(event) => {
+                  const nextTargetMime = event.target.value;
+                  setTargetMime(nextTargetMime);
+                  if (file) {
+                    setResult(null);
+                    const nextTarget = targetOptions.find((option) => option.value === nextTargetMime);
+                    setStatusMode('ready');
+                    handleProgress(0, `Target format set to ${nextTarget?.label ?? nextTargetMime}`);
+                  }
+                }}
                 disabled={!targetOptions.length || busy}
               >
                 {targetOptions.map((option) => (
@@ -647,13 +781,63 @@ export default function App() {
 
         <section className="panel stack">
           <div className="card">
-            <h2>2. Conversion status</h2>
-            <p>{status}</p>
+            <div className="status-header">
+              <div>
+                <h2>2. Conversion status</h2>
+                <p>{status}</p>
+              </div>
+              <div className={`status-indicator status-${statusMode}`} aria-live="polite">
+                <span className="status-dot" />
+                <div>
+                  <strong>{statusIndicator.label}</strong>
+                  <small>{statusIndicator.detail}</small>
+                </div>
+              </div>
+            </div>
             <progress value={progress} max={1} />
             <div className="progress-caption">
               <span>{Math.round(progress * 100)}%</span>
-              <span>{busy ? 'Working in background-safe browser context' : 'Idle'}</span>
+              <span>{busy ? 'Streaming live updates below' : statusIndicator.detail}</span>
             </div>
+            <button
+              type="button"
+              className="log-toggle"
+              onClick={() => setLogOpen((open) => !open)}
+              aria-expanded={logOpen}
+            >
+              {logOpen ? 'Hide live activity' : 'Show live activity'}
+            </button>
+            {logOpen ? (
+              <div className="activity-log" role="log" aria-live="polite" aria-relevant="additions text">
+                {activityEntries.length ? (
+                  activityEntries.map((entry) => (
+                    <article key={entry.id} className={`activity-entry activity-${entry.tone}`}>
+                      <div className="activity-entry-header">
+                        <strong>{entry.message}</strong>
+                        <span>{entry.timestamp}</span>
+                      </div>
+                      <div className="activity-entry-meta">
+                        <span>{Math.round(entry.progress * 100)}%</span>
+                        <span>
+                          {entry.tone === 'error'
+                            ? 'Needs attention'
+                            : entry.tone === 'success'
+                              ? 'Completed'
+                              : entry.progress === 0
+                                ? 'Ready'
+                                : 'Updated'}
+                        </span>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <div className="activity-empty">
+                    We&apos;ll stream conversion updates here as soon as a file is loaded and a job
+                    begins.
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
 
           <div className="card">

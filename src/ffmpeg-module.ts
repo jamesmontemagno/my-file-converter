@@ -4,6 +4,7 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 const ffmpeg = new FFmpeg();
 let loaded = false;
 let progressHandlerAttached = false;
+let activeProgressHandler: ((progress: number, message: string) => void) | undefined;
 
 function extForMime(mime: string) {
   if (mime.includes('video/mp4')) return 'mp4';
@@ -19,6 +20,7 @@ function extForMime(mime: string) {
 }
 
 async function ensureLoaded(onProgress?: (progress: number, message: string) => void) {
+  activeProgressHandler = onProgress;
   if (loaded) return;
   onProgress?.(0.1, 'Downloading ffmpeg core');
   const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
@@ -28,7 +30,7 @@ async function ensureLoaded(onProgress?: (progress: number, message: string) => 
   });
   if (!progressHandlerAttached) {
     ffmpeg.on('progress', ({ progress }) => {
-      onProgress?.(Math.min(0.95, 0.15 + progress * 0.75), 'Transcoding with ffmpeg');
+      activeProgressHandler?.(Math.min(0.95, 0.15 + progress * 0.75), 'Transcoding with ffmpeg');
     });
     progressHandlerAttached = true;
   }
@@ -41,6 +43,7 @@ export async function convert(args: {
   onProgress?: (progress: number, message: string) => void;
 }) {
   const { file, targetMime, onProgress } = args;
+  activeProgressHandler = onProgress;
   await ensureLoaded(onProgress);
 
   const inputExt = file.name.split('.').pop() || 'input';
