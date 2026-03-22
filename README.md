@@ -2,6 +2,8 @@
 
 A React + TypeScript + Vite client-side file converter for GitHub Pages.
 
+![alt text](image.png)
+
 ## Stack
 
 - React 19
