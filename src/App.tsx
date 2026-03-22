@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 import {
   classifyMediaType,
   detectCapabilities,
@@ -155,6 +156,105 @@ function Footer() {
   );
 }
 
+function UpdateNotification() {
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    offlineReady: [offlineReady, setOfflineReady],
+    updateServiceWorker,
+  } = useRegisterSW();
+
+  function close() {
+    setOfflineReady(false);
+    setNeedRefresh(false);
+  }
+
+  if (!offlineReady && !needRefresh) return null;
+
+  return (
+    <div className="pwa-toast" role="alert">
+      <div className="pwa-toast-body">
+        {offlineReady ? (
+          <span>{APP_NAME} is ready to work offline.</span>
+        ) : (
+          <span>A new version of {APP_NAME} is available.</span>
+        )}
+      </div>
+      <div className="pwa-toast-actions">
+        {needRefresh && (
+          <button className="ghost-button pwa-toast-btn" onClick={() => updateServiceWorker(true)}>
+            Update
+          </button>
+        )}
+        <button className="ghost-button pwa-toast-btn" onClick={close}>
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const INSTALL_STEPS: { platform: string; steps: string[] }[] = [
+  {
+    platform: 'Chrome / Edge (desktop)',
+    steps: [
+      'Look for the install icon (⊕) in the browser address bar.',
+      'Click it and choose "Install".',
+      'The app opens in its own window without browser chrome.',
+    ],
+  },
+  {
+    platform: 'Chrome (Android)',
+    steps: [
+      'Tap the three-dot menu in the top-right corner.',
+      'Select "Add to Home screen".',
+      'Tap "Add" to confirm.',
+    ],
+  },
+  {
+    platform: 'Safari (iPhone / iPad)',
+    steps: [
+      'Tap the Share button at the bottom of Safari.',
+      'Scroll down and tap "Add to Home Screen".',
+      'Tap "Add" in the top-right corner.',
+    ],
+  },
+  {
+    platform: 'Firefox (desktop)',
+    steps: [
+      'Install the "Progressive Web Apps for Firefox" extension.',
+      'Click the PWA icon that appears in the address bar.',
+      'Click "Install" to pin the app.',
+    ],
+  },
+];
+
+function InstallSection() {
+  return (
+    <section id="install" className="install-section">
+      <div className="install-header">
+        <span className="eyebrow">Available as an app</span>
+        <h2>Install {APP_NAME} on your device</h2>
+        <p className="hero-text">
+          Pin {APP_NAME} to your home screen or desktop so it loads instantly, works offline, and
+          feels like a native app — with no app store required.
+        </p>
+      </div>
+      <div className="install-grid">
+        {INSTALL_STEPS.map(({ platform, steps }) => (
+          <div key={platform} className="install-card">
+            <h3>{platform}</h3>
+            <ol className="install-steps-list">
+              {steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
   return (
     <main className="page">
@@ -180,6 +280,9 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
             <button onClick={onOpenApp}>Start converting</button>
             <a className="text-link" href="#features">
               Explore features
+            </a>
+            <a className="text-link" href="#install">
+              Install as app
             </a>
             <a className="text-link" href="#/privacy">
               Privacy policy
@@ -262,6 +365,8 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
         <h2>Ready to try the full converter experience?</h2>
         <button onClick={onOpenApp}>Go to the app workspace</button>
       </section>
+
+      <InstallSection />
 
       <Footer />
     </main>
@@ -708,19 +813,36 @@ export default function App() {
   }
 
   if (page === 'landing') {
-    return <LandingPage onOpenApp={() => navigate('app')} />;
+    return (
+      <>
+        <UpdateNotification />
+        <LandingPage onOpenApp={() => navigate('app')} />
+      </>
+    );
   }
 
   if (page === 'privacy') {
-    return <PrivacyPage />;
+    return (
+      <>
+        <UpdateNotification />
+        <PrivacyPage />
+      </>
+    );
   }
 
   if (page === 'terms') {
-    return <TermsPage />;
+    return (
+      <>
+        <UpdateNotification />
+        <TermsPage />
+      </>
+    );
   }
 
   return (
-    <main className="page">
+    <>
+      <UpdateNotification />
+      <main className="page">
       <header className="topbar">
         <a className="brand brand-link" href="#">
           {APP_NAME}
@@ -1136,5 +1258,6 @@ export default function App() {
 
       <Footer />
     </main>
+    </>
   );
 }
