@@ -1,5 +1,6 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import type { ConversionOptions } from './conversion-options';
 
 const ffmpeg = new FFmpeg();
 let loaded = false;
@@ -40,9 +41,10 @@ async function ensureLoaded(onProgress?: (progress: number, message: string) => 
 export async function convert(args: {
   file: File;
   targetMime: string;
+  options?: ConversionOptions;
   onProgress?: (progress: number, message: string) => void;
 }) {
-  const { file, targetMime, onProgress } = args;
+  const { file, targetMime, options, onProgress } = args;
   activeProgressHandler = onProgress;
   await ensureLoaded(onProgress);
 
@@ -50,10 +52,21 @@ export async function convert(args: {
   const outputExt = extForMime(targetMime);
   const inputName = `input.${inputExt}`;
   const outputName = `output.${outputExt}`;
+  const trimStart = Math.max(0, options?.media.trimStart ?? 0);
+  const trimEnd = Math.max(0, options?.media.trimEnd ?? 0);
 
   onProgress?.(0.2, 'Writing input file');
   await ffmpeg.writeFile(inputName, await fetchFile(file));
-  await ffmpeg.exec(['-i', inputName, outputName]);
+  const command = ['-i', inputName];
+
+  if (trimStart > 0 || trimEnd > 0) {
+    onProgress?.(0.35, 'Applying trim settings');
+    if (trimStart > 0) command.push('-ss', trimStart.toString());
+    if (trimEnd > 0) command.push('-to', trimEnd.toString());
+  }
+
+  command.push(outputName);
+  await ffmpeg.exec(command);
   const data = await ffmpeg.readFile(outputName);
   onProgress?.(1, 'Done');
 

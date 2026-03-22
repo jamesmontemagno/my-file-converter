@@ -1,4 +1,5 @@
 import type { ConversionResult } from './conversion';
+import type { ConversionOptions } from './conversion-options';
 
 type PendingEntry = {
   resolve: (value: ConversionResult) => void;
@@ -40,12 +41,20 @@ export function convertWithWasmFallback(args: {
   file: File;
   targetMime: string;
   wasmModuleUrl: string;
+  options?: ConversionOptions;
   onProgress?: (progress: number, message: string) => void;
 }) {
   const id = nextId++;
   const w = getWorker();
   return new Promise<ConversionResult>((resolve, reject) => {
     pending.set(id, { resolve, reject, onProgress: args.onProgress });
-    w.postMessage({ id, type: 'convert', file: args.file, targetMime: args.targetMime, wasmModuleUrl: args.wasmModuleUrl });
+    w.postMessage({
+      id,
+      type: 'convert',
+      file: args.file,
+      targetMime: args.targetMime,
+      wasmModuleUrl: args.wasmModuleUrl,
+      options: args.options,
+    });
   });
 }

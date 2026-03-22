@@ -1,3 +1,5 @@
+import type { ConversionOptions } from './conversion-options';
+
 function extensionFor(mime: string) {
   if (mime.includes('mp4')) return 'mp4';
   if (mime.includes('webm')) return 'webm';
@@ -10,12 +12,13 @@ function extensionFor(mime: string) {
 }
 
 self.onmessage = async (event: MessageEvent) => {
-  const { id, type, file, targetMime, wasmModuleUrl } = (event.data || {}) as {
+  const { id, type, file, targetMime, wasmModuleUrl, options } = (event.data || {}) as {
     id: number;
     type: string;
     file: File;
     targetMime: string;
     wasmModuleUrl: string;
+    options?: ConversionOptions;
   };
 
   if (type !== 'convert') return;
@@ -30,6 +33,7 @@ self.onmessage = async (event: MessageEvent) => {
       convert: (args: {
         file: File;
         targetMime: string;
+        options?: ConversionOptions;
         onProgress?: (progress: number, message: string) => void;
       }) => Promise<{ blob: Blob; outputName?: string }>;
     };
@@ -41,6 +45,7 @@ self.onmessage = async (event: MessageEvent) => {
     const result = await module.convert({
       file,
       targetMime,
+      options,
       onProgress: (progress, message) => {
         self.postMessage({ id, type: 'progress', progress, message });
       },

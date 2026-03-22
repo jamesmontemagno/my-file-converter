@@ -12,6 +12,13 @@ import {
   supportsNativeRoute,
   type ConversionResult,
 } from './conversion';
+import {
+  buildOutputName,
+  describeSelectedOptions,
+  hasMediaTrim,
+  stripExtension,
+  type ConversionOptions,
+} from './conversion-options';
 import { convertWithWasmFallback } from './worker-client';
 
 const APP_NAME = 'LocalMorph';
@@ -44,6 +51,20 @@ function formatEventTime(date: Date) {
 
 function clampProgress(value: number) {
   return Math.max(0, Math.min(1, value));
+}
+
+function parsePositiveInteger(value: string) {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.max(1, Math.round(parsed));
+}
+
+function parseNonNegativeNumber(value: string) {
+  if (!value.trim()) return 0;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return parsed;
 }
 
 function getPageFromHash(): Page {
@@ -451,6 +472,12 @@ export default function App() {
   const mediaType: MediaKind = classifyMediaType(file);
   const targetOptions = useMemo(() => targetFormatsFor(mediaType), [mediaType]);
   const [targetMime, setTargetMime] = useState('');
+  const [outputBaseName, setOutputBaseName] = useState('');
+  const [imageWidth, setImageWidth] = useState('');
+  const [imageHeight, setImageHeight] = useState('');
+  const [keepAspectRatio, setKeepAspectRatio] = useState(true);
+  const [trimStart, setTrimStart] = useState('0');
+  const [trimEnd, setTrimEnd] = useState('');
 
   useEffect(() => {
     const onHashChange = () => setPage(getPageFromHash());
@@ -483,18 +510,69 @@ export default function App() {
 
   const defaultModuleUrl = new URL('./ffmpeg-module.ts', import.meta.url).href;
   const moduleUrl = customModuleUrl.trim() || defaultModuleUrl;
+  const requestedOptions = useMemo<ConversionOptions>(
+    () => ({
+      outputBaseName: outputBaseName.trim(),
+      image: {
+        width: parsePositiveInteger(imageWidth),
+        height: parsePositiveInteger(imageHeight),
+        keepAspectRatio,
+      },
+      media: {
+        trimStart: parseNonNegativeNumber(trimStart),
+        trimEnd: parseNonNegativeNumber(trimEnd),
+      },
+    }),
+    [imageHeight, imageWidth, keepAspectRatio, outputBaseName, trimEnd, trimStart],
+  );
+  const trimRequested =
+    (mediaType === 'audio' || mediaType === 'video') && hasMediaTrim(requestedOptions.media);
+  const trimValidationError =
+    trimRequested &&
+    requestedOptions.media.trimEnd > 0 &&
+    requestedOptions.media.trimEnd <= requestedOptions.media.trimStart
+      ? 'Trim end must be greater than trim start.'
+      : '';
+  const selectedOptions = useMemo(
+    () => describeSelectedOptions(mediaType, requestedOptions),
+    [mediaType, requestedOptions],
+  );
+  const selectedAdjustments = useMemo(
+    () => selectedOptions.filter((entry) => !entry.startsWith('Save as ')),
+    [selectedOptions],
+  );
+  const outputFileName = file && targetMime ? buildOutputName(file.name, targetMime, outputBaseName) : '—';
+  const resultOutputName = result && file && targetMime ? buildOutputName(file.name, targetMime, outputBaseName) : result?.outputName ?? '';
 
   const routeDecision = useMemo(() => {
     if (!file || !targetMime) return 'blocked' as const;
+    if (trimValidationError) return 'blocked' as const;
+    if (trimRequested) return enableWasmFallback ? ('wasm' as const) : ('blocked' as const);
     if (supportsNativeRoute(file, targetMime)) return 'native' as const;
     if (enableWasmFallback) return 'wasm' as const;
     return 'blocked' as const;
-  }, [enableWasmFallback, file, targetMime]);
+  }, [enableWasmFallback, file, targetMime, trimRequested, trimValidationError]);
+  const routeReason = useMemo(() => {
+    if (!file || !targetMime) return 'Select a file and target format to see the conversion route.';
+    if (trimValidationError) return trimValidationError;
+    if (trimRequested) {
+      return enableWasmFallback
+        ? 'Trim settings require ffmpeg and will switch this job to the fallback route.'
+        : 'Trim settings require ffmpeg. Enable the fallback route to continue.';
+    }
+    if (supportsNativeRoute(file, targetMime)) {
+      return 'Current settings can stay on the native browser route.';
+    }
+    if (enableWasmFallback) {
+      return 'This format combination is not supported natively, so ffmpeg fallback will be used.';
+    }
+    return 'This format combination needs ffmpeg fallback, but fallback is disabled.';
+  }, [enableWasmFallback, file, targetMime, trimRequested, trimValidationError]);
 
   const steps = [
-    { label: 'Upload', state: file ? 'done' : 'current' },
-    { label: 'Configure', state: file && targetMime ? 'done' : 'pending' },
-    { label: 'Convert', state: busy ? 'current' : result ? 'done' : 'pending' },
+    { label: 'Choose file', state: file ? 'done' : 'current' },
+    { label: 'Set options', state: file && targetMime ? 'done' : 'pending' },
+    { label: 'Convert locally', state: busy ? 'current' : result ? 'done' : 'pending' },
     { label: 'Preview & download', state: result ? 'done' : 'pending' },
   ];
   const statusIndicator = useMemo(() => statusCopyFor(statusMode), [statusMode]);
@@ -544,8 +622,15 @@ export default function App() {
     });
   }
 
+  function markConfigurationChanged(message: string) {
+    setResult(null);
+    setProgress(0);
+    setStatus(message);
+    setStatusMode(file ? 'ready' : 'idle');
+  }
+
   async function runConversion() {
-    if (!file || !targetMime) return;
+    if (!file || !targetMime || trimValidationError) return;
 
     setBusy(true);
     setStatusMode('working');
@@ -553,7 +638,7 @@ export default function App() {
     setResult(null);
     setActivityLog((previous) => {
       const lastEntry = previous[previous.length - 1];
-      return [
+      const nextEntries: ActivityEntry[] = [
         ...previous.slice(-24),
         {
           id: (lastEntry?.id ?? 0) + 1,
@@ -563,31 +648,53 @@ export default function App() {
           timestamp: formatEventTime(new Date()),
         },
       ];
+      const optionsLabel = selectedAdjustments.join(' • ');
+      if (optionsLabel) {
+        nextEntries.push({
+          id: (lastEntry?.id ?? 0) + 2,
+          message: optionsLabel,
+          progress: 0,
+          tone: 'info',
+          timestamp: formatEventTime(new Date()),
+        });
+      }
+      return nextEntries;
     });
     handleProgress(0.05, 'Preparing conversion job');
 
     try {
       let next: ConversionResult;
 
-      if (supportsNativeRoute(file, targetMime)) {
+      if (routeDecision === 'native') {
         next =
           mediaType === 'image'
-            ? await convertImage({ file, targetMime, quality, onProgress: handleProgress })
+            ? await convertImage({
+                file,
+                targetMime,
+                quality,
+                imageOptions: requestedOptions.image,
+                onProgress: handleProgress,
+              })
             : await convertViaMediaRecorder({ file, targetMime, onProgress: handleProgress });
-      } else if (enableWasmFallback) {
+      } else if (routeDecision === 'wasm' && enableWasmFallback) {
         next = await convertWithWasmFallback({
           file,
           targetMime,
           wasmModuleUrl: moduleUrl,
+          options: requestedOptions,
           onProgress: handleProgress,
         });
       } else {
         throw new Error('Native route is unsupported and ffmpeg fallback is disabled.');
       }
 
-      setResult(next);
+      setResult({
+        ...next,
+        outputName: buildOutputName(file.name, targetMime, requestedOptions.outputBaseName),
+      });
       setStatusMode('success');
       handleProgress(1, 'Conversion complete — preview ready below', 'success');
+      setLogOpen(false);
     } catch (error) {
       setStatusMode('error');
       handleProgress(
@@ -654,6 +761,12 @@ export default function App() {
                   setResult(null);
                   setFile(nextFile);
                   setProgress(0);
+                  setOutputBaseName(nextFile ? stripExtension(nextFile.name) : '');
+                  setImageWidth('');
+                  setImageHeight('');
+                  setKeepAspectRatio(true);
+                  setTrimStart('0');
+                  setTrimEnd('');
                   setStatus(nextFile ? 'File loaded. Configure your output format.' : 'Select a file to begin.');
                   setStatusMode(nextFile ? 'ready' : 'idle');
                   setActivityLog(
@@ -703,10 +816,10 @@ export default function App() {
                   const nextTargetMime = event.target.value;
                   setTargetMime(nextTargetMime);
                   if (file) {
-                    setResult(null);
                     const nextTarget = targetOptions.find((option) => option.value === nextTargetMime);
-                    setStatusMode('ready');
-                    handleProgress(0, `Target format set to ${nextTarget?.label ?? nextTargetMime}`);
+                    markConfigurationChanged(
+                      `Target format set to ${nextTarget?.label ?? nextTargetMime}. Ready to convert.`,
+                    );
                   }
                 }}
                 disabled={!targetOptions.length || busy}
@@ -720,18 +833,138 @@ export default function App() {
             </label>
 
             <label className="field">
-              <span>Quality (image lossy formats)</span>
+              <span>Output file name</span>
               <input
-                type="range"
-                min="0.1"
-                max="1"
-                step="0.05"
-                value={quality}
-                disabled={busy}
-                onChange={(event) => setQuality(Number(event.target.value))}
+                type="text"
+                value={outputBaseName}
+                disabled={!file || busy}
+                onChange={(event) => setOutputBaseName(event.target.value)}
+                placeholder={file ? stripExtension(file.name) : 'converted-file'}
               />
-              <output>{quality.toFixed(2)}</output>
+              <small>Extension is added automatically from the selected output format.</small>
             </label>
+
+            {mediaType === 'image' ? (
+              <div className="option-section">
+                <h3>Image adjustments</h3>
+                <div className="option-grid">
+                  <label className="field">
+                    <span>Width (px)</span>
+                    <input
+                      type="number"
+                      min="1"
+                      inputMode="numeric"
+                      value={imageWidth}
+                      disabled={busy}
+                      onChange={(event) => {
+                        setImageWidth(event.target.value);
+                        if (file) {
+                          markConfigurationChanged('Image size updated. Ready to convert.');
+                        }
+                      }}
+                      placeholder="Original width"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Height (px)</span>
+                    <input
+                      type="number"
+                      min="1"
+                      inputMode="numeric"
+                      value={imageHeight}
+                      disabled={busy}
+                      onChange={(event) => {
+                        setImageHeight(event.target.value);
+                        if (file) {
+                          markConfigurationChanged('Image size updated. Ready to convert.');
+                        }
+                      }}
+                      placeholder="Original height"
+                    />
+                  </label>
+                </div>
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={keepAspectRatio}
+                    disabled={busy}
+                    onChange={(event) => {
+                      setKeepAspectRatio(event.target.checked);
+                      if (file) {
+                        markConfigurationChanged('Aspect ratio preference updated. Ready to convert.');
+                      }
+                    }}
+                  />
+                  Keep aspect ratio
+                </label>
+                <small>Leave width or height blank to keep the original dimension.</small>
+                <label className="field">
+                  <span>Quality (image lossy formats)</span>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1"
+                    step="0.05"
+                    value={quality}
+                    disabled={busy}
+                    onChange={(event) => {
+                      setQuality(Number(event.target.value));
+                      if (file) {
+                        markConfigurationChanged('Image quality updated. Ready to convert.');
+                      }
+                    }}
+                  />
+                  <output>{quality.toFixed(2)}</output>
+                </label>
+              </div>
+            ) : null}
+
+            {mediaType === 'audio' || mediaType === 'video' ? (
+              <div className="option-section">
+                <h3>Trim clip</h3>
+                <div className="option-grid">
+                  <label className="field">
+                    <span>Start time (seconds)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      inputMode="decimal"
+                      value={trimStart}
+                      disabled={busy}
+                      onChange={(event) => {
+                        setTrimStart(event.target.value);
+                        if (file) {
+                          markConfigurationChanged('Trim settings updated. Ready to convert.');
+                        }
+                      }}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>End time (seconds)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      inputMode="decimal"
+                      value={trimEnd}
+                      disabled={busy}
+                      onChange={(event) => {
+                        setTrimEnd(event.target.value);
+                        if (file) {
+                          markConfigurationChanged('Trim settings updated. Ready to convert.');
+                        }
+                      }}
+                      placeholder="Leave blank for full length"
+                    />
+                  </label>
+                </div>
+                <small>
+                  Trim controls use ffmpeg when the native browser route cannot apply them.
+                </small>
+                {trimValidationError ? <p className="form-error">{trimValidationError}</p> : null}
+              </div>
+            ) : null}
 
             <details className="field">
               <summary>Advanced fallback options</summary>
@@ -755,13 +988,27 @@ export default function App() {
               </label>
             </details>
 
-            <button onClick={runConversion} disabled={!file || !targetMime || busy}>
+            <div className="selection-summary">
+              <span className="meta-label">Output file</span>
+              <strong>{outputFileName}</strong>
+              {selectedAdjustments.length ? (
+                <ul className="option-summary-list">
+                  {selectedAdjustments.map((entry) => (
+                    <li key={entry}>{entry}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">No extra adjustments selected yet.</p>
+              )}
+            </div>
+
+            <button onClick={runConversion} disabled={!file || !targetMime || busy || Boolean(trimValidationError)}>
               {busy ? 'Converting…' : 'Convert file'}
             </button>
           </div>
 
           <div className="card">
-            <h2>What will happen</h2>
+            <h2>What happens next</h2>
             <ul className="step-list">
               {steps.map((step) => (
                 <li key={step.label} className={`step-item step-${step.state}`}>
@@ -771,8 +1018,13 @@ export default function App() {
               ))}
             </ul>
             <p className="muted">
+              Your file stays in the browser during conversion unless you choose a third-party
+              fallback module URL.
+            </p>
+            <p className="muted">
               Route selected: <strong>{routeLabel(routeDecision)}</strong>
             </p>
+            <p className="muted">{routeReason}</p>
           </div>
         </aside>
 
@@ -855,9 +1107,9 @@ export default function App() {
                     <span className="meta-label">MIME type</span>
                     <strong>{result.blob.type || 'unknown'}</strong>
                   </div>
-                </div>
-                <a className="download-button" href={downloadUrl} download={result.outputName}>
-                  Download {result.outputName}
+                 </div>
+                <a className="download-button" href={downloadUrl} download={resultOutputName}>
+                  Download {resultOutputName}
                 </a>
               </>
             ) : (
@@ -871,14 +1123,14 @@ export default function App() {
             )}
           </div>
 
-          <div className="card">
-            <h2>Environment and support</h2>
+          <details className="card info-details">
+            <summary>Technical support details</summary>
             <p className="muted">
-              This helps users understand why the app may choose the native browser route or the
-              ffmpeg fallback.
+              Browser capability details are available here if you need to understand route
+              selection or troubleshoot a conversion.
             </p>
             <pre>{JSON.stringify(capabilities, null, 2)}</pre>
-          </div>
+          </details>
         </section>
       </section>
 

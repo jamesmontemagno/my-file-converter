@@ -1,10 +1,47 @@
 import { classifyMediaType } from './capabilities';
+import type { ImageConversionOptions } from './conversion-options';
 
 export type ConversionResult = {
   blob: Blob;
   outputName: string;
   route: string;
 };
+
+function resolveImageSize(sourceWidth: number, sourceHeight: number, options?: ImageConversionOptions) {
+  const targetWidth = options?.width ?? null;
+  const targetHeight = options?.height ?? null;
+
+  if (!targetWidth && !targetHeight) {
+    return { width: sourceWidth, height: sourceHeight };
+  }
+
+  if (options?.keepAspectRatio !== false) {
+    if (targetWidth && targetHeight) {
+      const scale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
+      return {
+        width: Math.max(1, Math.round(sourceWidth * scale)),
+        height: Math.max(1, Math.round(sourceHeight * scale)),
+      };
+    }
+
+    if (targetWidth) {
+      return {
+        width: targetWidth,
+        height: Math.max(1, Math.round(sourceHeight * (targetWidth / sourceWidth))),
+      };
+    }
+
+    return {
+      width: Math.max(1, Math.round(sourceWidth * ((targetHeight ?? sourceHeight) / sourceHeight))),
+      height: targetHeight ?? sourceHeight,
+    };
+  }
+
+  return {
+    width: targetWidth ?? sourceWidth,
+    height: targetHeight ?? sourceHeight,
+  };
+}
 
 function mimeToExt(mime: string) {
   if (mime.includes('png')) return 'png';
@@ -29,20 +66,27 @@ export async function convertImage(args: {
   file: File;
   targetMime: string;
   quality: number;
+  imageOptions?: ImageConversionOptions;
   onProgress?: (progress: number, message: string) => void;
 }): Promise<ConversionResult> {
-  const { file, targetMime, quality, onProgress } = args;
+  const { file, targetMime, quality, imageOptions, onProgress } = args;
   onProgress?.(0.1, 'Decoding image');
   const bitmap = await createImageBitmap(file);
+  const nextSize = resolveImageSize(bitmap.width, bitmap.height, imageOptions);
   const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
+  canvas.width = nextSize.width;
+  canvas.height = nextSize.height;
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     bitmap.close();
     throw new Error('Could not create 2D canvas context.');
   }
-  ctx.drawImage(bitmap, 0, 0);
+
+  if (nextSize.width !== bitmap.width || nextSize.height !== bitmap.height) {
+    onProgress?.(0.35, `Resizing image to ${nextSize.width}×${nextSize.height}`);
+  }
+
+  ctx.drawImage(bitmap, 0, 0, nextSize.width, nextSize.height);
   bitmap.close();
 
   onProgress?.(0.6, 'Encoding image');
