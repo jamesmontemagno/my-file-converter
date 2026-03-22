@@ -38,6 +38,24 @@ npm run build
 
 Push to `main` and GitHub Actions will build and publish `dist/` to GitHub Pages.
 
+### Custom domain
+
+This repo now includes `public/CNAME`, so each production build publishes the custom domain
+`localmorph.com` with the site artifact.
+
+To finish the setup in GitHub Pages:
+
+1. Open the repository `Settings` → `Pages`.
+2. Set the custom domain to `localmorph.com`.
+3. Enable `Enforce HTTPS` after DNS finishes propagating.
+
+DNS should point the domain at GitHub Pages:
+
+- For the apex domain `localmorph.com`, use GitHub Pages-supported `A`/`AAAA` records or an
+  `ALIAS`/`ANAME` record if your DNS provider supports it.
+- For `www.localmorph.com`, add a `CNAME` to your GitHub Pages host and optionally redirect
+  `www` to the apex domain.
+
 ## Branding and legal pages
 
 The app is branded as `LocalMorph` and includes hash-routed `Privacy Policy` and `Terms of Use`
