@@ -79,7 +79,46 @@ function titleForPage(page: Page) {
   if (page === 'app') return `${APP_NAME} | Browser File Converter`;
   if (page === 'privacy') return `${APP_NAME} | Privacy Policy`;
   if (page === 'terms') return `${APP_NAME} | Terms of Use`;
-  return `${APP_NAME} | Convert files locally in your browser`;
+  return `${APP_NAME} | Convert Files Locally in Your Browser`;
+}
+
+function descriptionForPage(page: Page) {
+  if (page === 'app')
+    return 'Convert images, audio, and video files directly in your browser. No uploads, no servers — everything stays on your device.';
+  if (page === 'privacy')
+    return 'LocalMorph privacy policy. Learn how we handle your data — spoiler: we never receive your files because all conversion happens locally in your browser.';
+  if (page === 'terms')
+    return 'LocalMorph terms of use. Review the conditions under which you may use this browser-based file converter.';
+  return 'LocalMorph converts images, audio, and video files directly in your browser — no uploads, no servers, no privacy risks. Free, fast, and 100% client-side.';
+}
+
+function canonicalForPage(page: Page) {
+  const base = 'https://localmorph.com/';
+  if (page === 'app') return `${base}#/app`;
+  if (page === 'privacy') return `${base}#/privacy`;
+  if (page === 'terms') return `${base}#/terms`;
+  return base;
+}
+
+function setMetaTag(name: string, content: string, property = false) {
+  const attr = property ? 'property' : 'name';
+  let tag = document.querySelector<HTMLMetaElement>(`meta[${attr}="${name}"]`);
+  if (!tag) {
+    tag = document.createElement('meta');
+    tag.setAttribute(attr, name);
+    document.head.appendChild(tag);
+  }
+  tag.setAttribute('content', content);
+}
+
+function setCanonicalTag(href: string) {
+  let tag = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+  if (!tag) {
+    tag = document.createElement('link');
+    tag.setAttribute('rel', 'canonical');
+    document.head.appendChild(tag);
+  }
+  tag.setAttribute('href', href);
 }
 
 function routeLabel(route: 'native' | 'wasm' | 'blocked') {
@@ -592,6 +631,18 @@ export default function App() {
 
   useEffect(() => {
     document.title = titleForPage(page);
+    const description = descriptionForPage(page);
+    const canonical = canonicalForPage(page);
+    const title = titleForPage(page);
+
+    setMetaTag('description', description);
+    setMetaTag('og:title', title, true);
+    setMetaTag('og:description', description, true);
+    setMetaTag('og:url', canonical, true);
+    setMetaTag('twitter:title', title);
+    setMetaTag('twitter:description', description);
+    setMetaTag('twitter:url', canonical);
+    setCanonicalTag(canonical);
   }, [page]);
 
   useEffect(() => {
