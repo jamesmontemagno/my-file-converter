@@ -10,7 +10,7 @@ A React + TypeScript + Vite client-side file converter for GitHub Pages.
 - TypeScript
 - Vite
 - Native browser conversion paths first
-- `ffmpeg.wasm` single-thread fallback for unsupported conversions
+- Optional `ffmpeg.wasm` single-thread route for unsupported or user-forced conversions
 
 ## Features
 
@@ -68,7 +68,7 @@ pages so they work on static hosting without additional server routes.
 1. Run `npm run dev` and verify the app loads.
 2. Convert PNG/JPEG/WebP image through the native route.
 3. Convert a small audio/video file where `MediaRecorder` support is reported.
-4. Force an unsupported conversion and verify the ffmpeg fallback path runs.
+4. Force an unsupported or manually selected ffmpeg conversion and verify the ffmpeg route runs.
 5. Run the deployed site in Chromium, Firefox, and Safari.
 
 ## Known constraints
