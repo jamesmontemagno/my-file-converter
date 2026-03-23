@@ -381,6 +381,12 @@ input[type='range'] {
   margin-top: 0.3rem;
 }
 
+.conversion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .form-error {
   margin: 0;
   color: #fca5a5;
@@ -485,6 +491,10 @@ small,
 
 .status-ready .status-dot {
   background: #f59e0b;
+}
+
+.status-canceled .status-dot {
+  background: #f97316;
 }
 
 .log-toggle {
