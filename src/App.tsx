@@ -75,7 +75,7 @@ function clampProgress(value: number) {
 }
 
 function formatPercentage(value: number) {
-  const digits = value >= 10 ? 0 : 1;
+  const digits = value < 10 ? 1 : 0;
   return `${value.toFixed(digits)}%`;
 }
 
@@ -171,6 +171,10 @@ function sourceForRouteDecision(route: RouteDecision) {
   if (route === 'native') return 'native' as const;
   if (route === 'wasm') return 'ffmpeg' as const;
   return undefined;
+}
+
+function isNativeConversionRoute(route: string) {
+  return route === 'native-image' || route === 'native-mediarecorder';
 }
 
 function resolveRoute(args: {
@@ -300,7 +304,7 @@ function sizeChangeGuidance(args: {
     return 'The converted file is smaller than the source and ready to download.';
   }
 
-  const nativeRoute = args.result.route.startsWith('native');
+  const nativeRoute = isNativeConversionRoute(args.result.route);
   const webMediaOutput = args.outputMime.includes('webm') || args.outputMime.includes('webp');
 
   if (nativeRoute && webMediaOutput) {
