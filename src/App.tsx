@@ -25,7 +25,8 @@ import { convertWithWasmFallback } from './worker-client';
 import { LogoIcon } from './Logo';
 
 const APP_NAME = 'LocalMorph';
-const MAX_ACTIVITY_ENTRIES = 160;
+const MAX_ACTIVITY_HISTORY_LENGTH = 160;
+const MAX_RAW_OUTPUT_ENTRIES = 80;
 
 type Page = 'landing' | 'app' | 'privacy' | 'terms' | 'docs';
 type StatusMode = 'idle' | 'ready' | 'working' | 'success' | 'error';
@@ -1020,7 +1021,7 @@ export default function App() {
     [activityLog],
   );
   const rawOutputEntries = useMemo(
-    () => activityLog.filter((entry) => entry.variant === 'raw').slice(-80),
+    () => activityLog.filter((entry) => entry.variant === 'raw').slice(-MAX_RAW_OUTPUT_ENTRIES),
     [activityLog],
   );
   const liveStatusDetail = statusDetail || statusIndicator.detail;
@@ -1101,7 +1102,7 @@ export default function App() {
         });
       }
 
-      return nextEntries.slice(-MAX_ACTIVITY_ENTRIES);
+      return nextEntries.slice(-MAX_ACTIVITY_HISTORY_LENGTH);
     });
   }
 
