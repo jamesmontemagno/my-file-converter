@@ -21,6 +21,7 @@ import {
   type ConversionOptions,
 } from './conversion-options';
 import { convertWithWasmFallback } from './worker-client';
+import { LogoIcon } from './Logo';
 
 const APP_NAME = 'LocalMorph';
 
@@ -452,6 +453,7 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
     <main className="page">
       <header className="topbar">
         <a className="brand brand-link" href="#">
+          <LogoIcon size={28} />
           {APP_NAME}
         </a>
         <nav className="nav-actions">
@@ -524,6 +526,7 @@ function LegalLayout({
     <main className="page">
       <header className="topbar">
         <a className="brand brand-link" href="#">
+          <LogoIcon size={28} />
           {APP_NAME}
         </a>
         <nav className="nav-actions">
@@ -1164,6 +1167,7 @@ export default function App() {
       <main className="page">
       <header className="topbar">
         <a className="brand brand-link" href="#">
+          <LogoIcon size={28} />
           {APP_NAME}
         </a>
         <HamburgerMenu />
