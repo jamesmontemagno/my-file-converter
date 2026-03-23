@@ -494,6 +494,47 @@ small,
   border-color: rgba(148, 163, 184, 0.28);
 }
 
+.live-status-card,
+.activity-summary {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.95rem;
+}
+
+.live-status-card {
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  background: rgba(2, 6, 23, 0.32);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.live-status-header,
+.activity-summary-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.activity-summary-header span {
+  color: #a7b7d1;
+  font-size: 0.88rem;
+}
+
+.live-source-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(96, 165, 250, 0.14);
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  color: #bfdbfe;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .activity-log {
   display: grid;
   gap: 0.7rem;
@@ -537,8 +578,46 @@ small,
   font-size: 0.88rem;
 }
 
+.activity-entry-detail {
+  margin: 0.45rem 0 0;
+  color: #d7e3f8;
+  line-height: 1.5;
+}
+
 .activity-entry-meta {
   margin-top: 0.4rem;
+}
+
+.raw-output-log {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+  max-height: 18rem;
+  overflow: auto;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  background: rgba(2, 6, 23, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.raw-output-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: start;
+  color: #c9d7ee;
+  font-size: 0.88rem;
+}
+
+.raw-output-line span {
+  color: #7dd3fc;
+  white-space: nowrap;
+}
+
+.raw-output-line code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 progress {
@@ -860,6 +939,8 @@ pre {
 
   .hero-actions,
   .status-header,
+  .live-status-header,
+  .activity-summary-header,
   .meta-grid,
   .progress-caption {
     flex-direction: column;
@@ -872,6 +953,11 @@ pre {
 
   .option-grid {
     grid-template-columns: 1fr;
+  }
+
+  .raw-output-line {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
   }
 
   .site-footer {

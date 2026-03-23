@@ -11,6 +11,7 @@ import {
   convertImage,
   convertViaMediaRecorder,
   supportsNativeRoute,
+  type ConversionActivity,
   type ConversionResult,
 } from './conversion';
 import {
@@ -28,12 +29,16 @@ const APP_NAME = 'LocalMorph';
 type Page = 'landing' | 'app' | 'privacy' | 'terms' | 'docs';
 type StatusMode = 'idle' | 'ready' | 'working' | 'success' | 'error';
 type ActivityTone = 'info' | 'success' | 'error';
+type ActivityVariant = 'milestone' | 'raw';
 type ActivityEntry = {
   id: number;
   message: string;
+  detail?: string;
   progress: number;
   tone: ActivityTone;
   timestamp: string;
+  variant: ActivityVariant;
+  source?: 'native' | 'ffmpeg';
 };
 
 function formatBytes(bytes: number) {
@@ -182,6 +187,12 @@ function statusCopyFor(mode: StatusMode) {
     label: 'Waiting for input',
     detail: 'Load a file and the converter will start reporting activity here.',
   };
+}
+
+function sourceLabel(source?: 'native' | 'ffmpeg') {
+  if (source === 'ffmpeg') return 'ffmpeg output';
+  if (source === 'native') return 'Browser pipeline';
+  return '';
 }
 
 function HamburgerMenu() {
@@ -867,6 +878,7 @@ export default function App() {
   const [file, setFile] = useState<File | null>(null);
   const [quality, setQuality] = useState(0.9);
   const [status, setStatus] = useState('Select a file to begin.');
+  const [statusDetail, setStatusDetail] = useState('Load a file and the converter will start reporting activity here.');
   const [progress, setProgress] = useState(0);
   const [statusMode, setStatusMode] = useState<StatusMode>('idle');
   const [enableWasmFallback, setEnableWasmFallback] = useState(true);
@@ -876,7 +888,8 @@ export default function App() {
   const [capabilities, setCapabilities] = useState<CapabilityReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
-  const [logOpen, setLogOpen] = useState(true);
+  const [logOpen, setLogOpen] = useState(false);
+  const [statusSource, setStatusSource] = useState<'native' | 'ffmpeg' | undefined>();
 
   const mediaType: MediaKind = classifyMediaType(file);
   const targetOptions = useMemo(() => targetFormatsFor(mediaType), [mediaType]);
@@ -997,7 +1010,19 @@ export default function App() {
     { label: 'Preview & download', state: result ? 'done' : 'pending' },
   ];
   const statusIndicator = useMemo(() => statusCopyFor(statusMode), [statusMode]);
-  const activityEntries = useMemo(() => [...activityLog].reverse(), [activityLog]);
+  const recentMilestones = useMemo(
+    () =>
+      [...activityLog]
+        .filter((entry) => entry.variant === 'milestone')
+        .slice(-3)
+        .reverse(),
+    [activityLog],
+  );
+  const rawOutputEntries = useMemo(
+    () => activityLog.filter((entry) => entry.variant === 'raw').slice(-80),
+    [activityLog],
+  );
+  const liveStatusDetail = statusDetail || statusIndicator.detail;
 
   function navigate(next: Page) {
     if (next === 'app') {
@@ -1015,33 +1040,67 @@ export default function App() {
     setPage(next);
   }
 
-  function handleProgress(nextProgress: number, message: string, tone: ActivityTone = 'info') {
-    const normalizedProgress = clampProgress(nextProgress);
-    setStatus(message);
-    setProgress(normalizedProgress);
-    setActivityLog((previous) => {
-      const lastEntry = previous[previous.length - 1];
-      const timestamp = formatEventTime(new Date());
+  function handleProgress(activity: ConversionActivity, tone: ActivityTone = 'info') {
+    const normalizedProgress = clampProgress(activity.progress);
+    const detail = activity.detail?.trim() || '';
+    const rawOutput = activity.rawOutput?.trim() || '';
 
-      if (tone === 'info' && lastEntry && lastEntry.message === message && lastEntry.tone === tone) {
-        return [
-          ...previous.slice(0, -1),
-          {
-            ...lastEntry,
-            progress: normalizedProgress,
-            timestamp,
-          },
-        ];
+    setStatus(activity.message);
+    setStatusDetail(detail);
+    setProgress(normalizedProgress);
+    setStatusSource(activity.source);
+    setActivityLog((previous) => {
+      const nextEntries = [...previous];
+      const timestamp = formatEventTime(new Date());
+      let lastMilestoneIndex = -1;
+
+      for (let index = nextEntries.length - 1; index >= 0; index -= 1) {
+        if (nextEntries[index].variant === 'milestone') {
+          lastMilestoneIndex = index;
+          break;
+        }
       }
 
-      const nextEntry: ActivityEntry = {
-        id: (lastEntry?.id ?? 0) + 1,
-        message,
-        progress: normalizedProgress,
-        tone,
-        timestamp,
-      };
-      return [...previous.slice(-24), nextEntry];
+      let nextId = nextEntries[nextEntries.length - 1]?.id ?? 0;
+      const lastMilestone = lastMilestoneIndex >= 0 ? nextEntries[lastMilestoneIndex] : undefined;
+
+      if (tone === 'info' && lastMilestone && lastMilestone.message === activity.message && lastMilestone.tone === tone) {
+        nextEntries[lastMilestoneIndex] = {
+          ...lastMilestone,
+          detail: detail || lastMilestone.detail,
+          progress: normalizedProgress,
+          timestamp,
+          source: activity.source ?? lastMilestone.source,
+        };
+      } else {
+        nextId += 1;
+        nextEntries.push({
+          id: nextId,
+          message: activity.message,
+          detail,
+          progress: normalizedProgress,
+          tone,
+          timestamp,
+          variant: 'milestone',
+          source: activity.source,
+        });
+      }
+
+      if (rawOutput) {
+        nextId += 1;
+        nextEntries.push({
+          id: nextId,
+          message: rawOutput,
+          detail: `${activity.message}${detail ? ` • ${detail}` : ''}`,
+          progress: normalizedProgress,
+          tone,
+          timestamp,
+          variant: 'raw',
+          source: activity.source,
+        });
+      }
+
+      return nextEntries.slice(-160);
     });
   }
 
@@ -1049,7 +1108,9 @@ export default function App() {
     setResult(null);
     setProgress(0);
     setStatus(message);
+    setStatusDetail('The conversion configuration changed. Start a new run when ready.');
     setStatusMode(file ? 'ready' : 'idle');
+    setStatusSource(undefined);
   }
 
   async function runConversion() {
@@ -1057,33 +1118,46 @@ export default function App() {
 
     setBusy(true);
     setStatusMode('working');
-    setLogOpen(true);
+    setLogOpen(false);
     setResult(null);
-    setActivityLog((previous) => {
-      const lastEntry = previous[previous.length - 1];
+    setStatusSource(routeDecision === 'wasm' ? 'ffmpeg' : 'native');
+    setActivityLog(() => {
+      let nextId = 0;
       const nextEntries: ActivityEntry[] = [
-        ...previous.slice(-24),
         {
-          id: (lastEntry?.id ?? 0) + 1,
+          id: (nextId += 1),
           message: `Starting ${routeLabel(routeDecision).toLowerCase()} conversion`,
+          detail: `Preparing ${file.name} for local conversion.`,
           progress: 0,
           tone: 'info',
           timestamp: formatEventTime(new Date()),
+          variant: 'milestone',
+          source: routeDecision === 'wasm' ? 'ffmpeg' : 'native',
         },
       ];
       const optionsLabel = selectedAdjustments.join(' • ');
       if (optionsLabel) {
         nextEntries.push({
-          id: (lastEntry?.id ?? 0) + 2,
+          id: (nextId += 1),
           message: optionsLabel,
+          detail: 'Selected output adjustments for this conversion.',
           progress: 0,
           tone: 'info',
           timestamp: formatEventTime(new Date()),
+          variant: 'milestone',
+          source: routeDecision === 'wasm' ? 'ffmpeg' : 'native',
         });
       }
       return nextEntries;
     });
-    handleProgress(0.05, 'Preparing conversion job');
+    handleProgress(
+      {
+        progress: 0.05,
+        message: 'Preparing conversion job',
+        detail: `Initializing the ${routeLabel(routeDecision).toLowerCase()} route.`,
+        source: routeDecision === 'wasm' ? 'ffmpeg' : 'native',
+      },
+    );
 
     try {
       let next: ConversionResult;
@@ -1116,15 +1190,27 @@ export default function App() {
         outputName: buildOutputName(file.name, targetMime, requestedOptions.outputBaseName),
       });
       setStatusMode('success');
-      handleProgress(1, 'Conversion complete — preview ready below', 'success');
-      setLogOpen(false);
+      handleProgress(
+        {
+          progress: 1,
+          message: 'Conversion complete — preview ready below',
+          detail: 'Review the preview or download the converted file.',
+          source: routeDecision === 'wasm' ? 'ffmpeg' : 'native',
+        },
+        'success',
+      );
     } catch (error) {
       setStatusMode('error');
       handleProgress(
-        0,
-        `Conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        {
+          progress: 0,
+          message: 'Conversion failed',
+          detail: error instanceof Error ? error.message : 'Unknown error',
+          source: routeDecision === 'wasm' ? 'ffmpeg' : 'native',
+        },
         'error',
       );
+      setLogOpen(true);
     } finally {
       setBusy(false);
     }
@@ -1203,23 +1289,33 @@ export default function App() {
                   setTrimStart('0');
                   setTrimEnd('');
                   setStatus(nextFile ? 'File loaded. Configure your output format.' : 'Select a file to begin.');
+                  setStatusDetail(
+                    nextFile
+                      ? 'Choose an output format to see the live route and progress details.'
+                      : 'Load a file and the converter will start reporting activity here.',
+                  );
                   setStatusMode(nextFile ? 'ready' : 'idle');
+                  setStatusSource(undefined);
                   setActivityLog(
                     nextFile
                       ? [
                           {
                             id: 1,
                             message: `Loaded ${nextFile.name} (${formatBytes(nextFile.size)})`,
+                            detail: 'File metadata is ready and the browser can configure the conversion route.',
                             progress: 0,
                             tone: 'info',
                             timestamp: formatEventTime(new Date()),
+                            variant: 'milestone',
                           },
                           {
                             id: 2,
                             message: 'Configure your output format and start conversion when ready.',
+                            detail: 'The live progress view will update as soon as the conversion begins.',
                             progress: 0,
                             tone: 'info',
                             timestamp: formatEventTime(new Date()),
+                            variant: 'milestone',
                           },
                         ]
                       : [],
@@ -1481,7 +1577,40 @@ export default function App() {
             <progress value={progress} max={1} />
             <div className="progress-caption">
               <span>{Math.round(progress * 100)}%</span>
-              <span>{busy ? 'Streaming live updates below' : statusIndicator.detail}</span>
+              <span>{busy ? liveStatusDetail : statusIndicator.detail}</span>
+            </div>
+            <div className="live-status-card">
+              <div className="live-status-header">
+                <div>
+                  <span className="meta-label">Live stage</span>
+                  <strong>{status}</strong>
+                </div>
+                {statusSource ? <span className="live-source-chip">{sourceLabel(statusSource)}</span> : null}
+              </div>
+              <p className="muted">{liveStatusDetail}</p>
+            </div>
+            <div className="activity-summary">
+              <div className="activity-summary-header">
+                <strong>Recent milestones</strong>
+                <span>{recentMilestones.length ? `${recentMilestones.length} updates` : 'Waiting for work'}</span>
+              </div>
+              {recentMilestones.length ? (
+                recentMilestones.map((entry) => (
+                  <article key={entry.id} className={`activity-entry activity-${entry.tone}`}>
+                    <div className="activity-entry-header">
+                      <strong>{entry.message}</strong>
+                      <span>{entry.timestamp}</span>
+                    </div>
+                    {entry.detail ? <p className="activity-entry-detail">{entry.detail}</p> : null}
+                    <div className="activity-entry-meta">
+                      <span>{Math.round(entry.progress * 100)}%</span>
+                      <span>{entry.source ? sourceLabel(entry.source) : 'Stage update'}</span>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="activity-empty">Milestones for the current conversion will appear here.</div>
+              )}
             </div>
             <button
               type="button"
@@ -1489,35 +1618,21 @@ export default function App() {
               onClick={() => setLogOpen((open) => !open)}
               aria-expanded={logOpen}
             >
-              {logOpen ? 'Hide live activity' : 'Show live activity'}
+              {logOpen ? `Hide raw output (${rawOutputEntries.length} lines)` : `Show raw output (${rawOutputEntries.length} lines)`}
             </button>
             {logOpen ? (
-              <div className="activity-log" role="log" aria-live="polite" aria-relevant="additions text">
-                {activityEntries.length ? (
-                  activityEntries.map((entry) => (
-                    <article key={entry.id} className={`activity-entry activity-${entry.tone}`}>
-                      <div className="activity-entry-header">
-                        <strong>{entry.message}</strong>
-                        <span>{entry.timestamp}</span>
-                      </div>
-                      <div className="activity-entry-meta">
-                        <span>{Math.round(entry.progress * 100)}%</span>
-                        <span>
-                          {entry.tone === 'error'
-                            ? 'Needs attention'
-                            : entry.tone === 'success'
-                              ? 'Completed'
-                              : entry.progress === 0
-                                ? 'Ready'
-                                : 'Updated'}
-                        </span>
-                      </div>
-                    </article>
+              <div className="raw-output-log" role="log" aria-live="polite" aria-relevant="additions text">
+                {rawOutputEntries.length ? (
+                  rawOutputEntries.map((entry) => (
+                    <div key={entry.id} className="raw-output-line">
+                      <span>{entry.timestamp}</span>
+                      <code>{entry.message}</code>
+                    </div>
                   ))
                 ) : (
                   <div className="activity-empty">
-                    We&apos;ll stream conversion updates here as soon as a file is loaded and a job
-                    begins.
+                    Raw output is kept minimized by default. Expand it during a conversion to inspect
+                    ffmpeg and pipeline messages.
                   </div>
                 )}
               </div>

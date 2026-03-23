@@ -1,10 +1,10 @@
-import type { ConversionResult } from './conversion';
+import type { ConversionActivity, ConversionResult } from './conversion';
 import type { ConversionOptions } from './conversion-options';
 
 type PendingEntry = {
   resolve: (value: ConversionResult) => void;
   reject: (reason?: unknown) => void;
-  onProgress?: (progress: number, message: string) => void;
+  onProgress?: (activity: ConversionActivity) => void;
 };
 
 let worker: Worker | undefined;
@@ -15,12 +15,19 @@ function getWorker() {
   if (!worker) {
     worker = new Worker(new URL('./conversion-worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (event: MessageEvent) => {
-      const { id, type } = event.data as { id: number; type: string; progress?: number; message?: string; error?: string };
+      const { id, type } = event.data as {
+        id: number;
+        type: string;
+        activity?: ConversionActivity;
+        error?: string;
+      };
       const entry = pending.get(id);
       if (!entry) return;
 
       if (type === 'progress') {
-        entry.onProgress?.(event.data.progress, event.data.message);
+        if (event.data.activity) {
+          entry.onProgress?.(event.data.activity);
+        }
         return;
       }
       if (type === 'done') {
@@ -42,7 +49,7 @@ export function convertWithWasmFallback(args: {
   targetMime: string;
   wasmModuleUrl: string;
   options?: ConversionOptions;
-  onProgress?: (progress: number, message: string) => void;
+  onProgress?: (activity: ConversionActivity) => void;
 }) {
   const id = nextId++;
   const w = getWorker();
