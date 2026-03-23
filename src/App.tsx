@@ -306,98 +306,43 @@ const INSTALL_STEPS: { platform: string; steps: string[] }[] = [
   },
 ];
 
-type FeaturesTab = 'overview' | 'how-it-works';
-
 function FeaturesSection({ onOpenApp }: { onOpenApp: () => void }) {
-  const [activeTab, setActiveTab] = useState<FeaturesTab>('overview');
-
   return (
     <section className="landing-section">
       <div className="section-header">
-        <span className="eyebrow">What you get</span>
-        <h2>Features</h2>
+        <span className="eyebrow">How it works</span>
+        <h2>Convert files in four clear steps</h2>
+        <p className="hero-text">
+          The home screen already covers the benefits, so this section focuses on the flow people
+          follow from upload to download.
+        </p>
       </div>
-      <div className="tab-bar" role="tablist">
-        <button
-          id="tab-feat-overview"
-          role="tab"
-          aria-selected={activeTab === 'overview'}
-          aria-controls="tabpanel-feat-overview"
-          className={`tab-btn${activeTab === 'overview' ? ' tab-btn--active' : ''}`}
-          onClick={() => setActiveTab('overview')}
-        >
-          Overview
-        </button>
-        <button
-          id="tab-feat-how"
-          role="tab"
-          aria-selected={activeTab === 'how-it-works'}
-          aria-controls="tabpanel-feat-how"
-          className={`tab-btn${activeTab === 'how-it-works' ? ' tab-btn--active' : ''}`}
-          onClick={() => setActiveTab('how-it-works')}
-        >
-          How it works
-        </button>
+      <div className="workflow-steps">
+        <div>
+          <span>1</span>
+          <h3>Choose a file</h3>
+          <p>Upload a video, audio clip, or image and let the app detect the best options.</p>
+        </div>
+        <div>
+          <span>2</span>
+          <h3>Pick the output</h3>
+          <p>Select the format that makes sense and see whether the browser can handle it natively.</p>
+        </div>
+        <div>
+          <span>3</span>
+          <h3>Convert with visibility</h3>
+          <p>Follow clear progress updates so you always know what route is running.</p>
+        </div>
+        <div>
+          <span>4</span>
+          <h3>Preview and download</h3>
+          <p>Check the converted result right in the app before saving it to your device.</p>
+        </div>
       </div>
-
-      {activeTab === 'overview' && (
-        <div id="tabpanel-feat-overview" role="tabpanel" aria-labelledby="tab-feat-overview">
-          <div className="feature-grid">
-            <article className="feature-card">
-              <h2>Confidence through clarity</h2>
-              <p>
-                Users can see supported routes, current progress, selected formats, and whether the
-                app is using the native or ffmpeg pipeline.
-              </p>
-            </article>
-            <article className="feature-card">
-              <h2>Designed for GitHub Pages</h2>
-              <p>
-                Static deployment, React + TypeScript + Vite build, and a single-thread fallback
-                path that works without special server runtime infrastructure.
-              </p>
-            </article>
-            <article className="feature-card">
-              <h2>Better post-conversion workflow</h2>
-              <p>
-                Converted output is previewed inline so people can validate the result before they
-                download it.
-              </p>
-            </article>
-          </div>
-          <section className="cta-band">
-            <h2>Ready to try the full converter experience?</h2>
-            <button onClick={onOpenApp}>Go to the app workspace</button>
-          </section>
-        </div>
-      )}
-
-      {activeTab === 'how-it-works' && (
-        <div id="tabpanel-feat-how" role="tabpanel" aria-labelledby="tab-feat-how">
-          <div className="workflow-steps">
-            <div>
-              <span>1</span>
-              <h3>Choose a file</h3>
-              <p>We detect what it is and show the formats that make sense.</p>
-            </div>
-            <div>
-              <span>2</span>
-              <h3>See the route</h3>
-              <p>Users know before converting whether the browser can do it natively.</p>
-            </div>
-            <div>
-              <span>3</span>
-              <h3>Watch progress</h3>
-              <p>Clear status messaging and progress updates reduce uncertainty.</p>
-            </div>
-            <div>
-              <span>4</span>
-              <h3>Preview the result</h3>
-              <p>Image, audio, and video output is visualized directly in the app.</p>
-            </div>
-          </div>
-        </div>
-      )}
+      <section className="cta-band">
+        <h2>Ready to try the full converter experience?</h2>
+        <button onClick={onOpenApp}>Go to the app workspace</button>
+      </section>
     </section>
   );
 }
