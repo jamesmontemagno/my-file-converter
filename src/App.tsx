@@ -25,6 +25,7 @@ import { convertWithWasmFallback } from './worker-client';
 import { LogoIcon } from './Logo';
 
 const APP_NAME = 'LocalMorph';
+const MAX_ACTIVITY_ENTRIES = 160;
 
 type Page = 'landing' | 'app' | 'privacy' | 'terms' | 'docs';
 type StatusMode = 'idle' | 'ready' | 'working' | 'success' | 'error';
@@ -1100,7 +1101,7 @@ export default function App() {
         });
       }
 
-      return nextEntries.slice(-160);
+      return nextEntries.slice(-MAX_ACTIVITY_ENTRIES);
     });
   }
 

@@ -30,7 +30,7 @@ async function ensureLoaded(onProgress?: (activity: ConversionActivity) => void)
   onProgress?.({
     progress: latestProgress,
     message: 'Downloading ffmpeg core',
-    detail: 'Fetching the ffmpeg.wasm runtime for the fallback route.',
+    detail: 'Fetching the ffmpeg.wasm runtime for the WebAssembly conversion path.',
     source: 'ffmpeg',
     rawOutput: '$ load ffmpeg-core',
   });
