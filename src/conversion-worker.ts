@@ -1,4 +1,5 @@
 import type { ConversionOptions } from './conversion-options';
+import type { ConversionActivity } from './conversion';
 
 function extensionFor(mime: string) {
   if (mime.includes('mp4')) return 'mp4';
@@ -34,7 +35,7 @@ self.onmessage = async (event: MessageEvent) => {
         file: File;
         targetMime: string;
         options?: ConversionOptions;
-        onProgress?: (progress: number, message: string) => void;
+        onProgress?: (activity: ConversionActivity) => void;
       }) => Promise<{ blob: Blob; outputName?: string }>;
     };
 
@@ -46,8 +47,8 @@ self.onmessage = async (event: MessageEvent) => {
       file,
       targetMime,
       options,
-      onProgress: (progress, message) => {
-        self.postMessage({ id, type: 'progress', progress, message });
+      onProgress: (activity) => {
+        self.postMessage({ id, type: 'progress', activity });
       },
     });
 

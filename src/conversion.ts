@@ -7,6 +7,14 @@ export type ConversionResult = {
   route: string;
 };
 
+export type ConversionActivity = {
+  progress: number;
+  message: string;
+  detail?: string;
+  rawOutput?: string;
+  source?: 'native' | 'ffmpeg';
+};
+
 function resolveImageSize(sourceWidth: number, sourceHeight: number, options?: ImageConversionOptions) {
   const targetWidth = options?.width ?? null;
   const targetHeight = options?.height ?? null;
@@ -67,10 +75,15 @@ export async function convertImage(args: {
   targetMime: string;
   quality: number;
   imageOptions?: ImageConversionOptions;
-  onProgress?: (progress: number, message: string) => void;
+  onProgress?: (activity: ConversionActivity) => void;
 }): Promise<ConversionResult> {
   const { file, targetMime, quality, imageOptions, onProgress } = args;
-  onProgress?.(0.1, 'Decoding image');
+  onProgress?.({
+    progress: 0.1,
+    message: 'Decoding image',
+    detail: `Reading ${file.type || 'source image'} into the browser canvas.`,
+    source: 'native',
+  });
   const bitmap = await createImageBitmap(file);
   const nextSize = resolveImageSize(bitmap.width, bitmap.height, imageOptions);
   const canvas = document.createElement('canvas');
@@ -83,13 +96,23 @@ export async function convertImage(args: {
   }
 
   if (nextSize.width !== bitmap.width || nextSize.height !== bitmap.height) {
-    onProgress?.(0.35, `Resizing image to ${nextSize.width}×${nextSize.height}`);
+    onProgress?.({
+      progress: 0.35,
+      message: `Resizing image to ${nextSize.width}×${nextSize.height}`,
+      detail: 'Scaling the decoded image before export.',
+      source: 'native',
+    });
   }
 
   ctx.drawImage(bitmap, 0, 0, nextSize.width, nextSize.height);
   bitmap.close();
 
-  onProgress?.(0.6, 'Encoding image');
+  onProgress?.({
+    progress: 0.6,
+    message: 'Encoding image',
+    detail: `Exporting the canvas as ${targetMime}.`,
+    source: 'native',
+  });
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (result) => {
@@ -133,7 +156,7 @@ function mediaRecorderSupported(type: string) {
 export async function convertViaMediaRecorder(args: {
   file: File;
   targetMime: string;
-  onProgress?: (progress: number, message: string) => void;
+  onProgress?: (activity: ConversionActivity) => void;
 }): Promise<ConversionResult> {
   const { file, targetMime, onProgress } = args;
   const mediaType = classifyMediaType(file);
@@ -144,7 +167,12 @@ export async function convertViaMediaRecorder(args: {
     throw new Error(`MediaRecorder does not support target MIME type: ${targetMime}`);
   }
 
-  onProgress?.(0.1, 'Preparing media stream');
+  onProgress?.({
+    progress: 0.1,
+    message: 'Preparing media stream',
+    detail: 'Loading the source media into a browser playback element.',
+    source: 'native',
+  });
   const element = await createMediaElement(file, mediaType);
   const captureStream = (element as CaptureCapableElement).captureStream;
   if (!captureStream) {
@@ -165,12 +193,22 @@ export async function convertViaMediaRecorder(args: {
   });
 
   recorder.start(500);
-  onProgress?.(0.3, 'Recording converted stream');
+  onProgress?.({
+    progress: 0.3,
+    message: 'Recording converted stream',
+    detail: `Capturing ${mediaType} output with MediaRecorder.`,
+    source: 'native',
+  });
   const progressInterval = window.setInterval(() => {
     const duration = Number.isFinite(element.duration) ? element.duration : 0;
     if (duration > 0) {
       const completion = Math.min(1, element.currentTime / duration);
-      onProgress?.(0.3 + completion * 0.65, 'Recording converted stream');
+      onProgress?.({
+        progress: 0.3 + completion * 0.65,
+        message: 'Recording converted stream',
+        detail: `Captured ${Math.round(completion * 100)}% of the source duration.`,
+        source: 'native',
+      });
     }
   }, 250);
 
@@ -181,6 +219,12 @@ export async function convertViaMediaRecorder(args: {
       element.play().catch(reject);
     });
 
+    onProgress?.({
+      progress: 0.96,
+      message: 'Finalizing recording',
+      detail: 'Stopping the recorder and assembling the output file.',
+      source: 'native',
+    });
     recorder.stop();
     await finished;
   } finally {
