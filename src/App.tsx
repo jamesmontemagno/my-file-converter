@@ -116,7 +116,7 @@ function isStandaloneLaunch() {
 
 function getInitialPage(): Page {
   if (!window.location.hash && isStandaloneLaunch()) {
-    window.location.hash = '/app';
+    window.location.hash = '#/app';
     return 'app';
   }
 
@@ -1203,13 +1203,13 @@ export default function App() {
 
   function navigate(next: Page) {
     if (next === 'app') {
-      window.location.hash = '/app';
+      window.location.hash = '#/app';
     } else if (next === 'privacy') {
-      window.location.hash = '/privacy';
+      window.location.hash = '#/privacy';
     } else if (next === 'terms') {
-      window.location.hash = '/terms';
+      window.location.hash = '#/terms';
     } else if (next === 'docs') {
-      window.location.hash = '/docs';
+      window.location.hash = '#/docs';
     } else {
       window.location.hash = '';
     }
