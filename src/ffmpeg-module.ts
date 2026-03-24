@@ -1,5 +1,5 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import type { ConversionOptions } from './conversion-options';
 import type { ConversionActivity } from './conversion';
 
@@ -151,20 +151,31 @@ async function ensureLoaded(onProgress?: (activity: ConversionActivity) => void)
     rawOutput: '$ load ffmpeg-core',
   });
 
-  // Use direct CDN URLs instead of blob URLs. jsDelivr provides CORS
-  // headers, and direct URLs allow the browser to use streaming WASM
-  // compilation (WebAssembly.compileStreaming) which is faster and more
-  // reliable than blob URLs — especially inside Web Workers.
+  // Use toBlobURL from @ffmpeg/util to download and convert CDN assets to
+  // blob URLs. The FFmpeg library creates an internal worker that needs to
+  // import() these URLs — blob URLs work reliably in nested worker contexts
+  // while direct CDN URLs do not.
   const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
-  const coreURL = `${baseURL}/ffmpeg-core.js`;
-  const wasmURL = `${baseURL}/ffmpeg-core.wasm`;
 
   onProgress?.({
     progress: 0.06,
-    message: 'Loading ffmpeg core',
-    detail: 'Calling ffmpeg.load() with direct CDN URLs…',
+    message: 'Downloading ffmpeg core',
+    detail: 'Downloading ffmpeg-core.js and ffmpeg-core.wasm (~31 MB) from jsDelivr CDN…',
     source: 'ffmpeg',
-    rawOutput: `$ ffmpeg.load({ coreURL: "${coreURL}", wasmURL: "${wasmURL}" })`,
+  });
+
+  const [coreURL, wasmURL] = await Promise.all([
+    toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+    toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+  ]);
+
+  const tDownload = Date.now();
+  onProgress?.({
+    progress: 0.07,
+    message: 'Compiling ffmpeg WASM',
+    detail: `Download completed in ${((tDownload - t0) / 1000).toFixed(1)}s. Now calling ffmpeg.load() to compile the WebAssembly module…`,
+    source: 'ffmpeg',
+    rawOutput: `$ toBlobURL done in ${((tDownload - t0) / 1000).toFixed(1)}s — calling ffmpeg.load()`,
   });
 
   await ffmpeg.load({ coreURL, wasmURL });
@@ -173,9 +184,9 @@ async function ensureLoaded(onProgress?: (activity: ConversionActivity) => void)
   onProgress?.({
     progress: 0.09,
     message: 'ffmpeg core ready',
-    detail: `ffmpeg.load() completed in ${((t1 - t0) / 1000).toFixed(1)}s.`,
+    detail: `ffmpeg.load() completed in ${((t1 - tDownload) / 1000).toFixed(1)}s. Total load time: ${((t1 - t0) / 1000).toFixed(1)}s.`,
     source: 'ffmpeg',
-    rawOutput: `$ ffmpeg ready — load took ${((t1 - t0) / 1000).toFixed(1)}s`,
+    rawOutput: `$ ffmpeg ready — compile ${((t1 - tDownload) / 1000).toFixed(1)}s, total ${((t1 - t0) / 1000).toFixed(1)}s`,
   });
   if (!progressHandlerAttached) {
     ffmpeg.on('progress', ({ progress, time }) => {
