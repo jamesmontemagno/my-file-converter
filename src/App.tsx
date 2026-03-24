@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import {
   classifyMediaType,
@@ -10,6 +10,7 @@ import {
 import {
   convertImage,
   convertViaMediaRecorder,
+  isConversionAbortError,
   supportsNativeRoute,
   type ConversionActivity,
   type ConversionResult,
@@ -29,7 +30,7 @@ const MAX_ACTIVITY_HISTORY_LENGTH = 160;
 const MAX_RAW_OUTPUT_ENTRIES = 80;
 
 type Page = 'landing' | 'app' | 'privacy' | 'terms' | 'docs';
-type StatusMode = 'idle' | 'ready' | 'working' | 'success' | 'error';
+type StatusMode = 'idle' | 'ready' | 'working' | 'success' | 'error' | 'canceled';
 type ActivityTone = 'info' | 'success' | 'error';
 type ActivityVariant = 'milestone' | 'raw';
 type RouteDecision = 'native' | 'wasm' | 'blocked';
@@ -353,6 +354,13 @@ function statusCopyFor(mode: StatusMode) {
     return {
       label: 'Needs attention',
       detail: 'The latest conversion hit an error. Check the live log for details.',
+    };
+  }
+
+  if (mode === 'canceled') {
+    return {
+      label: 'Canceled',
+      detail: 'The active conversion was stopped before the output was produced.',
     };
   }
 
@@ -1021,9 +1029,11 @@ export default function App() {
   const [downloadUrl, setDownloadUrl] = useState('');
   const [capabilities, setCapabilities] = useState<CapabilityReport | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cancelRequested, setCancelRequested] = useState(false);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
   const [statusSource, setStatusSource] = useState<'native' | 'ffmpeg' | undefined>();
+  const activeAbortController = useRef<AbortController | null>(null);
 
   const mediaType: MediaKind = classifyMediaType(file);
   const targetOptions = useMemo(() => targetFormatsFor(mediaType), [mediaType]);
@@ -1254,10 +1264,28 @@ export default function App() {
     setStatusSource(undefined);
   }
 
+  function cancelConversion() {
+    if (!busy || cancelRequested) return;
+    setCancelRequested(true);
+    handleProgress(
+      {
+        progress,
+        message: 'Cancel requested',
+        detail: 'Stopping the current conversion and cleaning up local work.',
+        source: statusSource,
+      },
+      'info',
+    );
+    activeAbortController.current?.abort();
+  }
+
   async function runConversion() {
     if (!file || !targetMime || trimValidationError) return;
 
+    const abortController = new AbortController();
+    activeAbortController.current = abortController;
     setBusy(true);
+    setCancelRequested(false);
     setStatusMode('working');
     setLogOpen(false);
     setResult(null);
@@ -1312,8 +1340,14 @@ export default function App() {
                 quality,
                 imageOptions: requestedOptions.image,
                 onProgress: handleProgress,
+                signal: abortController.signal,
               })
-            : await convertViaMediaRecorder({ file, targetMime, onProgress: handleProgress });
+            : await convertViaMediaRecorder({
+                file,
+                targetMime,
+                onProgress: handleProgress,
+                signal: abortController.signal,
+              });
       } else if (routeDecision === 'wasm' && enableWasmFallback) {
         next = await convertWithWasmFallback({
           file,
@@ -1321,6 +1355,7 @@ export default function App() {
           wasmModuleUrl: moduleUrl,
           options: requestedOptions,
           onProgress: handleProgress,
+          signal: abortController.signal,
         });
       } else {
         throw new Error(routeReason);
@@ -1341,18 +1376,30 @@ export default function App() {
         'success',
       );
     } catch (error) {
-      setStatusMode('error');
-      handleProgress(
-        {
+      if (isConversionAbortError(error)) {
+        setStatusMode('canceled');
+        handleProgress({
           progress: 0,
-          message: 'Conversion failed',
-          detail: error instanceof Error ? error.message : 'Unknown error',
+          message: 'Conversion canceled',
+          detail: 'The conversion was stopped before a new file was generated.',
           source: routeSource,
-        },
-        'error',
-      );
-      setLogOpen(true);
+        });
+      } else {
+        setStatusMode('error');
+        handleProgress(
+          {
+            progress: 0,
+            message: 'Conversion failed',
+            detail: error instanceof Error ? error.message : 'Unknown error',
+            source: routeSource,
+          },
+          'error',
+        );
+        setLogOpen(true);
+      }
     } finally {
+      activeAbortController.current = null;
+      setCancelRequested(false);
       setBusy(false);
     }
   }
@@ -1730,9 +1777,21 @@ export default function App() {
               )}
             </div>
 
-            <button onClick={runConversion} disabled={!file || !targetMime || busy || Boolean(trimValidationError)}>
-              {busy ? 'Converting…' : 'Convert file'}
-            </button>
+            <div className="conversion-actions">
+              <button onClick={runConversion} disabled={!file || !targetMime || busy || Boolean(trimValidationError)}>
+                {busy ? 'Converting…' : 'Convert file'}
+              </button>
+              {busy ? (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={cancelConversion}
+                  disabled={cancelRequested}
+                >
+                  {cancelRequested ? 'Canceling…' : 'Cancel conversion'}
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <div className="card">

@@ -1,6 +1,8 @@
 import { classifyMediaType } from './capabilities';
 import type { ImageConversionOptions } from './conversion-options';
 
+export const CONVERSION_CANCELED_MESSAGE = 'Conversion canceled.';
+
 export type ConversionResult = {
   blob: Blob;
   outputName: string;
@@ -14,6 +16,51 @@ export type ConversionActivity = {
   rawOutput?: string;
   source?: 'native' | 'ffmpeg';
 };
+
+export function createConversionAbortError() {
+  return new DOMException(CONVERSION_CANCELED_MESSAGE, 'AbortError');
+}
+
+export function isConversionAbortError(error: unknown) {
+  return (
+    (error instanceof DOMException && error.name === 'AbortError') ||
+    (error instanceof Error &&
+      (error.name === 'AbortError' || error.message === CONVERSION_CANCELED_MESSAGE))
+  );
+}
+
+function throwIfConversionAborted(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw createConversionAbortError();
+  }
+}
+
+function raceWithAbort<T>(promise: Promise<T>, signal?: AbortSignal, onAbort?: () => void) {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    onAbort?.();
+    return Promise.reject(createConversionAbortError());
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    const handleAbort = () => {
+      onAbort?.();
+      reject(createConversionAbortError());
+    };
+
+    signal.addEventListener('abort', handleAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', handleAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener('abort', handleAbort);
+        reject(error);
+      },
+    );
+  });
+}
 
 function resolveImageSize(sourceWidth: number, sourceHeight: number, options?: ImageConversionOptions) {
   const targetWidth = options?.width ?? null;
@@ -76,15 +123,17 @@ export async function convertImage(args: {
   quality: number;
   imageOptions?: ImageConversionOptions;
   onProgress?: (activity: ConversionActivity) => void;
+  signal?: AbortSignal;
 }): Promise<ConversionResult> {
-  const { file, targetMime, quality, imageOptions, onProgress } = args;
+  const { file, targetMime, quality, imageOptions, onProgress, signal } = args;
+  throwIfConversionAborted(signal);
   onProgress?.({
     progress: 0.1,
     message: 'Decoding image',
     detail: `Reading ${file.type || 'source image'} into the browser canvas.`,
     source: 'native',
   });
-  const bitmap = await createImageBitmap(file);
+  const bitmap = await raceWithAbort(createImageBitmap(file), signal);
   const nextSize = resolveImageSize(bitmap.width, bitmap.height, imageOptions);
   const canvas = document.createElement('canvas');
   canvas.width = nextSize.width;
@@ -106,6 +155,7 @@ export async function convertImage(args: {
 
   ctx.drawImage(bitmap, 0, 0, nextSize.width, nextSize.height);
   bitmap.close();
+  throwIfConversionAborted(signal);
 
   onProgress?.({
     progress: 0.6,
@@ -114,8 +164,20 @@ export async function convertImage(args: {
     source: 'native',
   });
   const blob = await new Promise<Blob>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(createConversionAbortError());
+      return;
+    }
+
+    const handleAbort = () => reject(createConversionAbortError());
+    signal?.addEventListener('abort', handleAbort, { once: true });
     canvas.toBlob(
       (result) => {
+        signal?.removeEventListener('abort', handleAbort);
+        if (signal?.aborted) {
+          reject(createConversionAbortError());
+          return;
+        }
         if (!result) {
           reject(new Error(`Unable to encode as ${targetMime}.`));
           return;
@@ -157,8 +219,9 @@ export async function convertViaMediaRecorder(args: {
   file: File;
   targetMime: string;
   onProgress?: (activity: ConversionActivity) => void;
+  signal?: AbortSignal;
 }): Promise<ConversionResult> {
-  const { file, targetMime, onProgress } = args;
+  const { file, targetMime, onProgress, signal } = args;
   const mediaType = classifyMediaType(file);
   if (mediaType !== 'audio' && mediaType !== 'video') {
     throw new Error('MediaRecorder conversion supports only audio/video input.');
@@ -167,13 +230,14 @@ export async function convertViaMediaRecorder(args: {
     throw new Error(`MediaRecorder does not support target MIME type: ${targetMime}`);
   }
 
+  throwIfConversionAborted(signal);
   onProgress?.({
     progress: 0.1,
     message: 'Preparing media stream',
     detail: 'Loading the source media into a browser playback element.',
     source: 'native',
   });
-  const element = await createMediaElement(file, mediaType);
+  const element = await raceWithAbort(createMediaElement(file, mediaType), signal);
   const captureStream = (element as CaptureCapableElement).captureStream;
   if (!captureStream) {
     URL.revokeObjectURL(element.src);
@@ -213,11 +277,21 @@ export async function convertViaMediaRecorder(args: {
   }, 250);
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      element.onended = () => resolve();
-      element.onerror = () => reject(new Error('Playback failed for source media.'));
-      element.play().catch(reject);
-    });
+    await raceWithAbort(
+      new Promise<void>((resolve, reject) => {
+        element.onended = () => resolve();
+        element.onerror = () => reject(new Error('Playback failed for source media.'));
+        element.play().catch(reject);
+      }),
+      signal,
+      () => {
+        element.pause();
+        if (recorder.state !== 'inactive') {
+          recorder.stop();
+        }
+      },
+    );
+    throwIfConversionAborted(signal);
 
     onProgress?.({
       progress: 0.96,
@@ -226,7 +300,8 @@ export async function convertViaMediaRecorder(args: {
       source: 'native',
     });
     recorder.stop();
-    await finished;
+    await raceWithAbort(finished, signal);
+    throwIfConversionAborted(signal);
   } finally {
     if (recorder.state !== 'inactive') {
       recorder.stop();
