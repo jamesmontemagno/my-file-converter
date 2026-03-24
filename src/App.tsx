@@ -102,11 +102,15 @@ function getPageFromHash(): Page {
   return 'landing';
 }
 
+function hasStandaloneNavigatorFlag(nav: Navigator): nav is Navigator & { standalone?: boolean } {
+  return 'standalone' in nav;
+}
+
 function isStandaloneLaunch() {
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
     window.matchMedia('(display-mode: window-controls-overlay)').matches ||
-    ('standalone' in navigator && navigator.standalone === true)
+    (hasStandaloneNavigatorFlag(navigator) && navigator.standalone === true)
   );
 }
 
