@@ -1107,8 +1107,8 @@ export default function App() {
     progressRef.current = progress;
   }, [progress]);
 
-  const defaultModuleUrl = new URL('./ffmpeg-module.ts', import.meta.url).href;
-  const moduleUrl = customModuleUrl.trim() || defaultModuleUrl;
+  const defaultModuleUrl = 'Bundled ffmpeg fallback module';
+  const moduleUrl = customModuleUrl.trim();
   const requestedOptions = useMemo<ConversionOptions>(
     () => ({
       outputBaseName: outputBaseName.trim(),

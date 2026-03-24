@@ -82,7 +82,7 @@ function getWorker() {
 export function convertWithWasmFallback(args: {
   file: File;
   targetMime: string;
-  wasmModuleUrl: string;
+  wasmModuleUrl?: string;
   options?: ConversionOptions;
   onProgress?: (activity: ConversionActivity) => void;
   signal?: AbortSignal;
