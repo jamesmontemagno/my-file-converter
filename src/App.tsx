@@ -102,6 +102,23 @@ function getPageFromHash(): Page {
   return 'landing';
 }
 
+function isStandaloneLaunch() {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+    ('standalone' in navigator && navigator.standalone === true)
+  );
+}
+
+function getInitialPage(): Page {
+  if (!window.location.hash && isStandaloneLaunch()) {
+    window.location.hash = '/app';
+    return 'app';
+  }
+
+  return getPageFromHash();
+}
+
 function titleForPage(page: Page) {
   if (page === 'app') return `${APP_NAME} | Browser File Converter`;
   if (page === 'privacy') return `${APP_NAME} | Privacy Policy`;
@@ -1015,7 +1032,7 @@ function DocsPage() {
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>(getPageFromHash());
+  const [page, setPage] = useState<Page>(() => getInitialPage());
   const [file, setFile] = useState<File | null>(null);
   const [quality, setQuality] = useState(0.9);
   const [status, setStatus] = useState('Select a file to begin.');
