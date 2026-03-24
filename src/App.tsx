@@ -1033,6 +1033,7 @@ export default function App() {
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
   const [statusSource, setStatusSource] = useState<'native' | 'ffmpeg' | undefined>();
+  const progressRef = useRef(0);
   const activeAbortController = useRef<AbortController | null>(null);
 
   const mediaType: MediaKind = classifyMediaType(file);
@@ -1085,6 +1086,10 @@ export default function App() {
     setDownloadUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [result]);
+
+  useEffect(() => {
+    progressRef.current = progress;
+  }, [progress]);
 
   const defaultModuleUrl = new URL('./ffmpeg-module.ts', import.meta.url).href;
   const moduleUrl = customModuleUrl.trim() || defaultModuleUrl;
@@ -1269,7 +1274,7 @@ export default function App() {
     setCancelRequested(true);
     handleProgress(
       {
-        progress,
+        progress: progressRef.current,
         message: 'Cancel requested',
         detail: 'Stopping the current conversion and cleaning up local work.',
         source: statusSource,

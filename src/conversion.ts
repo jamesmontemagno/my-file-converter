@@ -180,10 +180,6 @@ export async function convertImage(args: {
     }
     canvas.toBlob(
       (result) => {
-        if (signal?.aborted) {
-          handleAbort();
-          return;
-        }
         if (!result) {
           settle(() => reject(new Error(`Unable to encode as ${targetMime}.`)));
           return;
