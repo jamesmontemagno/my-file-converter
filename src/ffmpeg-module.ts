@@ -71,7 +71,7 @@ function codecConfigForTargetMime(targetMime: string): OutputCodecConfig {
         '-b:a',
         '96k',
       ],
-      summary: 'Encoding WebM with VP8 video and Opus audio for a faster WebAssembly conversion path.',
+      summary: 'Encoding WebM with VP8 video and Opus audio. VP8 is usually the faster WebAssembly path because it is less computationally expensive than VP9.',
     };
   }
 
@@ -103,7 +103,10 @@ function codecConfigForTargetMime(targetMime: string): OutputCodecConfig {
     };
   }
 
-  return { args: [] };
+  return {
+    args: [],
+    summary: 'Using the container default codec settings for this target.',
+  };
 }
 
 async function ensureLoaded(onProgress?: (activity: ConversionActivity) => void) {
