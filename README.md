@@ -96,3 +96,19 @@ Notes:
 - Non-zero `ffmpeg.exec()` exit codes are treated as conversion failures.
 - On long single-thread jobs, log output can pause while the encoder is still running.
 - This app intentionally stays single-thread for GitHub Pages compatibility.
+
+## WASM encoding presets
+
+All video encoder presets are tuned for the single-thread WebAssembly build, which is
+roughly 10–20× slower than native FFmpeg per the upstream FAQ. The defaults prioritise
+actually completing the encode over maximum quality:
+
+| Target | Encoder | Key flags | Why |
+|--------|---------|-----------|-----|
+| WebM VP8 | libvpx | `-deadline realtime -cpu-used 8 -crf 30` | Fastest VP8 mode; previous `-deadline good -crf 10` caused the encoder to stall on the first frame for long videos |
+| WebM VP9 | libvpx-vp9 | `-deadline realtime -cpu-used 8 -crf 35` | VP9 is inherently slower; realtime mode makes it feasible in WASM |
+| MP4 H.264 | libx264 | `-preset ultrafast` | The default `medium` preset is prohibitively slow in WASM |
+| Audio only | libopus / aac | Standard bitrate flags | Audio encoding is fast in any mode |
+
+If you need higher quality output, consider converting shorter clips or using
+desktop FFmpeg for long videos.

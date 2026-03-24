@@ -1149,12 +1149,15 @@ export default function App() {
     if (!busy || statusMode !== 'working' || statusSource !== 'ffmpeg') return;
 
     const interval = window.setInterval(() => {
-      const ageMs = Date.now() - lastActivityAt;
-      if (ageMs < 15000) return;
+      const silenceMs = Date.now() - lastActivityAt;
+      if (silenceMs < 10_000) return;
+      const silenceSec = Math.round(silenceMs / 1000);
       setStatusDetail(
-        'ffmpeg is still encoding in the background. On single-thread WebAssembly builds, long video jobs may run for several minutes with sparse progress updates.',
+        `ffmpeg is still encoding (no output for ${silenceSec}s). ` +
+        'Single-thread WebAssembly encoding is much slower than native FFmpeg — ' +
+        'the encoder is working but progress events only fire when full frames complete.',
       );
-    }, 5000);
+    }, 4000);
 
     return () => window.clearInterval(interval);
   }, [busy, lastActivityAt, statusMode, statusSource]);

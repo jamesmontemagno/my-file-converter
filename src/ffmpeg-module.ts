@@ -9,7 +9,13 @@ let progressHandlerAttached = false;
 let logHandlerAttached = false;
 let activeProgressHandler: ((activity: ConversionActivity) => void) | undefined;
 let latestProgress = 0;
-const DEFAULT_EXEC_TIMEOUT_MS = -1;
+
+// ---------------------------------------------------------------------------
+// File-size safety: the single-thread WASM build has a ~2 GB memory ceiling.
+// Input + working buffers + output must all fit, so reject files over 2 GB.
+// In practice the usable ceiling is lower; 2 GB is a hard WebAssembly limit.
+// ---------------------------------------------------------------------------
+const MAX_INPUT_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB
 
 function extForMime(mime: string) {
   if (mime.includes('video/mp4')) return 'mp4';
@@ -26,81 +32,103 @@ function extForMime(mime: string) {
 
 type OutputCodecConfig = {
   args: string[];
-  summary?: string;
+  summary: string;
 };
+
+// ---------------------------------------------------------------------------
+// Encoding presets tuned for the single-thread WebAssembly build.
+//
+// Key constraints in browser WASM:
+//   - Single-threaded: no pthreads, no row-mt, no multi-slice.
+//   - ~10–20× slower than native FFmpeg per the upstream FAQ.
+//   - Progress events rely on stderr frame lines; if the encoder is stuck on
+//     a single expensive frame, no progress fires until that frame completes.
+//
+// Guidelines applied below:
+//   VP8:  -deadline realtime -cpu-used 8          (fastest VP8 mode)
+//   VP9:  -deadline realtime -cpu-used 8 -row-mt 0 (fastest VP9 mode)
+//   x264: -preset ultrafast                       (fastest x264 mode)
+//   Audio-only jobs keep simple settings — they are fast in any mode.
+// ---------------------------------------------------------------------------
 
 function codecConfigForTargetMime(targetMime: string): OutputCodecConfig {
   const normalized = targetMime.toLowerCase();
 
-  if (normalized.startsWith('video/webm')) {
-    if (normalized.includes('codecs=vp9')) {
-      return {
-        args: [
-          '-c:v',
-          'libvpx-vp9',
-          '-deadline',
-          'good',
-          '-cpu-used',
-          '4',
-          '-b:v',
-          '0',
-          '-crf',
-          '32',
-          '-c:a',
-          'libopus',
-          '-b:a',
-          '96k',
-        ],
-        summary: 'Encoding WebM with VP9 video and Opus audio. VP9 is the slower WebAssembly path for longer videos.',
-      };
-    }
-
+  // -- Video WebM (VP9 variant) -------------------------------------------
+  if (normalized.startsWith('video/webm') && normalized.includes('codecs=vp9')) {
     return {
       args: [
-        '-c:v',
-        'libvpx',
-        '-deadline',
-        'good',
-        '-cpu-used',
-        '4',
-        '-b:v',
-        '1M',
-        '-crf',
-        '10',
-        '-c:a',
-        'libopus',
-        '-b:a',
-        '96k',
+        '-c:v', 'libvpx-vp9',
+        '-deadline', 'realtime',
+        '-cpu-used', '8',
+        '-row-mt', '0',
+        '-b:v', '1M',
+        '-crf', '35',
+        '-c:a', 'libopus',
+        '-b:a', '96k',
       ],
-      summary: 'Encoding WebM with VP8 video and Opus audio. VP8 is usually the faster WebAssembly path because it is less computationally expensive than VP9.',
+      summary:
+        'WebM VP9 + Opus — realtime deadline / cpu-used 8 for WASM speed. ' +
+        'VP9 is still slower than VP8 in single-thread WebAssembly; expect long encodes for videos over a few minutes.',
     };
   }
 
+  // -- Video WebM (VP8 default) -------------------------------------------
+  if (normalized.startsWith('video/webm')) {
+    return {
+      args: [
+        '-c:v', 'libvpx',
+        '-deadline', 'realtime',
+        '-cpu-used', '8',
+        '-b:v', '1M',
+        '-crf', '30',
+        '-c:a', 'libopus',
+        '-b:a', '96k',
+      ],
+      summary:
+        'WebM VP8 + Opus — realtime deadline / cpu-used 8 for fast WASM encoding. ' +
+        'VP8 is the fastest video codec available in this WebAssembly build.',
+    };
+  }
+
+  // -- Audio WebM ---------------------------------------------------------
   if (normalized.startsWith('audio/webm')) {
     return {
-      args: ['-c:a', 'libopus', '-b:a', '96k'],
-      summary: 'Encoding WebM audio with Opus.',
+      args: ['-vn', '-c:a', 'libopus', '-b:a', '96k'],
+      summary: 'WebM audio with Opus.',
     };
   }
 
+  // -- Audio Ogg ----------------------------------------------------------
   if (normalized.startsWith('audio/ogg')) {
     return {
-      args: ['-c:a', 'libopus', '-b:a', '96k'],
-      summary: 'Encoding Ogg audio with Opus.',
+      args: ['-vn', '-c:a', 'libopus', '-b:a', '96k'],
+      summary: 'Ogg audio with Opus.',
     };
   }
 
+  // -- Video MP4 ----------------------------------------------------------
   if (normalized.startsWith('video/mp4')) {
     return {
-      args: ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart'],
-      summary: 'Encoding MP4 with H.264 video and AAC audio.',
+      args: [
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-movflags', '+faststart',
+      ],
+      summary:
+        'MP4 H.264 + AAC — ultrafast preset for WASM speed. ' +
+        'Quality is lower than the default medium preset but encoding completes orders of magnitude faster in WebAssembly.',
     };
   }
 
+  // -- Audio MP4 ----------------------------------------------------------
   if (normalized.startsWith('audio/mp4')) {
     return {
-      args: ['-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart'],
-      summary: 'Encoding MP4 audio with AAC.',
+      args: ['-vn', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart'],
+      summary: 'MP4 audio with AAC.',
     };
   }
 
@@ -113,11 +141,11 @@ function codecConfigForTargetMime(targetMime: string): OutputCodecConfig {
 async function ensureLoaded(onProgress?: (activity: ConversionActivity) => void) {
   activeProgressHandler = onProgress;
   if (loaded) return;
-  latestProgress = 0.08;
+  latestProgress = 0.05;
   onProgress?.({
     progress: latestProgress,
     message: 'Downloading ffmpeg core',
-    detail: 'Fetching the ffmpeg.wasm runtime for the WebAssembly conversion path.',
+    detail: 'Fetching the ffmpeg.wasm runtime (~31 MB) from the CDN. This is cached after the first load.',
     source: 'ffmpeg',
     rawOutput: '$ load ffmpeg-core',
   });
@@ -127,12 +155,16 @@ async function ensureLoaded(onProgress?: (activity: ConversionActivity) => void)
     wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
   });
   if (!progressHandlerAttached) {
-    ffmpeg.on('progress', ({ progress }) => {
-      latestProgress = Math.min(0.95, 0.15 + progress * 0.75);
+    ffmpeg.on('progress', ({ progress, time }) => {
+      latestProgress = Math.min(0.95, 0.10 + progress * 0.80);
+      const pct = Math.round(progress * 100);
+      const timeSec = time > 0 ? (time / 1_000_000).toFixed(1) : null;
       activeProgressHandler?.({
         progress: latestProgress,
         message: 'Transcoding with ffmpeg',
-        detail: `${Math.round(progress * 100)}% of the ffmpeg job has reported progress.`,
+        detail: timeSec
+          ? `${pct}% complete — encoded ${timeSec}s of output so far.`
+          : `${pct}% of the ffmpeg job has reported progress.`,
         source: 'ffmpeg',
       });
     });
@@ -164,6 +196,15 @@ export async function convert(args: {
   const { file, targetMime, options, onProgress } = args;
   activeProgressHandler = onProgress;
   latestProgress = 0;
+
+  // ---- Input validation -------------------------------------------------
+  if (file.size >= MAX_INPUT_BYTES) {
+    throw new Error(
+      `Input file is ${(file.size / (1024 * 1024 * 1024)).toFixed(1)} GB. ` +
+      'The WebAssembly runtime has a hard memory ceiling of ~2 GB, so files this large cannot be processed in the browser.',
+    );
+  }
+
   await ensureLoaded(onProgress);
 
   const inputExt = file.name.split('.').pop() || 'input';
@@ -174,27 +215,28 @@ export async function convert(args: {
   const trimEnd = Math.max(0, options?.media.trimEnd ?? 0);
   const codecConfig = codecConfigForTargetMime(targetMime);
 
-  latestProgress = 0.2;
+  // ---- Write input into the WASM virtual filesystem ---------------------
+  latestProgress = 0.08;
   onProgress?.({
     progress: latestProgress,
     message: 'Writing input file',
-    detail: `Copying ${file.name} into the ffmpeg workspace.`,
+    detail: `Copying ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB) into the ffmpeg virtual filesystem.`,
     source: 'ffmpeg',
     rawOutput: `$ writeFile ${inputName}`,
   });
   await ffmpeg.writeFile(inputName, await fetchFile(file));
 
   try {
-    // Place -ss before -i for input-level seeking (skips decoding of
+    // ---- Build command --------------------------------------------------
+    // Place -ss before -i for input-level seeking (skips decoding of the
     // skipped portion, which is significantly faster in WebAssembly).
     const command: string[] = [];
 
     if (trimStart > 0 || trimEnd > 0) {
-      latestProgress = 0.35;
       onProgress?.({
-        progress: latestProgress,
+        progress: 0.12,
         message: 'Applying trim settings',
-        detail: `Preparing trim window ${trimStart}s → ${trimEnd || 'end of file'}.`,
+        detail: `Trim window: ${trimStart}s → ${trimEnd || 'end of file'}.`,
         source: 'ffmpeg',
       });
       if (trimStart > 0) command.push('-ss', trimStart.toString());
@@ -203,73 +245,68 @@ export async function convert(args: {
     command.push('-i', inputName);
 
     // With input-level seeking (-ss before -i), -to is relative to the
-    // seeked start point, so we output the correct duration.
+    // seeked start point, so we compute the correct duration.
     if (trimEnd > 0) {
       const duration = trimStart > 0 ? trimEnd - trimStart : trimEnd;
       if (duration > 0) command.push('-t', duration.toString());
     }
 
-    if (codecConfig.summary) {
-      latestProgress = Math.max(latestProgress, 0.38);
-      onProgress?.({
-        progress: latestProgress,
-        message: 'Configuring output codec',
-        detail: codecConfig.summary,
-        source: 'ffmpeg',
-      });
-    }
-
     command.push(...codecConfig.args, outputName);
-    latestProgress = Math.max(latestProgress, 0.4);
+
+    // ---- Report what we are about to run --------------------------------
+    latestProgress = 0.15;
     onProgress?.({
       progress: latestProgress,
-      message: 'Starting ffmpeg command',
-      detail: codecConfig.summary
-        ? `Running ffmpeg to create ${outputName}. ${codecConfig.summary}`
-        : `Running ffmpeg to create ${outputName}.`,
+      message: 'Starting ffmpeg encode',
+      detail: codecConfig.summary,
       source: 'ffmpeg',
       rawOutput: `$ ffmpeg ${command.join(' ')}`,
     });
-    onProgress?.({
-      progress: latestProgress,
-      message: 'ffmpeg command is running',
-      detail:
-        'The encoder is still working in the background. For longer single-thread jobs, log output can pause for a while before completion.',
-      source: 'ffmpeg',
-    });
-    const exitCode = await ffmpeg.exec(command, DEFAULT_EXEC_TIMEOUT_MS);
+
+    // ---- Execute --------------------------------------------------------
+    // exec() returns 0 on success, 1 on timeout, other non-zero on error.
+    // Default timeout is -1 (no timeout).
+    const exitCode = await ffmpeg.exec(command);
+
     if (exitCode !== 0) {
-      const outputExists = await ffmpeg
-        .listDir('.')
-        .then((nodes) => nodes.some((node) => node.name === outputName))
-        .catch(() => false);
       throw new Error(
-        outputExists
-          ? `ffmpeg exited with code ${exitCode}. The output file exists but the command reported a non-zero status.`
-          : `ffmpeg exited with code ${exitCode}. The command did not complete successfully before output collection.`,
+        exitCode === 1
+          ? 'ffmpeg timed out before the conversion could finish.'
+          : `ffmpeg exited with code ${exitCode}. Check the raw log output for encoder error details.`,
       );
     }
 
-    latestProgress = 0.96;
-    onProgress?.({
-      progress: latestProgress,
-      message: 'ffmpeg command finished',
-      detail: 'The encoding process returned successfully and output collection can begin.',
-      source: 'ffmpeg',
-    });
+    // ---- Read output ----------------------------------------------------
     latestProgress = 0.97;
     onProgress?.({
       progress: latestProgress,
-      message: 'Collecting converted file',
-      detail: `Reading ${outputName} back from ffmpeg.`,
+      message: 'Reading output file',
+      detail: `Collecting ${outputName} from the ffmpeg virtual filesystem.`,
       source: 'ffmpeg',
       rawOutput: `$ readFile ${outputName}`,
     });
-    const data = await ffmpeg.readFile(outputName);
+
+    let data: Uint8Array | string;
+    try {
+      data = await ffmpeg.readFile(outputName);
+    } catch {
+      throw new Error(
+        'ffmpeg reported success but no output file was created. ' +
+        'This usually means the input format or codec combination is not supported by this WebAssembly build.',
+      );
+    }
+
+    if (data instanceof Uint8Array && data.byteLength === 0) {
+      throw new Error(
+        'ffmpeg created an empty output file. ' +
+        'The input may be too short, or the selected codec could not produce output for this source.',
+      );
+    }
+
     onProgress?.({
       progress: 1,
-      message: 'Done',
-      detail: 'ffmpeg finished and returned the converted output.',
+      message: 'Conversion complete',
+      detail: 'ffmpeg finished successfully.',
       source: 'ffmpeg',
     });
 
@@ -278,6 +315,7 @@ export async function convert(args: {
       outputName: `${file.name.replace(/\.[^/.]+$/, '')}.${outputExt}`,
     };
   } finally {
+    // Clean up virtual filesystem regardless of success or failure.
     await ffmpeg.deleteFile(inputName).catch(() => {});
     await ffmpeg.deleteFile(outputName).catch(() => {});
   }
