@@ -24,6 +24,13 @@ import {
 } from './conversion-options';
 import { convertWithWasmFallback } from './worker-client';
 import { LogoIcon } from './Logo';
+import {
+  ConvertingStep,
+  ResultsStep,
+  SettingsStep,
+  UploadStep,
+  WizardStepper,
+} from './components/converter';
 
 const APP_NAME = 'LocalMorph';
 const MAX_ACTIVITY_HISTORY_LENGTH = 160;
@@ -35,6 +42,8 @@ type ActivityTone = 'info' | 'success' | 'error';
 type ActivityVariant = 'milestone' | 'raw';
 type RouteDecision = 'native' | 'wasm' | 'blocked';
 type RoutePreference = 'auto' | 'native' | 'ffmpeg';
+type ConverterStep = 'upload' | 'settings' | 'converting' | 'results';
+type StepState = 'done' | 'current' | 'pending';
 type ActivityEntry = {
   id: number;
   message: string;
@@ -54,6 +63,12 @@ type SizeChangeSummary = {
   trend: 'smaller' | 'larger' | 'same';
   deltaLabel: string;
   summaryLabel: string;
+};
+
+type WizardStep = {
+  id: ConverterStep;
+  label: string;
+  state: StepState;
 };
 
 function formatBytes(bytes: number) {
@@ -1053,6 +1068,7 @@ function DocsPage() {
 
 export default function App() {
   const [page, setPage] = useState<Page>(() => getInitialPage());
+  const [activeStep, setActiveStep] = useState<ConverterStep>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [quality, setQuality] = useState(0.9);
   const [status, setStatus] = useState('Select a file to begin.');
@@ -1181,12 +1197,21 @@ export default function App() {
   const routeSource = resolvedRoute.source;
   const routeDisplayLabel = routeLabel(routeDecision, routePreference);
 
-  const steps = [
-    { label: 'Choose file', state: file ? 'done' : 'current' },
-    { label: 'Set options', state: file && targetMime ? 'done' : 'pending' },
-    { label: 'Convert locally', state: busy ? 'current' : result ? 'done' : 'pending' },
-    { label: 'Preview & download', state: result ? 'done' : 'pending' },
-  ];
+  const canConvert = Boolean(file && targetMime && !trimValidationError && routeDecision !== 'blocked');
+  const stepOrder: ConverterStep[] = ['upload', 'settings', 'converting', 'results'];
+  const activeStepIndex = stepOrder.indexOf(activeStep);
+  const wizardSteps: WizardStep[] = stepOrder.map((step, index) => ({
+    id: step,
+    label:
+      step === 'upload'
+        ? 'Choose file'
+        : step === 'settings'
+          ? 'Set options'
+          : step === 'converting'
+            ? 'Convert locally'
+            : 'Preview & download',
+    state: index < activeStepIndex ? 'done' : index === activeStepIndex ? 'current' : 'pending',
+  }));
   const statusIndicator = useMemo(() => statusCopyFor(statusMode), [statusMode]);
   const recentMilestones = useMemo(
     () =>
@@ -1216,6 +1241,160 @@ export default function App() {
         : '',
     [file, result, targetMime],
   );
+
+  function initializeForFile(nextFile: File | null) {
+    setResult(null);
+    setFile(nextFile);
+    setProgress(0);
+    setOutputBaseName(nextFile ? stripExtension(nextFile.name) : '');
+    setImageWidth('');
+    setImageHeight('');
+    setKeepAspectRatio(true);
+    setTrimStart('0');
+    setTrimEnd('');
+    setStatus(nextFile ? 'File loaded. Configure your output format.' : 'Select a file to begin.');
+    setStatusDetail(
+      nextFile
+        ? 'Choose an output format to see the live route and progress details.'
+        : 'Load a file and the converter will start reporting activity here.',
+    );
+    setStatusMode(nextFile ? 'ready' : 'idle');
+    setStatusSource(undefined);
+    setCancelRequested(false);
+    setLogOpen(false);
+    setActivityLog(
+      nextFile
+        ? [
+            {
+              id: 1,
+              message: `Loaded ${nextFile.name} (${formatBytes(nextFile.size)})`,
+              detail: 'File metadata is ready and the browser can configure the conversion route.',
+              progress: 0,
+              tone: 'info',
+              timestamp: formatEventTime(new Date()),
+              variant: 'milestone',
+            },
+            {
+              id: 2,
+              message: 'Configure your output format and start conversion when ready.',
+              detail: 'The live progress view will update as soon as the conversion begins.',
+              progress: 0,
+              tone: 'info',
+              timestamp: formatEventTime(new Date()),
+              variant: 'milestone',
+            },
+          ]
+        : [],
+    );
+    setActiveStep(nextFile ? 'settings' : 'upload');
+  }
+
+  function restartConverter() {
+    if (busy) return;
+    setQuality(0.9);
+    setEnableWasmFallback(true);
+    setRoutePreference('auto');
+    setCustomModuleUrl('');
+    initializeForFile(null);
+  }
+
+  function goBackToUploadStep() {
+    if (busy) return;
+    setActiveStep('upload');
+  }
+
+  function goToSettingsStep() {
+    if (!file || busy) return;
+    setActiveStep('settings');
+  }
+
+  function startConversionStep() {
+    if (!canConvert || busy) return;
+    setActiveStep('converting');
+    void runConversion();
+  }
+
+  function handleTargetMimeChange(nextTargetMime: string) {
+    setTargetMime(nextTargetMime);
+    if (file) {
+      const nextTarget = targetOptions.find((option) => option.value === nextTargetMime);
+      markConfigurationChanged(`Target format set to ${nextTarget?.label ?? nextTargetMime}. Ready to convert.`);
+    }
+  }
+
+  function handleOutputBaseNameChange(nextOutputBaseName: string) {
+    setOutputBaseName(nextOutputBaseName);
+    if (file) {
+      markConfigurationChanged('Output file name updated. Ready to convert.');
+    }
+  }
+
+  function handleImageWidthChange(nextImageWidth: string) {
+    setImageWidth(nextImageWidth);
+    if (file) {
+      markConfigurationChanged('Image size updated. Ready to convert.');
+    }
+  }
+
+  function handleImageHeightChange(nextImageHeight: string) {
+    setImageHeight(nextImageHeight);
+    if (file) {
+      markConfigurationChanged('Image size updated. Ready to convert.');
+    }
+  }
+
+  function handleKeepAspectRatioChange(nextKeepAspectRatio: boolean) {
+    setKeepAspectRatio(nextKeepAspectRatio);
+    if (file) {
+      markConfigurationChanged('Aspect ratio preference updated. Ready to convert.');
+    }
+  }
+
+  function handleQualityChange(nextQuality: number) {
+    setQuality(nextQuality);
+    if (file) {
+      markConfigurationChanged('Image quality updated. Ready to convert.');
+    }
+  }
+
+  function handleTrimStartChange(nextTrimStart: string) {
+    setTrimStart(nextTrimStart);
+    if (file) {
+      markConfigurationChanged('Trim settings updated. Ready to convert.');
+    }
+  }
+
+  function handleTrimEndChange(nextTrimEnd: string) {
+    setTrimEnd(nextTrimEnd);
+    if (file) {
+      markConfigurationChanged('Trim settings updated. Ready to convert.');
+    }
+  }
+
+  function handleRoutePreferenceChange(nextRoutePreference: RoutePreference) {
+    setRoutePreference(nextRoutePreference);
+    if (file) {
+      markConfigurationChanged('Route preference updated. Ready to convert.');
+    }
+  }
+
+  function handleEnableWasmFallbackChange(enabled: boolean) {
+    setEnableWasmFallback(enabled);
+    if (file) {
+      markConfigurationChanged(
+        enabled
+          ? 'ffmpeg.wasm fallback enabled. Ready to convert.'
+          : 'ffmpeg.wasm fallback disabled. Ready to convert.',
+      );
+    }
+  }
+
+  function handleCustomModuleUrlChange(nextCustomModuleUrl: string) {
+    setCustomModuleUrl(nextCustomModuleUrl);
+    if (file) {
+      markConfigurationChanged('Fallback module URL updated. Ready to convert.');
+    }
+  }
 
   function navigate(next: Page) {
     if (next === 'app') {
@@ -1304,6 +1483,9 @@ export default function App() {
     setStatusDetail('The conversion configuration changed. Start a new run when ready.');
     setStatusMode(file ? 'ready' : 'idle');
     setStatusSource(undefined);
+    if (!busy && file) {
+      setActiveStep('settings');
+    }
   }
 
   function cancelConversion() {
@@ -1326,6 +1508,7 @@ export default function App() {
 
     const abortController = new AbortController();
     activeAbortController.current = abortController;
+    setActiveStep('converting');
     setBusy(true);
     setCancelRequested(false);
     setStatusMode('working');
@@ -1408,6 +1591,7 @@ export default function App() {
         outputName: buildOutputName(file.name, targetMime, requestedOptions.outputBaseName),
       });
       setStatusMode('success');
+      setActiveStep('results');
       handleProgress(
         {
           progress: 1,
@@ -1500,500 +1684,109 @@ export default function App() {
         <div className={`route-chip route-${routeDecision}`}>{routeDisplayLabel}</div>
       </section>
 
-      <section className="workspace-grid">
-        <aside className="panel stack">
-          <div className="card">
-            <h2>1. Upload and configure</h2>
-            <label className="field">
-              <span>Input file</span>
-              <input
-                type="file"
-                disabled={busy}
-                onChange={(event) => {
-                  const nextFile = event.target.files?.[0] ?? null;
-                  setResult(null);
-                  setFile(nextFile);
-                  setProgress(0);
-                  setOutputBaseName(nextFile ? stripExtension(nextFile.name) : '');
-                  setImageWidth('');
-                  setImageHeight('');
-                  setKeepAspectRatio(true);
-                  setTrimStart('0');
-                  setTrimEnd('');
-                  setStatus(nextFile ? 'File loaded. Configure your output format.' : 'Select a file to begin.');
-                  setStatusDetail(
-                    nextFile
-                      ? 'Choose an output format to see the live route and progress details.'
-                      : 'Load a file and the converter will start reporting activity here.',
-                  );
-                  setStatusMode(nextFile ? 'ready' : 'idle');
-                  setStatusSource(undefined);
-                  setActivityLog(
-                    nextFile
-                      ? [
-                          {
-                            id: 1,
-                            message: `Loaded ${nextFile.name} (${formatBytes(nextFile.size)})`,
-                            detail: 'File metadata is ready and the browser can configure the conversion route.',
-                            progress: 0,
-                            tone: 'info',
-                            timestamp: formatEventTime(new Date()),
-                            variant: 'milestone',
-                          },
-                          {
-                            id: 2,
-                            message: 'Configure your output format and start conversion when ready.',
-                            detail: 'The live progress view will update as soon as the conversion begins.',
-                            progress: 0,
-                            tone: 'info',
-                            timestamp: formatEventTime(new Date()),
-                            variant: 'milestone',
-                          },
-                        ]
-                      : [],
-                  );
-                }}
-              />
-            </label>
+      <WizardStepper steps={wizardSteps} />
 
-            <div className="meta-grid">
-              <div>
-                <span className="meta-label">Detected type</span>
-                <strong>{file ? mediaType : '—'}</strong>
-              </div>
-              <div>
-                <span className="meta-label">Source format</span>
-                <strong>{file?.type || '—'}</strong>
-              </div>
-              <div>
-                <span className="meta-label">File size</span>
-                <strong>{file ? formatBytes(file.size) : '—'}</strong>
-              </div>
-            </div>
+      <section className="wizard-panel">
+        {activeStep === 'upload' ? (
+          <UploadStep
+            busy={busy}
+            detectedType={file ? mediaType : '—'}
+            sourceFormat={file?.type || '—'}
+            fileSize={file ? formatBytes(file.size) : '—'}
+            canContinue={Boolean(file)}
+            onFileChange={initializeForFile}
+            onContinue={goToSettingsStep}
+          />
+        ) : null}
 
-            <label className="field">
-              <span>Target format</span>
-              <select
-                value={targetMime}
-                onChange={(event) => {
-                  const nextTargetMime = event.target.value;
-                  setTargetMime(nextTargetMime);
-                  if (file) {
-                    const nextTarget = targetOptions.find((option) => option.value === nextTargetMime);
-                    markConfigurationChanged(
-                      `Target format set to ${nextTarget?.label ?? nextTargetMime}. Ready to convert.`,
-                    );
-                  }
-                }}
-                disabled={!targetOptions.length || busy}
-              >
-                {targetOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+        {activeStep === 'settings' ? (
+          <SettingsStep
+            busy={busy}
+            mediaType={mediaType}
+            selectedFileSummary={file ? `${file.name} (${formatBytes(file.size)})` : 'No file selected'}
+            targetMime={targetMime}
+            targetOptions={targetOptions}
+            outputBaseName={outputBaseName}
+            outputNamePlaceholder={file ? stripExtension(file.name) : 'converted-file'}
+            imageWidth={imageWidth}
+            imageHeight={imageHeight}
+            keepAspectRatio={keepAspectRatio}
+            quality={quality}
+            trimStart={trimStart}
+            trimEnd={trimEnd}
+            trimValidationError={trimValidationError}
+            routePreference={routePreference}
+            enableWasmFallback={enableWasmFallback}
+            customModuleUrl={customModuleUrl}
+            defaultModuleUrl={defaultModuleUrl}
+            outputFileName={outputFileName}
+            selectedAdjustments={selectedAdjustments}
+            routeDisplayLabel={routeDisplayLabel}
+            routePreferenceLabel={routePreferenceLabel(routePreference)}
+            routeReason={routeReason}
+            canConvert={canConvert}
+            onTargetMimeChange={handleTargetMimeChange}
+            onOutputBaseNameChange={handleOutputBaseNameChange}
+            onImageWidthChange={handleImageWidthChange}
+            onImageHeightChange={handleImageHeightChange}
+            onKeepAspectRatioChange={handleKeepAspectRatioChange}
+            onQualityChange={handleQualityChange}
+            onTrimStartChange={handleTrimStartChange}
+            onTrimEndChange={handleTrimEndChange}
+            onRoutePreferenceChange={handleRoutePreferenceChange}
+            onEnableWasmFallbackChange={handleEnableWasmFallbackChange}
+            onCustomModuleUrlChange={handleCustomModuleUrlChange}
+            onBack={goBackToUploadStep}
+            onConvert={startConversionStep}
+          />
+        ) : null}
 
-            <label className="field">
-              <span>Output file name</span>
-              <input
-                type="text"
-                value={outputBaseName}
-                disabled={!file || busy}
-                onChange={(event) => setOutputBaseName(event.target.value)}
-                placeholder={file ? stripExtension(file.name) : 'converted-file'}
-              />
-              <small>Extension is added automatically from the selected output format.</small>
-            </label>
+        {activeStep === 'converting' ? (
+          <ConvertingStep
+            status={status}
+            statusMode={statusMode}
+            statusIndicator={statusIndicator}
+            progress={progress}
+            busy={busy}
+            liveStatusDetail={liveStatusDetail}
+            statusSource={statusSource}
+            recentMilestones={recentMilestones}
+            logOpen={logOpen}
+            rawOutputEntries={rawOutputEntries}
+            cancelRequested={cancelRequested}
+            canConvert={canConvert}
+            onToggleLog={() => setLogOpen((open) => !open)}
+            onCancel={cancelConversion}
+            onConvertAgain={startConversionStep}
+            onRestart={restartConverter}
+            sourceLabel={sourceLabel}
+          />
+        ) : null}
 
-            {mediaType === 'image' ? (
-              <div className="option-section">
-                <h3>Image adjustments</h3>
-                <div className="option-grid">
-                  <label className="field">
-                    <span>Width (px)</span>
-                    <input
-                      type="number"
-                      min="1"
-                      inputMode="numeric"
-                      value={imageWidth}
-                      disabled={busy}
-                      onChange={(event) => {
-                        setImageWidth(event.target.value);
-                        if (file) {
-                          markConfigurationChanged('Image size updated. Ready to convert.');
-                        }
-                      }}
-                      placeholder="Original width"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Height (px)</span>
-                    <input
-                      type="number"
-                      min="1"
-                      inputMode="numeric"
-                      value={imageHeight}
-                      disabled={busy}
-                      onChange={(event) => {
-                        setImageHeight(event.target.value);
-                        if (file) {
-                          markConfigurationChanged('Image size updated. Ready to convert.');
-                        }
-                      }}
-                      placeholder="Original height"
-                    />
-                  </label>
-                </div>
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={keepAspectRatio}
-                    disabled={busy}
-                    onChange={(event) => {
-                      setKeepAspectRatio(event.target.checked);
-                      if (file) {
-                        markConfigurationChanged('Aspect ratio preference updated. Ready to convert.');
-                      }
-                    }}
-                  />
-                  Keep aspect ratio
-                </label>
-                <small>Leave width or height blank to keep the original dimension.</small>
-                <label className="field">
-                  <span>Quality (image lossy formats)</span>
-                  <input
-                    type="range"
-                    min="0.1"
-                    max="1"
-                    step="0.05"
-                    value={quality}
-                    disabled={busy}
-                    onChange={(event) => {
-                      setQuality(Number(event.target.value));
-                      if (file) {
-                        markConfigurationChanged('Image quality updated. Ready to convert.');
-                      }
-                    }}
-                  />
-                  <output>{quality.toFixed(2)}</output>
-                </label>
-              </div>
-            ) : null}
+        {activeStep === 'results' ? (
+          <ResultsStep
+            hasResult={Boolean(result && downloadUrl)}
+            preview={result && downloadUrl ? previewForResult(downloadUrl, result) : null}
+            routeLabel={result?.route || '—'}
+            inputSizeLabel={file ? formatBytes(file.size) : '—'}
+            outputSizeLabel={result ? formatBytes(result.blob.size) : '—'}
+            sizeChange={sizeChange}
+            mimeTypeLabel={result?.blob.type || 'unknown'}
+            sizeGuidance={sizeGuidance}
+            downloadUrl={downloadUrl}
+            resultOutputName={resultOutputName}
+            onRestart={restartConverter}
+          />
+        ) : null}
 
-            {mediaType === 'audio' || mediaType === 'video' ? (
-              <div className="option-section">
-                <h3>Trim clip</h3>
-                <div className="option-grid">
-                  <label className="field">
-                    <span>Start time (seconds)</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      inputMode="decimal"
-                      value={trimStart}
-                      disabled={busy}
-                      onChange={(event) => {
-                        setTrimStart(event.target.value);
-                        if (file) {
-                          markConfigurationChanged('Trim settings updated. Ready to convert.');
-                        }
-                      }}
-                    />
-                  </label>
-                  <label className="field">
-                    <span>End time (seconds)</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      inputMode="decimal"
-                      value={trimEnd}
-                      disabled={busy}
-                      onChange={(event) => {
-                        setTrimEnd(event.target.value);
-                        if (file) {
-                          markConfigurationChanged('Trim settings updated. Ready to convert.');
-                        }
-                      }}
-                      placeholder="Leave blank for full length"
-                    />
-                  </label>
-                </div>
-                <small>
-                  Trim controls use ffmpeg when the native browser route cannot apply them.
-                </small>
-                {trimValidationError ? <p className="form-error">{trimValidationError}</p> : null}
-              </div>
-            ) : null}
-
-            <details className="field">
-              <summary>Advanced fallback options</summary>
-              <div className="field route-preference-field">
-                <span>Conversion route preference</span>
-                <div className="route-preference-options">
-                  {[
-                    {
-                      value: 'auto' as const,
-                      label: 'Auto',
-                      description: 'Pick the best route automatically for the selected format.',
-                    },
-                    {
-                      value: 'native' as const,
-                      label: 'Prefer browser-native',
-                      description: 'Stay on browser-native encoding when possible, then fall back if required.',
-                    },
-                    {
-                      value: 'ffmpeg' as const,
-                      label: 'Force ffmpeg.wasm',
-                      description: 'Always use the WebAssembly encoder when the fallback module is enabled.',
-                    },
-                  ].map((option) => (
-                    <label
-                      key={option.value}
-                      className={`route-preference-option${routePreference === option.value ? ' is-selected' : ''}`}
-                    >
-                      <input
-                        type="radio"
-                        name="route-preference"
-                        value={option.value}
-                        checked={routePreference === option.value}
-                        disabled={busy}
-                        onChange={(event) => {
-                          setRoutePreference(event.target.value as RoutePreference);
-                          if (file) {
-                            markConfigurationChanged('Route preference updated. Ready to convert.');
-                          }
-                        }}
-                      />
-                      <span>
-                        <strong>{option.label}</strong>
-                        <small>{option.description}</small>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={enableWasmFallback}
-                  onChange={(event) => {
-                    setEnableWasmFallback(event.target.checked);
-                    if (file) {
-                      markConfigurationChanged(
-                        event.target.checked
-                          ? 'ffmpeg.wasm fallback enabled. Ready to convert.'
-                          : 'ffmpeg.wasm fallback disabled. Ready to convert.',
-                      );
-                    }
-                  }}
-                />
-                Enable ffmpeg.wasm fallback
-              </label>
-              <label className="field">
-                <span>Override fallback module URL</span>
-                <input
-                  type="url"
-                  value={customModuleUrl}
-                  onChange={(event) => setCustomModuleUrl(event.target.value)}
-                  placeholder={defaultModuleUrl}
-                />
-                <small>Leave blank to use the bundled fallback module.</small>
-              </label>
-            </details>
-
-            <div className="selection-summary">
-              <span className="meta-label">Output file</span>
-              <strong>{outputFileName}</strong>
-              {selectedAdjustments.length ? (
-                <ul className="option-summary-list">
-                  {selectedAdjustments.map((entry) => (
-                    <li key={entry}>{entry}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="muted">No extra adjustments selected yet.</p>
-              )}
-            </div>
-
-            <div className="conversion-actions">
-              <button onClick={runConversion} disabled={!file || !targetMime || busy || Boolean(trimValidationError)}>
-                {busy ? 'Converting…' : 'Convert file'}
-              </button>
-              {busy ? (
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={cancelConversion}
-                  disabled={cancelRequested}
-                >
-                  {cancelRequested ? 'Canceling…' : 'Cancel conversion'}
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="card">
-            <h2>What happens next</h2>
-            <ul className="step-list">
-              {steps.map((step) => (
-                <li key={step.label} className={`step-item step-${step.state}`}>
-                  <span className="step-dot" />
-                  <span>{step.label}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="muted">
-              Your file stays in the browser during conversion unless you choose a third-party
-              fallback module URL.
-            </p>
-              <p className="muted">
-                Route selected: <strong>{routeDisplayLabel}</strong>
-              </p>
-              <p className="muted">
-                Route preference: <strong>{routePreferenceLabel(routePreference)}</strong>
-              </p>
-              <p className="muted">{routeReason}</p>
-            </div>
-        </aside>
-
-        <section className="panel stack">
-          <div className="card">
-            <div className="status-header">
-              <div>
-                <h2>2. Conversion status</h2>
-                <p>{status}</p>
-              </div>
-              <div className={`status-indicator status-${statusMode}`} aria-live="polite">
-                <span className="status-dot" />
-                <div>
-                  <strong>{statusIndicator.label}</strong>
-                  <small>{statusIndicator.detail}</small>
-                </div>
-              </div>
-            </div>
-            <progress value={progress} max={1} />
-            <div className="progress-caption">
-              <span>{Math.round(progress * 100)}%</span>
-              <span>{busy ? liveStatusDetail : statusIndicator.detail}</span>
-            </div>
-            <div className="live-status-card">
-              <div className="live-status-header">
-                <div>
-                  <span className="meta-label">Live stage</span>
-                  <strong>{status}</strong>
-                </div>
-                {statusSource ? <span className="live-source-chip">{sourceLabel(statusSource)}</span> : null}
-              </div>
-              <p className="muted">{liveStatusDetail}</p>
-            </div>
-            <div className="activity-summary">
-              <div className="activity-summary-header">
-                <strong>Recent milestones</strong>
-                <span>{recentMilestones.length ? `${recentMilestones.length} updates` : 'Waiting for work'}</span>
-              </div>
-              {recentMilestones.length ? (
-                recentMilestones.map((entry) => (
-                  <article key={entry.id} className={`activity-entry activity-${entry.tone}`}>
-                    <div className="activity-entry-header">
-                      <strong>{entry.message}</strong>
-                      <span>{entry.timestamp}</span>
-                    </div>
-                    {entry.detail ? <p className="activity-entry-detail">{entry.detail}</p> : null}
-                    <div className="activity-entry-meta">
-                      <span>{Math.round(entry.progress * 100)}%</span>
-                      <span>{entry.source ? sourceLabel(entry.source) : 'Stage update'}</span>
-                    </div>
-                  </article>
-                ))
-              ) : (
-                <div className="activity-empty">Milestones for the current conversion will appear here.</div>
-              )}
-            </div>
-            <button
-              type="button"
-              className="log-toggle"
-              onClick={() => setLogOpen((open) => !open)}
-              aria-expanded={logOpen}
-            >
-              {logOpen ? `Hide raw output (${rawOutputEntries.length} lines)` : `Show raw output (${rawOutputEntries.length} lines)`}
-            </button>
-            {logOpen ? (
-              <div className="raw-output-log" role="log" aria-live="polite" aria-relevant="additions text">
-                {rawOutputEntries.length ? (
-                  rawOutputEntries.map((entry) => (
-                    <div key={entry.id} className="raw-output-line">
-                      <span>{entry.timestamp}</span>
-                      <code>{entry.message}</code>
-                    </div>
-                  ))
-                ) : (
-                  <div className="activity-empty">
-                    Raw output is kept minimized by default. Expand it during a conversion to inspect
-                    ffmpeg and pipeline messages.
-                  </div>
-                )}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="card">
-            <h2>3. Output preview</h2>
-            {result && downloadUrl ? (
-              <>
-                <div className="preview-shell">{previewForResult(downloadUrl, result)}</div>
-                <div className="meta-grid">
-                  <div>
-                    <span className="meta-label">Route</span>
-                    <strong>{result.route}</strong>
-                  </div>
-                  <div>
-                    <span className="meta-label">Input size</span>
-                    <strong>{file ? formatBytes(file.size) : '—'}</strong>
-                  </div>
-                  <div>
-                    <span className="meta-label">Output size</span>
-                    <strong>{formatBytes(result.blob.size)}</strong>
-                  </div>
-                  <div>
-                    <span className="meta-label">Size change</span>
-                    <strong>{sizeChange?.summaryLabel ?? '—'}</strong>
-                  </div>
-                  <div>
-                    <span className="meta-label">MIME type</span>
-                    <strong>{result.blob.type || 'unknown'}</strong>
-                  </div>
-                </div>
-                {sizeChange ? (
-                  <p className={`result-guidance result-guidance-${sizeChange.trend}`}>{sizeGuidance}</p>
-                ) : null}
-                <a className="download-button" href={downloadUrl} download={resultOutputName}>
-                  Download {resultOutputName}
-                </a>
-              </>
-            ) : (
-              <div className="empty-state">
-                <strong>No output yet</strong>
-                <p>
-                  After conversion, the result will appear here so the user can immediately inspect
-                  it before downloading.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <details className="card info-details">
-            <summary>Technical support details</summary>
-            <p className="muted">
-              Browser capability details are available here if you need to understand route
-              selection or troubleshoot a conversion.
-            </p>
-            <pre>{JSON.stringify(capabilities, null, 2)}</pre>
-          </details>
-        </section>
+        <details className="card info-details">
+          <summary>Technical support details</summary>
+          <p className="muted">
+            Browser capability details are available here if you need to understand route
+            selection or troubleshoot a conversion.
+          </p>
+          <pre>{JSON.stringify(capabilities, null, 2)}</pre>
+        </details>
       </section>
 
       <Footer />
