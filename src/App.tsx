@@ -418,17 +418,33 @@ function HamburgerMenu() {
 function Footer() {
   return (
     <footer className="site-footer">
-      <div className="footer-links">
-        <a href="#">Home</a>
-        <a href="#/app">Converter</a>
-        <a href="#/docs">Documentation</a>
-        <a href="#/privacy">Privacy Policy</a>
-        <a href="#/terms">Terms of Use</a>
+      <div className="footer-nav">
+        <div className="footer-links">
+          <span className="footer-heading">Explore</span>
+          <a href="#">Home</a>
+          <a href="#/app">Converter</a>
+          <a href="#/docs">Documentation</a>
+        </div>
+        <div className="footer-links">
+          <span className="footer-heading">Legal</span>
+          <a href="#/privacy">Privacy Policy</a>
+          <a href="#/terms">Terms of Use</a>
+        </div>
       </div>
-      <p className="muted footer-note">
-        {APP_NAME} is designed for browser-based local conversion. Review the legal pages before
-        using it in production or for sensitive workflows.
-      </p>
+      <div className="footer-meta">
+        <p className="muted footer-note">
+          {APP_NAME} is designed for browser-based local conversion. Review the legal pages before
+          using it in production or for sensitive workflows.
+        </p>
+        <a
+          className="footer-project-link"
+          href="https://github.com/jamesmontemagno/my-file-converter"
+          target="_blank"
+          rel="noreferrer"
+        >
+          GitHub project
+        </a>
+      </div>
     </footer>
   );
 }
