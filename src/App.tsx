@@ -102,6 +102,27 @@ function getPageFromHash(): Page {
   return 'landing';
 }
 
+function hasStandaloneNavigatorFlag(nav: Navigator): nav is Navigator & { standalone?: boolean } {
+  return 'standalone' in nav;
+}
+
+function isStandaloneLaunch() {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+    (hasStandaloneNavigatorFlag(navigator) && navigator.standalone === true)
+  );
+}
+
+function getInitialPage(): Page {
+  if (!window.location.hash && isStandaloneLaunch()) {
+    window.location.hash = '#/app';
+    return 'app';
+  }
+
+  return getPageFromHash();
+}
+
 function titleForPage(page: Page) {
   if (page === 'app') return `${APP_NAME} | Browser File Converter`;
   if (page === 'privacy') return `${APP_NAME} | Privacy Policy`;
@@ -1031,7 +1052,7 @@ function DocsPage() {
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>(getPageFromHash());
+  const [page, setPage] = useState<Page>(() => getInitialPage());
   const [file, setFile] = useState<File | null>(null);
   const [quality, setQuality] = useState(0.9);
   const [status, setStatus] = useState('Select a file to begin.');
@@ -1198,13 +1219,13 @@ export default function App() {
 
   function navigate(next: Page) {
     if (next === 'app') {
-      window.location.hash = '/app';
+      window.location.hash = '#/app';
     } else if (next === 'privacy') {
-      window.location.hash = '/privacy';
+      window.location.hash = '#/privacy';
     } else if (next === 'terms') {
-      window.location.hash = '/terms';
+      window.location.hash = '#/terms';
     } else if (next === 'docs') {
-      window.location.hash = '/docs';
+      window.location.hash = '#/docs';
     } else {
       window.location.hash = '';
     }
