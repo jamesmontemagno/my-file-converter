@@ -1,5 +1,5 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { fetchFile } from '@ffmpeg/util';
 import type { ConversionOptions } from './conversion-options';
 import type { ConversionActivity } from './conversion';
 
@@ -142,17 +142,40 @@ async function ensureLoaded(onProgress?: (activity: ConversionActivity) => void)
   activeProgressHandler = onProgress;
   if (loaded) return;
   latestProgress = 0.05;
+  const t0 = Date.now();
   onProgress?.({
     progress: latestProgress,
-    message: 'Downloading ffmpeg core',
-    detail: 'Fetching the ffmpeg.wasm runtime (~31 MB) from the CDN. This is cached after the first load.',
+    message: 'Loading ffmpeg core',
+    detail: 'Loading the ffmpeg.wasm runtime from the CDN. The browser will download, compile, and initialize the WebAssembly module.',
     source: 'ffmpeg',
     rawOutput: '$ load ffmpeg-core',
   });
+
+  // Use direct CDN URLs instead of blob URLs. jsDelivr provides CORS
+  // headers, and direct URLs allow the browser to use streaming WASM
+  // compilation (WebAssembly.compileStreaming) which is faster and more
+  // reliable than blob URLs — especially inside Web Workers.
   const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+  const coreURL = `${baseURL}/ffmpeg-core.js`;
+  const wasmURL = `${baseURL}/ffmpeg-core.wasm`;
+
+  onProgress?.({
+    progress: 0.06,
+    message: 'Loading ffmpeg core',
+    detail: 'Calling ffmpeg.load() with direct CDN URLs…',
+    source: 'ffmpeg',
+    rawOutput: `$ ffmpeg.load({ coreURL: "${coreURL}", wasmURL: "${wasmURL}" })`,
+  });
+
+  await ffmpeg.load({ coreURL, wasmURL });
+
+  const t1 = Date.now();
+  onProgress?.({
+    progress: 0.09,
+    message: 'ffmpeg core ready',
+    detail: `ffmpeg.load() completed in ${((t1 - t0) / 1000).toFixed(1)}s.`,
+    source: 'ffmpeg',
+    rawOutput: `$ ffmpeg ready — load took ${((t1 - t0) / 1000).toFixed(1)}s`,
   });
   if (!progressHandlerAttached) {
     ffmpeg.on('progress', ({ progress, time }) => {
@@ -217,14 +240,37 @@ export async function convert(args: {
 
   // ---- Write input into the WASM virtual filesystem ---------------------
   latestProgress = 0.08;
+  const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
   onProgress?.({
     progress: latestProgress,
-    message: 'Writing input file',
-    detail: `Copying ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB) into the ffmpeg virtual filesystem.`,
+    message: 'Reading input file',
+    detail: `Reading ${file.name} (${sizeMb} MB) into memory…`,
     source: 'ffmpeg',
-    rawOutput: `$ writeFile ${inputName}`,
+    rawOutput: `$ fetchFile ${file.name} (${sizeMb} MB)`,
   });
-  await ffmpeg.writeFile(inputName, await fetchFile(file));
+
+  const tFetch0 = Date.now();
+  const fileData = await fetchFile(file);
+  const tFetch1 = Date.now();
+
+  onProgress?.({
+    progress: 0.09,
+    message: 'Writing input file',
+    detail: `Read completed in ${((tFetch1 - tFetch0) / 1000).toFixed(1)}s. Writing ${sizeMb} MB to ffmpeg virtual filesystem…`,
+    source: 'ffmpeg',
+    rawOutput: `$ writeFile ${inputName} — fetchFile took ${((tFetch1 - tFetch0) / 1000).toFixed(1)}s`,
+  });
+
+  await ffmpeg.writeFile(inputName, fileData);
+  const tWrite1 = Date.now();
+
+  onProgress?.({
+    progress: 0.10,
+    message: 'Input file ready',
+    detail: `writeFile completed in ${((tWrite1 - tFetch1) / 1000).toFixed(1)}s. Total I/O: ${((tWrite1 - tFetch0) / 1000).toFixed(1)}s.`,
+    source: 'ffmpeg',
+    rawOutput: `$ writeFile done — write ${((tWrite1 - tFetch1) / 1000).toFixed(1)}s, total I/O ${((tWrite1 - tFetch0) / 1000).toFixed(1)}s`,
+  });
 
   try {
     // ---- Build command --------------------------------------------------
@@ -269,9 +315,11 @@ export async function convert(args: {
     // The WASM module can also throw non-Error values (e.g. Emscripten
     // abort strings) so we catch broadly and wrap for clarity.
     let exitCode: number;
+    const tExec0 = Date.now();
     try {
       exitCode = await ffmpeg.exec(command);
     } catch (execError) {
+      const elapsed = ((Date.now() - tExec0) / 1000).toFixed(1);
       const detail =
         execError instanceof Error
           ? execError.message
@@ -279,11 +327,20 @@ export async function convert(args: {
             ? execError
             : String(execError);
       throw new Error(
-        `ffmpeg crashed during encoding: ${detail}. ` +
+        `ffmpeg crashed after ${elapsed}s: ${detail}. ` +
         'This can happen when the WebAssembly runtime runs out of memory. ' +
         'Try a shorter clip, a smaller file, or a different output format.',
       );
     }
+    const tExec1 = Date.now();
+
+    onProgress?.({
+      progress: 0.96,
+      message: exitCode === 0 ? 'Encoding finished' : 'Encoding ended with error',
+      detail: `exec() returned ${exitCode} after ${((tExec1 - tExec0) / 1000).toFixed(1)}s.`,
+      source: 'ffmpeg',
+      rawOutput: `$ exec exit=${exitCode} elapsed=${((tExec1 - tExec0) / 1000).toFixed(1)}s`,
+    });
 
     if (exitCode !== 0) {
       throw new Error(
