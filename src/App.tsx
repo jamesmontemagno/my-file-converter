@@ -3,6 +3,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import {
   classifyMediaType,
   detectCapabilities,
+  isTargetMimeSupported,
   targetFormatsFor,
   type CapabilityReport,
   type MediaKind,
@@ -18,7 +19,6 @@ import {
 import {
   buildOutputName,
   describeSelectedOptions,
-  hasMediaTrim,
   stripExtension,
   type ConversionOptions,
 } from './conversion-options';
@@ -98,13 +98,6 @@ function parsePositiveInteger(value: string) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return Math.max(1, Math.round(parsed));
-}
-
-function parseNonNegativeNumber(value: string) {
-  if (!value.trim()) return 0;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) return 0;
-  return parsed;
 }
 
 function getPageFromHash(): Page {
@@ -203,10 +196,9 @@ function isNativeConversionRoute(route: string) {
 function resolveRoute(args: {
   file: File | null;
   targetMime: string;
-  trimRequested: boolean;
-  trimValidationError: string;
+  targetSupported: boolean;
 }): ResolvedRoute {
-  const { file, targetMime, trimRequested, trimValidationError } = args;
+  const { file, targetMime, targetSupported } = args;
 
   if (!file || !targetMime) {
     return {
@@ -215,21 +207,7 @@ function resolveRoute(args: {
     };
   }
 
-  if (trimValidationError) {
-    return {
-      decision: 'blocked',
-      reason: trimValidationError,
-    };
-  }
-
-  if (trimRequested) {
-    return {
-      decision: 'blocked',
-      reason: 'Trim settings are currently unavailable in this native-only release.',
-    };
-  }
-
-  if (supportsNativeRoute(file, targetMime)) {
+  if (targetSupported && supportsNativeRoute(file, targetMime)) {
     return {
       decision: 'native',
       reason: 'This format combination can use the fast native browser route.',
@@ -990,13 +968,19 @@ export default function App() {
 
   const mediaType: MediaKind = classifyMediaType(file);
   const targetOptions = useMemo(() => targetFormatsFor(mediaType), [mediaType]);
+  const targetOptionsWithSupport = useMemo(
+    () =>
+      targetOptions.map((option) => ({
+        ...option,
+        supported: isTargetMimeSupported(option.value, capabilities),
+      })),
+    [capabilities, targetOptions],
+  );
   const [targetMime, setTargetMime] = useState('');
   const [outputBaseName, setOutputBaseName] = useState('');
   const [imageWidth, setImageWidth] = useState('');
   const [imageHeight, setImageHeight] = useState('');
   const [keepAspectRatio, setKeepAspectRatio] = useState(true);
-  const [trimStart, setTrimStart] = useState('0');
-  const [trimEnd, setTrimEnd] = useState('');
 
   useEffect(() => {
     const onHashChange = () => setPage(getPageFromHash());
@@ -1025,8 +1009,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    setTargetMime(targetOptions[0]?.value ?? '');
-  }, [targetOptions]);
+    const firstSupported = targetOptionsWithSupport.find((option) => option.supported);
+    setTargetMime(firstSupported?.value ?? targetOptionsWithSupport[0]?.value ?? '');
+  }, [targetOptionsWithSupport]);
 
   useEffect(() => {
     if (!result) {
@@ -1064,20 +1049,17 @@ export default function App() {
         keepAspectRatio,
       },
       media: {
-        trimStart: parseNonNegativeNumber(trimStart),
-        trimEnd: parseNonNegativeNumber(trimEnd),
+        trimStart: 0,
+        trimEnd: 0,
       },
     }),
-    [imageHeight, imageWidth, keepAspectRatio, outputBaseName, trimEnd, trimStart],
+    [imageHeight, imageWidth, keepAspectRatio, outputBaseName],
   );
-  const trimRequested =
-    (mediaType === 'audio' || mediaType === 'video') && hasMediaTrim(requestedOptions.media);
-  const trimValidationError =
-    trimRequested &&
-    requestedOptions.media.trimEnd > 0 &&
-    requestedOptions.media.trimEnd <= requestedOptions.media.trimStart
-      ? 'Trim end must be greater than trim start.'
-      : '';
+  const selectedTargetOption = useMemo(
+    () => targetOptionsWithSupport.find((option) => option.value === targetMime),
+    [targetMime, targetOptionsWithSupport],
+  );
+  const targetSupported = selectedTargetOption?.supported ?? false;
   const selectedOptions = useMemo(
     () => describeSelectedOptions(mediaType, requestedOptions),
     [mediaType, requestedOptions],
@@ -1094,17 +1076,41 @@ export default function App() {
       resolveRoute({
         file,
         targetMime,
-        trimRequested,
-        trimValidationError,
+        targetSupported,
       }),
-    [file, targetMime, trimRequested, trimValidationError],
+    [file, targetMime, targetSupported],
   );
   const routeDecision = resolvedRoute.decision;
-  const routeReason = resolvedRoute.reason;
+  const recommendedTargetLabel = useMemo(
+    () => targetOptionsWithSupport.find((option) => option.supported)?.label,
+    [targetOptionsWithSupport],
+  );
+  const routeReason = useMemo(() => {
+    if (resolvedRoute.decision === 'blocked' && file && targetMime && !targetSupported) {
+      if (recommendedTargetLabel) {
+        return `This output format is not available in your browser. Try ${recommendedTargetLabel}.`;
+      }
+      return 'No compatible output format is available in your browser for this file type.';
+    }
+
+    return resolvedRoute.reason;
+  }, [file, recommendedTargetLabel, resolvedRoute, targetMime, targetSupported]);
   const routeSource = resolvedRoute.source;
   const routeDisplayLabel = routeLabel(routeDecision);
 
-  const canConvert = Boolean(file && targetMime && !trimValidationError && routeDecision !== 'blocked');
+  const canConvert = Boolean(file && targetMime && routeDecision !== 'blocked');
+  const uploadSupportSummary = useMemo(() => {
+    if (!file) return 'Select a file to preview supported output formats.';
+    const supportedLabels = targetOptionsWithSupport
+      .filter((option) => option.supported)
+      .map((option) => option.label.replace(/\s*\(.*?\)$/, ''));
+
+    if (!supportedLabels.length) {
+      return 'No compatible output formats detected for this file type in your browser.';
+    }
+
+    return `Supported outputs: ${supportedLabels.join(', ')}`;
+  }, [file, targetOptionsWithSupport]);
   const stepOrder: ConverterStep[] = ['upload', 'settings', 'converting', 'results'];
   const activeStepIndex = stepOrder.indexOf(activeStep);
   const wizardSteps: WizardStep[] = stepOrder.map((step, index) => ({
@@ -1157,8 +1163,6 @@ export default function App() {
     setImageWidth('');
     setImageHeight('');
     setKeepAspectRatio(true);
-    setTrimStart('0');
-    setTrimEnd('');
     setStatus(nextFile ? 'File loaded. Configure your output format.' : 'Select a file to begin.');
     setStatusDetail(
       nextFile
@@ -1259,20 +1263,6 @@ export default function App() {
     setQuality(nextQuality);
     if (file) {
       markConfigurationChanged('Image quality updated. Ready to convert.');
-    }
-  }
-
-  function handleTrimStartChange(nextTrimStart: string) {
-    setTrimStart(nextTrimStart);
-    if (file) {
-      markConfigurationChanged('Trim settings updated. Ready to convert.');
-    }
-  }
-
-  function handleTrimEndChange(nextTrimEnd: string) {
-    setTrimEnd(nextTrimEnd);
-    if (file) {
-      markConfigurationChanged('Trim settings updated. Ready to convert.');
     }
   }
 
@@ -1386,7 +1376,7 @@ export default function App() {
   }
 
   async function runConversion() {
-    if (!file || !targetMime || trimValidationError) return;
+    if (!file || !targetMime) return;
 
     const abortController = new AbortController();
     activeAbortController.current = abortController;
@@ -1566,6 +1556,7 @@ export default function App() {
             detectedType={file ? mediaType : '—'}
             sourceFormat={file?.type || '—'}
             fileSize={file ? formatBytes(file.size) : '—'}
+            supportSummary={uploadSupportSummary}
             canContinue={Boolean(file)}
             onFileChange={initializeForFile}
             onContinue={goToSettingsStep}
@@ -1578,16 +1569,13 @@ export default function App() {
             mediaType={mediaType}
             selectedFileSummary={file ? `${file.name} (${formatBytes(file.size)})` : 'No file selected'}
             targetMime={targetMime}
-            targetOptions={targetOptions}
+            targetOptions={targetOptionsWithSupport}
             outputBaseName={outputBaseName}
             outputNamePlaceholder={file ? stripExtension(file.name) : 'converted-file'}
             imageWidth={imageWidth}
             imageHeight={imageHeight}
             keepAspectRatio={keepAspectRatio}
             quality={quality}
-            trimStart={trimStart}
-            trimEnd={trimEnd}
-            trimValidationError={trimValidationError}
             outputFileName={outputFileName}
             selectedAdjustments={selectedAdjustments}
             routeDisplayLabel={routeDisplayLabel}
@@ -1599,8 +1587,6 @@ export default function App() {
             onImageHeightChange={handleImageHeightChange}
             onKeepAspectRatioChange={handleKeepAspectRatioChange}
             onQualityChange={handleQualityChange}
-            onTrimStartChange={handleTrimStartChange}
-            onTrimEndChange={handleTrimEndChange}
             onBack={goBackToUploadStep}
             onConvert={startConversionStep}
           />

@@ -3,6 +3,7 @@ type UploadStepProps = {
   detectedType: string;
   sourceFormat: string;
   fileSize: string;
+  supportSummary: string;
   canContinue: boolean;
   onFileChange: (file: File | null) => void;
   onContinue: () => void;
@@ -13,6 +14,7 @@ export function UploadStep({
   detectedType,
   sourceFormat,
   fileSize,
+  supportSummary,
   canContinue,
   onFileChange,
   onContinue,
@@ -42,6 +44,10 @@ export function UploadStep({
           <span className="meta-label">File size</span>
           <strong>{fileSize}</strong>
         </div>
+      </div>
+      <div className="selection-summary">
+        <span className="meta-label">Browser support for this file type</span>
+        <strong>{supportSummary}</strong>
       </div>
       <div className="wizard-actions">
         <button type="button" onClick={onContinue} disabled={!canContinue || busy}>

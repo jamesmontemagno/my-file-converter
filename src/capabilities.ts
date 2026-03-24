@@ -30,6 +30,7 @@ export function detectCapabilities(): CapabilityReport {
         'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
         'audio/webm;codecs=opus',
         'audio/ogg;codecs=opus',
+        'audio/mp4',
       ].reduce<Record<string, boolean>>((acc, type) => {
         acc[type] = MediaRecorder.isTypeSupported(type);
         return acc;
@@ -96,4 +97,21 @@ export function targetFormatsFor(mediaType: MediaKind) {
   }
 
   return [];
+}
+
+export function isTargetMimeSupported(
+  targetMime: string,
+  capabilities: CapabilityReport | null,
+) {
+  if (!capabilities) return false;
+
+  if (targetMime.startsWith('image/')) {
+    return capabilities.imageFormats[targetMime] === true;
+  }
+
+  if (targetMime.startsWith('audio/') || targetMime.startsWith('video/')) {
+    return capabilities.mediaRecorder === true && capabilities.mediaRecorderTypes[targetMime] === true;
+  }
+
+  return false;
 }

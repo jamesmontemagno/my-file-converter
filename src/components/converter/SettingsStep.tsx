@@ -1,6 +1,7 @@
 type FormatOption = {
   value: string;
   label: string;
+  supported: boolean;
 };
 
 type SettingsStepProps = {
@@ -15,9 +16,6 @@ type SettingsStepProps = {
   imageHeight: string;
   keepAspectRatio: boolean;
   quality: number;
-  trimStart: string;
-  trimEnd: string;
-  trimValidationError: string;
   outputFileName: string;
   selectedAdjustments: string[];
   routeDisplayLabel: string;
@@ -29,8 +27,6 @@ type SettingsStepProps = {
   onImageHeightChange: (value: string) => void;
   onKeepAspectRatioChange: (value: boolean) => void;
   onQualityChange: (value: number) => void;
-  onTrimStartChange: (value: string) => void;
-  onTrimEndChange: (value: string) => void;
   onBack: () => void;
   onConvert: () => void;
 };
@@ -47,9 +43,6 @@ export function SettingsStep({
   imageHeight,
   keepAspectRatio,
   quality,
-  trimStart,
-  trimEnd,
-  trimValidationError,
   outputFileName,
   selectedAdjustments,
   routeDisplayLabel,
@@ -61,11 +54,11 @@ export function SettingsStep({
   onImageHeightChange,
   onKeepAspectRatioChange,
   onQualityChange,
-  onTrimStartChange,
-  onTrimEndChange,
   onBack,
   onConvert,
 }: SettingsStepProps) {
+  const selectedOption = targetOptions.find((option) => option.value === targetMime);
+
   return (
     <div className="card wizard-card">
       <h2>2. Set options</h2>
@@ -82,11 +75,14 @@ export function SettingsStep({
           disabled={!targetOptions.length || busy}
         >
           {targetOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
+            <option key={option.value} value={option.value} disabled={!option.supported}>
+              {option.label}{option.supported ? '' : ' (Unsupported in this browser)'}
             </option>
           ))}
         </select>
+        {selectedOption && !selectedOption.supported ? (
+          <p className="form-error">This format is not supported in your current browser.</p>
+        ) : null}
       </label>
 
       <label className="field">
@@ -156,38 +152,10 @@ export function SettingsStep({
         </div>
       ) : null}
 
-      {mediaType === 'audio' || mediaType === 'video' ? (
+      {(mediaType === 'audio' || mediaType === 'video') ? (
         <div className="option-section">
-          <h3>Trim clip</h3>
-          <div className="option-grid">
-            <label className="field">
-              <span>Start time (seconds)</span>
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                inputMode="decimal"
-                value={trimStart}
-                disabled={busy}
-                onChange={(event) => onTrimStartChange(event.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span>End time (seconds)</span>
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                inputMode="decimal"
-                value={trimEnd}
-                disabled={busy}
-                onChange={(event) => onTrimEndChange(event.target.value)}
-                placeholder="Leave blank for full length"
-              />
-            </label>
-          </div>
-          <small>Trim is currently unavailable in native-only mode.</small>
-          {trimValidationError ? <p className="form-error">{trimValidationError}</p> : null}
+          <h3>Media options</h3>
+          <p className="muted">Trim controls are not available in this native-only release yet.</p>
         </div>
       ) : null}
 
