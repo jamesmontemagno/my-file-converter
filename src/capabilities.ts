@@ -2,6 +2,7 @@ export type MediaKind = 'image' | 'audio' | 'video' | 'unknown';
 
 export type CapabilityReport = {
   mediaRecorder: boolean;
+  mp3Encoder: boolean;
   webCodecs: {
     videoEncoder: boolean;
     audioEncoder: boolean;
@@ -17,6 +18,10 @@ export type CapabilityReport = {
 };
 
 export function detectCapabilities(): CapabilityReport {
+    const hasMp3EncoderContext =
+      typeof window.AudioContext !== 'undefined' ||
+      typeof (window as Window & { webkitAudioContext?: unknown }).webkitAudioContext !== 'undefined';
+
   const windowWithPickers = window as Window & {
     showOpenFilePicker?: unknown;
     showSaveFilePicker?: unknown;
@@ -47,6 +52,7 @@ export function detectCapabilities(): CapabilityReport {
 
   return {
     mediaRecorder: canMediaRecorder,
+    mp3Encoder: hasMp3EncoderContext,
     webCodecs: {
       videoEncoder: typeof window.VideoEncoder !== 'undefined',
       audioEncoder: typeof window.AudioEncoder !== 'undefined',
@@ -85,6 +91,7 @@ export function targetFormatsFor(mediaType: MediaKind) {
       { value: 'audio/webm;codecs=opus', label: 'WebM Opus (.webm)' },
       { value: 'audio/ogg;codecs=opus', label: 'Ogg Opus (.ogg)' },
       { value: 'audio/mp4', label: 'MP4 Audio (.m4a)' },
+      { value: 'audio/mpeg', label: 'MP3 (.mp3)' },
     ];
   }
 
@@ -104,6 +111,10 @@ export function isTargetMimeSupported(
   capabilities: CapabilityReport | null,
 ) {
   if (!capabilities) return false;
+
+  if (targetMime === 'audio/mpeg') {
+    return capabilities.mp3Encoder === true;
+  }
 
   if (targetMime.startsWith('image/')) {
     return capabilities.imageFormats[targetMime] === true;

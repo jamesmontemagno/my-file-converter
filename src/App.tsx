@@ -9,6 +9,7 @@ import {
   type MediaKind,
 } from './capabilities';
 import {
+  convertAudioToMp3,
   convertImage,
   convertViaMediaRecorder,
   isConversionAbortError,
@@ -39,7 +40,7 @@ type Page = 'landing' | 'app' | 'privacy' | 'terms' | 'docs';
 type StatusMode = 'idle' | 'ready' | 'working' | 'success' | 'error' | 'canceled';
 type ActivityTone = 'info' | 'success' | 'error';
 type ActivityVariant = 'milestone' | 'raw';
-type RouteDecision = 'native' | 'blocked';
+type RouteDecision = 'native' | 'encoder' | 'blocked';
 type ConverterStep = 'upload' | 'settings' | 'converting' | 'results';
 type StepState = 'done' | 'current' | 'pending';
 type ActivityEntry = {
@@ -50,12 +51,12 @@ type ActivityEntry = {
   tone: ActivityTone;
   timestamp: string;
   variant: ActivityVariant;
-  source?: 'native';
+  source?: 'native' | 'encoder';
 };
 type ResolvedRoute = {
   decision: RouteDecision;
   reason: string;
-  source?: 'native';
+  source?: 'native' | 'encoder';
 };
 type SizeChangeSummary = {
   trend: 'smaller' | 'larger' | 'same';
@@ -181,11 +182,13 @@ function setCanonicalTag(href: string) {
 
 function routeLabel(route: RouteDecision) {
   if (route === 'native') return 'Native browser path';
+  if (route === 'encoder') return 'MP3 encoder path';
   return 'Waiting for input';
 }
 
 function sourceForRouteDecision(route: RouteDecision) {
   if (route === 'native') return 'native' as const;
+  if (route === 'encoder') return 'encoder' as const;
   return undefined;
 }
 
@@ -195,15 +198,31 @@ function isNativeConversionRoute(route: string) {
 
 function resolveRoute(args: {
   file: File | null;
+  mediaType: MediaKind;
   targetMime: string;
   targetSupported: boolean;
 }): ResolvedRoute {
-  const { file, targetMime, targetSupported } = args;
+  const { file, mediaType, targetMime, targetSupported } = args;
 
   if (!file || !targetMime) {
     return {
       decision: 'blocked',
       reason: 'Select a file and target format to see the conversion route.',
+    };
+  }
+
+  if (targetMime === 'audio/mpeg') {
+    if (mediaType === 'audio' && targetSupported) {
+      return {
+        decision: 'encoder',
+        reason: 'This conversion will use the local MP3 software encoder path.',
+        source: 'encoder',
+      };
+    }
+
+    return {
+      decision: 'blocked',
+      reason: 'MP3 output currently supports audio input files only.',
     };
   }
 
@@ -285,7 +304,7 @@ function retryTargetFor(args: {
     mediaType === 'image'
       ? ['image/webp', 'image/jpeg', 'image/avif', 'image/png']
       : mediaType === 'audio'
-        ? ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4']
+        ? ['audio/mpeg', 'audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4']
         : mediaType === 'video'
           ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2']
           : [];
@@ -359,8 +378,9 @@ function statusCopyFor(mode: StatusMode) {
   };
 }
 
-function sourceLabel(source?: 'native') {
+function sourceLabel(source?: 'native' | 'encoder') {
   if (source === 'native') return 'Browser pipeline';
+  if (source === 'encoder') return 'MP3 software encoder';
   return '';
 }
 
@@ -930,6 +950,10 @@ function DocsPage() {
             your browser with no additional modules required.
           </li>
           <li>
+            <strong>MP3 encoder path</strong> — audio files targeting MP3 are processed with a
+            local software encoder running in your browser tab.
+          </li>
+          <li>
             <strong>Waiting for input / Unsupported</strong> — conversion cannot run until a
             compatible file and output format are selected.
           </li>
@@ -993,7 +1017,7 @@ export default function App() {
   const [cancelRequested, setCancelRequested] = useState(false);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
-  const [statusSource, setStatusSource] = useState<'native' | undefined>();
+  const [statusSource, setStatusSource] = useState<'native' | 'encoder' | undefined>();
   const [lastActivityAt, setLastActivityAt] = useState(() => Date.now());
   const progressRef = useRef(0);
   const activeAbortController = useRef<AbortController | null>(null);
@@ -1107,10 +1131,11 @@ export default function App() {
     () =>
       resolveRoute({
         file,
+        mediaType,
         targetMime,
         targetSupported,
       }),
-    [file, targetMime, targetSupported],
+    [file, mediaType, targetMime, targetSupported],
   );
   const routeDecision = resolvedRoute.decision;
   const recommendedTargetLabel = useMemo(
@@ -1502,6 +1527,12 @@ export default function App() {
                 onProgress: handleProgress,
                 signal: abortController.signal,
               });
+      } else if (routeDecision === 'encoder') {
+        next = await convertAudioToMp3({
+          file,
+          onProgress: handleProgress,
+          signal: abortController.signal,
+        });
       } else {
         throw new Error(routeReason);
       }

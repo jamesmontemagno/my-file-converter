@@ -873,6 +873,10 @@ pre {
   border-color: rgba(34, 197, 94, 0.35);
 }
 
+.route-encoder {
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
 .route-blocked {
   border-color: rgba(248, 113, 113, 0.35);
 }

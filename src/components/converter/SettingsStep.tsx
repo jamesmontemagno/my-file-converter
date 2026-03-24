@@ -36,6 +36,13 @@ function guidanceForFormat(targetMime: string, mediaType: string) {
   }
 
   if (mediaType === 'audio') {
+    if (targetMime.includes('mpeg')) {
+      return {
+        bestFor: 'Universal playback and sharing across apps/devices',
+        tradeoff: 'Uses software encoding in-browser and may take longer on large files.',
+      };
+    }
+
     if (targetMime.includes('ogg')) {
       return {
         bestFor: 'Open audio workflows and lightweight files',

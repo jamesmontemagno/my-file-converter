@@ -8,7 +8,7 @@ type ActivityEntry = {
   progress: number;
   tone: ActivityTone;
   timestamp: string;
-  source?: 'native';
+  source?: 'native' | 'encoder';
 };
 
 type RawOutputEntry = {
@@ -24,7 +24,7 @@ type ConvertingStepProps = {
   progress: number;
   busy: boolean;
   liveStatusDetail: string;
-  statusSource?: 'native';
+  statusSource?: 'native' | 'encoder';
   recentMilestones: ActivityEntry[];
   logOpen: boolean;
   rawOutputEntries: RawOutputEntry[];
@@ -35,7 +35,7 @@ type ConvertingStepProps = {
   onConvertAgain: () => void;
   onAdjustSettings: () => void;
   onRestart: () => void;
-  sourceLabel: (source?: 'native') => string;
+  sourceLabel: (source?: 'native' | 'encoder') => string;
 };
 
 export function ConvertingStep({

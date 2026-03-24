@@ -14,7 +14,7 @@ export type ConversionActivity = {
   message: string;
   detail?: string;
   rawOutput?: string;
-  source?: 'native';
+  source?: 'native' | 'encoder';
 };
 
 export function createConversionAbortError() {
@@ -99,6 +99,7 @@ function resolveImageSize(sourceWidth: number, sourceHeight: number, options?: I
 }
 
 function mimeToExt(mime: string) {
+  if (mime.includes('audio/mpeg')) return 'mp3';
   if (mime.includes('png')) return 'png';
   if (mime.includes('jpeg')) return 'jpg';
   if (mime.includes('webp')) return 'webp';
@@ -215,6 +216,125 @@ async function createMediaElement(file: File, mediaType: 'audio' | 'video'): Pro
 
 function mediaRecorderSupported(type: string) {
   return typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type);
+}
+
+function getAudioContextCtor() {
+  return (window.AudioContext ||
+    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext) as
+    | typeof AudioContext
+    | undefined;
+}
+
+function floatToInt16(input: Float32Array) {
+  const output = new Int16Array(input.length);
+  for (let index = 0; index < input.length; index += 1) {
+    const sample = Math.max(-1, Math.min(1, input[index]));
+    output[index] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+  }
+  return output;
+}
+
+export async function convertAudioToMp3(args: {
+  file: File;
+  onProgress?: (activity: ConversionActivity) => void;
+  signal?: AbortSignal;
+}): Promise<ConversionResult> {
+  const { file, onProgress, signal } = args;
+  const mediaType = classifyMediaType(file);
+  if (mediaType !== 'audio') {
+    throw new Error('MP3 encoding currently supports audio input only.');
+  }
+
+  const AudioContextCtor = getAudioContextCtor();
+  if (!AudioContextCtor) {
+    throw new Error('Web Audio API is not supported in this browser.');
+  }
+
+  throwIfConversionAborted(signal);
+  onProgress?.({
+    progress: 0.08,
+    message: 'Preparing MP3 encoder',
+    detail: 'Loading local audio encoder and reading input file.',
+    source: 'encoder',
+  });
+
+  const lamejsModule = await import('lamejs');
+  const Mp3Encoder = (lamejsModule as { Mp3Encoder: new (...args: number[]) => any }).Mp3Encoder;
+
+  const audioBytes = await raceWithAbort(file.arrayBuffer(), signal);
+  throwIfConversionAborted(signal);
+
+  onProgress?.({
+    progress: 0.22,
+    message: 'Decoding source audio',
+    detail: 'Using Web Audio to decode samples before MP3 encoding.',
+    source: 'encoder',
+  });
+
+  const audioContext = new AudioContextCtor();
+  let audioBuffer: AudioBuffer;
+  try {
+    audioBuffer = await raceWithAbort(audioContext.decodeAudioData(audioBytes.slice(0)), signal, () => {
+      void audioContext.close();
+    });
+  } finally {
+    await audioContext.close();
+  }
+
+  throwIfConversionAborted(signal);
+
+  const channels = Math.min(2, audioBuffer.numberOfChannels);
+  const sampleRate = audioBuffer.sampleRate;
+  const kbps = 128;
+  const encoder = new Mp3Encoder(channels, sampleRate, kbps);
+  const chunkSize = 1152;
+  const totalSamples = audioBuffer.length;
+  const totalChunks = Math.max(1, Math.ceil(totalSamples / chunkSize));
+
+  const left = floatToInt16(audioBuffer.getChannelData(0));
+  const right = channels > 1 ? floatToInt16(audioBuffer.getChannelData(1)) : null;
+  const mp3Chunks: ArrayBuffer[] = [];
+
+  onProgress?.({
+    progress: 0.35,
+    message: 'Encoding MP3 output',
+    detail: 'Converting decoded samples into MP3 frames.',
+    source: 'encoder',
+  });
+
+  for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+    throwIfConversionAborted(signal);
+    const start = chunkIndex * chunkSize;
+    const end = Math.min(start + chunkSize, totalSamples);
+    const leftChunk = left.subarray(start, end);
+    const frame = right
+      ? encoder.encodeBuffer(leftChunk, right.subarray(start, end))
+      : encoder.encodeBuffer(leftChunk);
+    if (frame.length) {
+      mp3Chunks.push(Uint8Array.from(frame).buffer);
+    }
+
+    if (chunkIndex % 12 === 0 || chunkIndex === totalChunks - 1) {
+      const completion = (chunkIndex + 1) / totalChunks;
+      onProgress?.({
+        progress: 0.35 + completion * 0.58,
+        message: 'Encoding MP3 output',
+        detail: `Encoded ${Math.round(completion * 100)}% of audio samples.`,
+        source: 'encoder',
+      });
+    }
+  }
+
+  const flush = encoder.flush();
+  if (flush.length) {
+    mp3Chunks.push(Uint8Array.from(flush).buffer);
+  }
+
+  return {
+    blob: new Blob(mp3Chunks, { type: 'audio/mpeg' }),
+    outputName: replaceExtension(file.name, 'mp3'),
+    route: 'encoder-mp3',
+  };
 }
 
 export async function convertViaMediaRecorder(args: {

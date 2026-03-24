@@ -23,6 +23,7 @@ export function stripExtension(name: string) {
 }
 
 export function extensionForMime(mime: string) {
+  if (mime.includes('mpeg')) return 'mp3';
   if (mime.includes('mp4')) return 'mp4';
   if (mime.includes('webm')) return 'webm';
   if (mime.includes('ogg')) return 'ogg';
