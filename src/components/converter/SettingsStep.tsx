@@ -228,7 +228,7 @@ export function SettingsStep({
       ) : null}
 
       <details className="field">
-        <summary>Advanced fallback options</summary>
+        <summary>Rendering options</summary>
         <div className="field route-preference-field">
           <span>Conversion route preference</span>
           <div className="route-preference-options">

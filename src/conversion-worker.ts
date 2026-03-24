@@ -69,10 +69,22 @@ self.onmessage = async (event: MessageEvent) => {
       route: 'wasm-ffmpeg',
     });
   } catch (error) {
+    let message: string;
+    if (error instanceof Error) {
+      message = error.message;
+    } else if (typeof error === 'string') {
+      message = error;
+    } else {
+      try {
+        message = JSON.stringify(error);
+      } catch {
+        message = String(error);
+      }
+    }
     self.postMessage({
       id,
       type: 'error',
-      error: error instanceof Error ? error.message : 'Unknown worker error.',
+      error: message || 'Unknown worker error.',
     });
   }
 };

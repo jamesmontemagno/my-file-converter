@@ -197,11 +197,9 @@ function routePreferenceLabel(preference: RoutePreference) {
 function routeLabel(route: RouteDecision, preference: RoutePreference) {
   if (route === 'native') return 'Native browser path';
   if (route === 'wasm') {
-    return preference === 'ffmpeg' ? 'Forced ffmpeg.wasm route' : 'ffmpeg.wasm fallback';
+    return preference === 'ffmpeg' ? 'ffmpeg.wasm (selected)' : 'ffmpeg.wasm fallback';
   }
-  return preference === 'ffmpeg'
-    ? 'Blocked until ffmpeg.wasm is enabled'
-    : 'Unsupported until fallback is enabled';
+  return 'Waiting for input';
 }
 
 function sourceForRouteDecision(route: RouteDecision) {
@@ -981,15 +979,11 @@ function DocsPage() {
           </li>
           <li>
             <strong>ffmpeg.wasm fallback</strong> — the format requires the WebAssembly module,
-            which will be loaded automatically if the fallback is enabled.
+            which is loaded automatically when needed.
           </li>
           <li>
-            <strong>Forced ffmpeg.wasm route</strong> — the WebAssembly module is selected
-            intentionally, even when the browser-native route is available.
-          </li>
-          <li>
-            <strong>Unsupported until fallback is enabled</strong> — the current format needs
-            ffmpeg but the fallback is turned off in the advanced settings panel.
+            <strong>ffmpeg.wasm (selected)</strong> — the WebAssembly module is selected
+            intentionally via the route preference, even when browser-native encoding is available.
           </li>
         </ul>
         <p>

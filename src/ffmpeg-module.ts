@@ -266,7 +266,24 @@ export async function convert(args: {
     // ---- Execute --------------------------------------------------------
     // exec() returns 0 on success, 1 on timeout, other non-zero on error.
     // Default timeout is -1 (no timeout).
-    const exitCode = await ffmpeg.exec(command);
+    // The WASM module can also throw non-Error values (e.g. Emscripten
+    // abort strings) so we catch broadly and wrap for clarity.
+    let exitCode: number;
+    try {
+      exitCode = await ffmpeg.exec(command);
+    } catch (execError) {
+      const detail =
+        execError instanceof Error
+          ? execError.message
+          : typeof execError === 'string'
+            ? execError
+            : String(execError);
+      throw new Error(
+        `ffmpeg crashed during encoding: ${detail}. ` +
+        'This can happen when the WebAssembly runtime runs out of memory. ' +
+        'Try a shorter clip, a smaller file, or a different output format.',
+      );
+    }
 
     if (exitCode !== 0) {
       throw new Error(
