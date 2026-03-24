@@ -62,12 +62,15 @@ function codecConfigForTargetMime(targetMime: string): OutputCodecConfig {
         '-deadline', 'realtime',
         '-cpu-used', '8',
         '-row-mt', '0',
+        '-lag-in-frames', '0',
+        '-auto-alt-ref', '0',
+        '-error-resilient', '1',
         '-crf', '35',
         '-c:a', 'libopus',
         '-b:a', '96k',
       ],
       summary:
-        'WebM VP9 + Opus — realtime deadline / cpu-used 8 for WASM speed. ' +
+        'WebM VP9 + Opus — minimal-memory realtime mode for WASM. ' +
         'VP9 is still slower than VP8 in single-thread WebAssembly; expect long encodes for videos over a few minutes.',
     };
   }
@@ -79,12 +82,15 @@ function codecConfigForTargetMime(targetMime: string): OutputCodecConfig {
         '-c:v', 'libvpx',
         '-deadline', 'realtime',
         '-cpu-used', '8',
+        '-lag-in-frames', '0',
+        '-auto-alt-ref', '0',
+        '-error-resilient', '1',
         '-crf', '30',
         '-c:a', 'libopus',
         '-b:a', '96k',
       ],
       summary:
-        'WebM VP8 + Opus — realtime deadline / cpu-used 8 for fast WASM encoding. ' +
+        'WebM VP8 + Opus — minimal-memory realtime mode for WASM. ' +
         'VP8 is the fastest video codec available in this WebAssembly build.',
     };
   }
@@ -307,16 +313,27 @@ export async function convert(args: {
     }
 
     // -- Memory-saving: scale down large video inputs ---------------------
-    // The single-thread WASM core has limited memory (~256–512 MB usable).
-    // A 145 MB input at 720p already uses most of it before encoding starts.
-    // Scale to 480p for files over 50 MB to keep peak memory manageable.
+    // The single-thread WASM core has limited memory. The input file lives
+    // in the WASM VFS (145 MB = 145 MB of WASM heap), plus H.264 decoder
+    // reference frames at native resolution, plus encoder buffers.
+    // Scale aggressively to keep peak memory within the WASM ceiling.
     const isVideo = targetMime.startsWith('video/');
-    if (isVideo && file.size > 50 * 1024 * 1024) {
+    if (isVideo && file.size > 100 * 1024 * 1024) {
+      // Very large files: scale to 360p
+      command.push('-vf', 'scale=-2:360');
+      onProgress?.({
+        progress: 0.13,
+        message: 'Scaling to 360p for WASM memory',
+        detail: `Input is ${sizeMb} MB — scaling to 360p to fit within WebAssembly memory limits.`,
+        source: 'ffmpeg',
+      });
+    } else if (isVideo && file.size > 25 * 1024 * 1024) {
+      // Moderately large files: scale to 480p
       command.push('-vf', 'scale=-2:480');
       onProgress?.({
         progress: 0.13,
-        message: 'Scaling down for WASM memory',
-        detail: `Input is ${sizeMb} MB — scaling video to 480p to fit within WebAssembly memory limits.`,
+        message: 'Scaling to 480p for WASM memory',
+        detail: `Input is ${sizeMb} MB — scaling to 480p to fit within WebAssembly memory limits.`,
         source: 'ffmpeg',
       });
     }
