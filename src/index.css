@@ -859,10 +859,6 @@ pre {
   border-color: rgba(34, 197, 94, 0.35);
 }
 
-.route-wasm {
-  border-color: rgba(96, 165, 250, 0.35);
-}
-
 .route-blocked {
   border-color: rgba(248, 113, 113, 0.35);
 }

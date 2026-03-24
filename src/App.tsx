@@ -22,7 +22,6 @@ import {
   stripExtension,
   type ConversionOptions,
 } from './conversion-options';
-import { convertWithWasmFallback } from './worker-client';
 import { LogoIcon } from './Logo';
 import {
   ConvertingStep,
@@ -40,8 +39,7 @@ type Page = 'landing' | 'app' | 'privacy' | 'terms' | 'docs';
 type StatusMode = 'idle' | 'ready' | 'working' | 'success' | 'error' | 'canceled';
 type ActivityTone = 'info' | 'success' | 'error';
 type ActivityVariant = 'milestone' | 'raw';
-type RouteDecision = 'native' | 'wasm' | 'blocked';
-type RoutePreference = 'auto' | 'native' | 'ffmpeg';
+type RouteDecision = 'native' | 'blocked';
 type ConverterStep = 'upload' | 'settings' | 'converting' | 'results';
 type StepState = 'done' | 'current' | 'pending';
 type ActivityEntry = {
@@ -52,12 +50,12 @@ type ActivityEntry = {
   tone: ActivityTone;
   timestamp: string;
   variant: ActivityVariant;
-  source?: 'native' | 'ffmpeg';
+  source?: 'native';
 };
 type ResolvedRoute = {
   decision: RouteDecision;
   reason: string;
-  source?: 'native' | 'ffmpeg';
+  source?: 'native';
 };
 type SizeChangeSummary = {
   trend: 'smaller' | 'larger' | 'same';
@@ -154,7 +152,7 @@ function descriptionForPage(page: Page) {
   if (page === 'terms')
     return 'LocalMorph terms of use. Review the conditions under which you may use this browser-based file converter.';
   if (page === 'docs')
-    return 'LocalMorph documentation. Learn about supported file formats, how browser-native conversion works, and when to use the ffmpeg.wasm route.';
+    return 'LocalMorph documentation. Learn about supported file formats and how browser-native conversion works.';
   return 'LocalMorph converts images, audio, and video files directly in your browser — no uploads, no servers, no privacy risks. Free, fast, and 100% client-side.';
 }
 
@@ -188,23 +186,13 @@ function setCanonicalTag(href: string) {
   tag.setAttribute('href', href);
 }
 
-function routePreferenceLabel(preference: RoutePreference) {
-  if (preference === 'native') return 'Prefer browser-native';
-  if (preference === 'ffmpeg') return 'Force ffmpeg.wasm';
-  return 'Auto';
-}
-
-function routeLabel(route: RouteDecision, preference: RoutePreference) {
+function routeLabel(route: RouteDecision) {
   if (route === 'native') return 'Native browser path';
-  if (route === 'wasm') {
-    return preference === 'ffmpeg' ? 'ffmpeg.wasm (selected)' : 'ffmpeg.wasm fallback';
-  }
   return 'Waiting for input';
 }
 
 function sourceForRouteDecision(route: RouteDecision) {
   if (route === 'native') return 'native' as const;
-  if (route === 'wasm') return 'ffmpeg' as const;
   return undefined;
 }
 
@@ -214,12 +202,11 @@ function isNativeConversionRoute(route: string) {
 
 function resolveRoute(args: {
   file: File | null;
-  routePreference: RoutePreference;
   targetMime: string;
   trimRequested: boolean;
   trimValidationError: string;
 }): ResolvedRoute {
-  const { file, routePreference, targetMime, trimRequested, trimValidationError } = args;
+  const { file, targetMime, trimRequested, trimValidationError } = args;
 
   if (!file || !targetMime) {
     return {
@@ -235,45 +222,24 @@ function resolveRoute(args: {
     };
   }
 
-  if (routePreference === 'ffmpeg') {
-    return {
-      decision: 'wasm',
-      reason: trimRequested
-        ? 'ffmpeg.wasm is selected — trim settings and conversion will use the WebAssembly route.'
-        : 'ffmpeg.wasm is selected — this job will use the WebAssembly encoder.',
-      source: 'ffmpeg',
-    };
-  }
-
   if (trimRequested) {
     return {
-      decision: 'wasm',
-      reason:
-        routePreference === 'native'
-          ? 'Browser-native routing was preferred, but trim settings require ffmpeg.wasm.'
-          : 'Trim settings require ffmpeg.wasm for this conversion.',
-      source: 'ffmpeg',
+      decision: 'blocked',
+      reason: 'Trim settings are currently unavailable in native-only mode.',
     };
   }
 
   if (supportsNativeRoute(file, targetMime)) {
     return {
       decision: 'native',
-      reason:
-        routePreference === 'native'
-          ? 'Browser-native routing is preferred and supported for this format combination.'
-          : 'This format combination can use the fast native browser route.',
+      reason: 'This format combination can use the fast native browser route.',
       source: 'native',
     };
   }
 
   return {
-    decision: 'wasm',
-    reason:
-      routePreference === 'native'
-        ? 'Browser-native routing was preferred, but this format combination needs ffmpeg.wasm.'
-        : 'This format combination is not supported natively — ffmpeg.wasm will be used automatically.',
-    source: 'ffmpeg',
+    decision: 'blocked',
+    reason: 'This format combination is not supported natively in your browser.',
   };
 }
 
@@ -319,14 +285,10 @@ function sizeChangeGuidance(args: {
   const webMediaOutput = args.outputMime.includes('webm') || args.outputMime.includes('webp');
 
   if (nativeRoute && webMediaOutput) {
-    return 'Browser-native WebM/WebP encoders can increase file size for some sources. Force ffmpeg.wasm if you want a more predictable encoder path.';
+    return 'Browser-native WebM/WebP encoders can increase file size for some sources.';
   }
 
-  if (args.result.route === 'wasm-ffmpeg') {
-    return 'This ffmpeg.wasm output ended up larger than the source. More encoder tuning may help in a future update.';
-  }
-
-  return 'This output is larger than the source. Try a different route or format if file size matters more than speed.';
+  return 'This output is larger than the source. Try a different format if file size matters more than speed.';
 }
 
 function previewForResult(downloadUrl: string, result: ConversionResult) {
@@ -387,8 +349,7 @@ function statusCopyFor(mode: StatusMode) {
   };
 }
 
-function sourceLabel(source?: 'native' | 'ffmpeg') {
-  if (source === 'ffmpeg') return 'ffmpeg output';
+function sourceLabel(source?: 'native') {
   if (source === 'native') return 'Browser pipeline';
   return '';
 }
@@ -639,10 +600,9 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
           <span className="eyebrow">Private. Fast. Browser-native.</span>
           <h1>Convert video, audio, and images locally without uploading your files.</h1>
           <p className="hero-text">
-            {APP_NAME} uses native browser APIs first, can fall back to `ffmpeg.wasm` when needed,
-            and also lets you force the ffmpeg route when you want a more predictable encoder path.
-            The experience is designed so people always know what route is being used, what the
-            browser supports, and what happens to their files.
+            {APP_NAME} uses browser-native APIs for all conversions. The experience is designed so
+            people always know what route is being used, what the browser supports, and what
+            happens to their files.
           </p>
           <div className="hero-actions">
             <button onClick={onOpenApp}>Start converting</button>
@@ -663,8 +623,8 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
             <p>Use fast built-in browser capabilities whenever possible.</p>
           </div>
           <div className="hero-stat">
-            <strong>Fallback when needed</strong>
-            <p>Automatic or forced ffmpeg path for broader format coverage.</p>
+            <strong>Native-only pipeline</strong>
+            <p>Uses built-in browser encoders and clearly reports unsupported outputs.</p>
           </div>
           <div className="hero-stat">
             <strong>Clear status and output</strong>
@@ -761,18 +721,15 @@ function PrivacyPage() {
       </section>
 
       <section>
-        <h2>4. Optional external modules</h2>
+        <h2>4. Browser environment considerations</h2>
         <p>
-          {APP_NAME} lets you override the fallback module URL. If you choose to load a module from
-          another host, your browser will request code from that third party.
+          {APP_NAME} runs using browser-native APIs. Output quality, codec support, and conversion
+          availability may vary by browser version, OS, and installed media components.
         </p>
         <ul>
-          <li>Your files are still intended to remain local in the browser workflow.</li>
-          <li>You should only use module URLs from parties you trust.</li>
-          <li>
-            Third-party code may have its own privacy, security, and licensing implications, which
-            you are responsible for reviewing.
-          </li>
+          <li>Your files are intended to remain local in the browser workflow.</li>
+          <li>Different browsers may support different output formats and codecs.</li>
+          <li>Large files may fail based on device memory and browser limits.</li>
         </ul>
       </section>
 
@@ -789,8 +746,7 @@ function PrivacyPage() {
         <h2>6. Your choices</h2>
         <p>
           You can stop using the app at any time by closing the page. You should avoid using the app
-          with sensitive files unless you have reviewed the hosting setup, browser environment, and
-          any optional third-party modules you enable.
+          with sensitive files unless you have reviewed the hosting setup and browser environment.
         </p>
       </section>
     </LegalLayout>
@@ -834,8 +790,8 @@ function TermsPage() {
         <h2>4. Browser and output limitations</h2>
         <p>
           Conversion behavior depends on browser capabilities, codecs, file formats, memory limits,
-          and optional fallback modules. Some conversions may fail, be lossy, or produce different
-          results across browsers and devices.
+          and device constraints. Some conversions may fail, be lossy, or produce different results
+          across browsers and devices.
         </p>
       </section>
 
@@ -873,7 +829,7 @@ function DocsPage() {
       <LegalLayout
         eyebrow="Docs"
         title="Documentation"
-        summary={`${APP_NAME} converts images, audio, and video files entirely in your browser. This page explains what formats are supported, how the conversion technology works, and when you may want to choose the ffmpeg.wasm route yourself.`}
+        summary={`${APP_NAME} converts images, audio, and video files entirely in your browser. This page explains what formats are supported and how the browser-native conversion technology works.`}
       >
       <section>
         <h2>1. Supported formats</h2>
@@ -912,7 +868,7 @@ function DocsPage() {
           </li>
           <li>
             <strong>MP4 Audio (.m4a)</strong> — AAC audio in an MP4 container; typically requires
-            the ffmpeg.wasm fallback.
+            browser support for MP4 recording.
           </li>
         </ul>
         <h3>Video</h3>
@@ -926,8 +882,8 @@ function DocsPage() {
             by browser.
           </li>
           <li>
-            <strong>MP4 H.264+AAC (.mp4)</strong> — widely compatible format; uses the ffmpeg.wasm
-            fallback path.
+            <strong>MP4 H.264+AAC (.mp4)</strong> — widely compatible format; available only when
+            your browser supports MP4 recording.
           </li>
         </ul>
       </section>
@@ -935,10 +891,9 @@ function DocsPage() {
       <section>
         <h2>2. How conversion works</h2>
         <p>
-          {APP_NAME} uses two conversion paths: a native browser route and an optional ffmpeg.wasm
-          route. By default the app chooses the best path automatically based on your browser&apos;s
-          capabilities and the selected format combination, but the advanced settings can also force
-          the ffmpeg route when you want it.
+          {APP_NAME} uses a browser-native conversion path. The app checks your browser&apos;s
+          capabilities and selected format combination, then either runs a native conversion or
+          reports that the format is unsupported.
         </p>
         <h3>Native browser route</h3>
         <p>
@@ -951,26 +906,13 @@ function DocsPage() {
           pipes the stream into the MediaRecorder API, which re-encodes it in the selected format.
           This path works well for WebM output in Chrome and Firefox.
         </p>
-        <h3>ffmpeg.wasm fallback</h3>
-        <p>
-          When the native route cannot handle a format combination — for example, producing MP4
-          output or applying trim settings — the app loads ffmpeg compiled to WebAssembly and runs
-          the conversion in a Web Worker. You can also force this route manually if you want to
-          compare output size or avoid browser-native encoder behavior. This keeps the main thread
-          responsive and avoids uploading your file to a server.
-        </p>
-        <p>
-          The ffmpeg.wasm module is loaded on demand. By default the bundled module URL is used, but
-          you can override it in the advanced settings if you prefer to host your own copy.
-        </p>
       </section>
 
       <section>
         <h2>3. Conversion route selection</h2>
         <p>
           The converter shows a route indicator before and during conversion so you always know
-          which path is active. By default it auto-picks the fastest compatible route, but advanced
-          settings also let you prefer browser-native output or force ffmpeg.wasm:
+          which path is active:
         </p>
         <ul>
           <li>
@@ -978,17 +920,12 @@ function DocsPage() {
             your browser with no additional modules required.
           </li>
           <li>
-            <strong>ffmpeg.wasm fallback</strong> — the format requires the WebAssembly module,
-            which is loaded automatically when needed.
-          </li>
-          <li>
-            <strong>ffmpeg.wasm (selected)</strong> — the WebAssembly module is selected
-            intentionally via the route preference, even when browser-native encoding is available.
+            <strong>Waiting for input / Unsupported</strong> — conversion cannot run until a
+            compatible file and output format are selected.
           </li>
         </ul>
         <p>
-          Trim settings always force the ffmpeg route because the native MediaRecorder API does not
-          support seeking before encoding.
+          Trim settings are currently unavailable in native-only mode.
         </p>
       </section>
 
@@ -1006,10 +943,6 @@ function DocsPage() {
             <strong>MediaRecorder API</strong> — required for the native audio and video route.
           </li>
           <li>
-            <strong>Web Workers</strong> — required for the ffmpeg.wasm fallback to run off the
-            main thread.
-          </li>
-          <li>
             <strong>Blob and URL APIs</strong> — used for generating download links and previewing
             output in the browser.
           </li>
@@ -1024,9 +957,7 @@ function DocsPage() {
         <h2>5. Privacy and data flow</h2>
         <p>
           Files are processed in memory inside your browser tab. They are not sent to any server as
-          part of the conversion workflow. The only exception is if you configure a custom
-          ffmpeg.wasm module URL that points to a third-party host — in that case your browser will
-          request the module code from that host, though your files remain local.
+          part of the conversion workflow.
         </p>
         <p>
           See the <a href="#/privacy">Privacy Policy</a> for the full data handling disclosure.
@@ -1045,8 +976,6 @@ export default function App() {
   const [statusDetail, setStatusDetail] = useState('Load a file and the converter will start reporting activity here.');
   const [progress, setProgress] = useState(0);
   const [statusMode, setStatusMode] = useState<StatusMode>('idle');
-  const [routePreference, setRoutePreference] = useState<RoutePreference>('auto');
-  const [customModuleUrl, setCustomModuleUrl] = useState('');
   const [result, setResult] = useState<ConversionResult | null>(null);
   const [downloadUrl, setDownloadUrl] = useState('');
   const [capabilities, setCapabilities] = useState<CapabilityReport | null>(null);
@@ -1054,7 +983,7 @@ export default function App() {
   const [cancelRequested, setCancelRequested] = useState(false);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
-  const [statusSource, setStatusSource] = useState<'native' | 'ffmpeg' | undefined>();
+  const [statusSource, setStatusSource] = useState<'native' | undefined>();
   const [lastActivityAt, setLastActivityAt] = useState(() => Date.now());
   const progressRef = useRef(0);
   const activeAbortController = useRef<AbortController | null>(null);
@@ -1115,24 +1044,17 @@ export default function App() {
   }, [progress]);
 
   useEffect(() => {
-    if (!busy || statusMode !== 'working' || statusSource !== 'ffmpeg') return;
+    if (!busy || statusMode !== 'working') return;
 
     const interval = window.setInterval(() => {
       const silenceMs = Date.now() - lastActivityAt;
       if (silenceMs < 10_000) return;
       const silenceSec = Math.round(silenceMs / 1000);
-      setStatusDetail(
-        `ffmpeg is still encoding (no output for ${silenceSec}s). ` +
-        'Single-thread WebAssembly encoding is much slower than native FFmpeg — ' +
-        'the encoder is working but progress events only fire when full frames complete.',
-      );
+      setStatusDetail(`Conversion is still running (no output for ${silenceSec}s).`);
     }, 4000);
 
     return () => window.clearInterval(interval);
-  }, [busy, lastActivityAt, statusMode, statusSource]);
-
-  const defaultModuleUrl = 'Bundled ffmpeg fallback module';
-  const moduleUrl = customModuleUrl.trim();
+  }, [busy, lastActivityAt, statusMode]);
   const requestedOptions = useMemo<ConversionOptions>(
     () => ({
       outputBaseName: outputBaseName.trim(),
@@ -1171,17 +1093,16 @@ export default function App() {
     () =>
       resolveRoute({
         file,
-        routePreference,
         targetMime,
         trimRequested,
         trimValidationError,
       }),
-    [file, routePreference, targetMime, trimRequested, trimValidationError],
+    [file, targetMime, trimRequested, trimValidationError],
   );
   const routeDecision = resolvedRoute.decision;
   const routeReason = resolvedRoute.reason;
   const routeSource = resolvedRoute.source;
-  const routeDisplayLabel = routeLabel(routeDecision, routePreference);
+  const routeDisplayLabel = routeLabel(routeDecision);
 
   const canConvert = Boolean(file && targetMime && !trimValidationError && routeDecision !== 'blocked');
   const stepOrder: ConverterStep[] = ['upload', 'settings', 'converting', 'results'];
@@ -1279,8 +1200,6 @@ export default function App() {
   function restartConverter() {
     if (busy) return;
     setQuality(0.9);
-    setRoutePreference('auto');
-    setCustomModuleUrl('');
     initializeForFile(null);
   }
 
@@ -1354,20 +1273,6 @@ export default function App() {
     setTrimEnd(nextTrimEnd);
     if (file) {
       markConfigurationChanged('Trim settings updated. Ready to convert.');
-    }
-  }
-
-  function handleRoutePreferenceChange(nextRoutePreference: RoutePreference) {
-    setRoutePreference(nextRoutePreference);
-    if (file) {
-      markConfigurationChanged('Route preference updated. Ready to convert.');
-    }
-  }
-
-  function handleCustomModuleUrlChange(nextCustomModuleUrl: string) {
-    setCustomModuleUrl(nextCustomModuleUrl);
-    if (file) {
-      markConfigurationChanged('Fallback module URL updated. Ready to convert.');
     }
   }
 
@@ -1498,7 +1403,7 @@ export default function App() {
         {
           id: (nextId += 1),
           message: `Starting ${routeDisplayLabel.toLowerCase()} conversion`,
-          detail: `${routePreferenceLabel(routePreference)} is active while preparing ${file.name} for local conversion.`,
+          detail: `Preparing ${file.name} for local conversion.`,
           progress: 0,
           tone: 'info',
           timestamp: formatEventTime(new Date()),
@@ -1530,17 +1435,6 @@ export default function App() {
       },
     );
 
-    if (routeDecision === 'wasm') {
-      const sourceSize = formatBytes(file.size);
-      handleProgress({
-        progress: 0.08,
-        message: 'Using ffmpeg.wasm single-thread route',
-        detail:
-          `This job is running client-side in WebAssembly (${sourceSize} input). Long video conversions can take significantly longer than desktop FFmpeg.`,
-        source: 'ffmpeg',
-      });
-    }
-
     try {
       let next: ConversionResult;
 
@@ -1561,15 +1455,6 @@ export default function App() {
                 onProgress: handleProgress,
                 signal: abortController.signal,
               });
-      } else if (routeDecision === 'wasm') {
-        next = await convertWithWasmFallback({
-          file,
-          targetMime,
-          wasmModuleUrl: moduleUrl,
-          options: requestedOptions,
-          onProgress: handleProgress,
-          signal: abortController.signal,
-        });
       } else {
         throw new Error(routeReason);
       }
@@ -1703,13 +1588,9 @@ export default function App() {
             trimStart={trimStart}
             trimEnd={trimEnd}
             trimValidationError={trimValidationError}
-            routePreference={routePreference}
-            customModuleUrl={customModuleUrl}
-            defaultModuleUrl={defaultModuleUrl}
             outputFileName={outputFileName}
             selectedAdjustments={selectedAdjustments}
             routeDisplayLabel={routeDisplayLabel}
-            routePreferenceLabel={routePreferenceLabel(routePreference)}
             routeReason={routeReason}
             canConvert={canConvert}
             onTargetMimeChange={handleTargetMimeChange}
@@ -1720,8 +1601,6 @@ export default function App() {
             onQualityChange={handleQualityChange}
             onTrimStartChange={handleTrimStartChange}
             onTrimEndChange={handleTrimEndChange}
-            onRoutePreferenceChange={handleRoutePreferenceChange}
-            onCustomModuleUrlChange={handleCustomModuleUrlChange}
             onBack={goBackToUploadStep}
             onConvert={startConversionStep}
           />

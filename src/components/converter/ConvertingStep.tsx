@@ -8,7 +8,7 @@ type ActivityEntry = {
   progress: number;
   tone: ActivityTone;
   timestamp: string;
-  source?: 'native' | 'ffmpeg';
+  source?: 'native';
 };
 
 type RawOutputEntry = {
@@ -24,7 +24,7 @@ type ConvertingStepProps = {
   progress: number;
   busy: boolean;
   liveStatusDetail: string;
-  statusSource?: 'native' | 'ffmpeg';
+  statusSource?: 'native';
   recentMilestones: ActivityEntry[];
   logOpen: boolean;
   rawOutputEntries: RawOutputEntry[];
@@ -34,7 +34,7 @@ type ConvertingStepProps = {
   onCancel: () => void;
   onConvertAgain: () => void;
   onRestart: () => void;
-  sourceLabel: (source?: 'native' | 'ffmpeg') => string;
+  sourceLabel: (source?: 'native') => string;
 };
 
 export function ConvertingStep({
@@ -125,8 +125,8 @@ export function ConvertingStep({
             ))
           ) : (
             <div className="activity-empty">
-              Raw output is kept minimized by default. Expand it during a conversion to inspect ffmpeg
-              and pipeline messages.
+              Raw output is kept minimized by default. Expand it during a conversion to inspect
+              pipeline messages.
             </div>
           )}
         </div>

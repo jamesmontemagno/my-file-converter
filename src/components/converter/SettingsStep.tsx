@@ -1,5 +1,3 @@
-type RoutePreference = 'auto' | 'native' | 'ffmpeg';
-
 type FormatOption = {
   value: string;
   label: string;
@@ -20,13 +18,9 @@ type SettingsStepProps = {
   trimStart: string;
   trimEnd: string;
   trimValidationError: string;
-  routePreference: RoutePreference;
-  customModuleUrl: string;
-  defaultModuleUrl: string;
   outputFileName: string;
   selectedAdjustments: string[];
   routeDisplayLabel: string;
-  routePreferenceLabel: string;
   routeReason: string;
   canConvert: boolean;
   onTargetMimeChange: (value: string) => void;
@@ -37,33 +31,9 @@ type SettingsStepProps = {
   onQualityChange: (value: number) => void;
   onTrimStartChange: (value: string) => void;
   onTrimEndChange: (value: string) => void;
-  onRoutePreferenceChange: (value: RoutePreference) => void;
-  onCustomModuleUrlChange: (value: string) => void;
   onBack: () => void;
   onConvert: () => void;
 };
-
-const routePreferenceOptions: {
-  value: RoutePreference;
-  label: string;
-  description: string;
-}[] = [
-  {
-    value: 'auto',
-    label: 'Auto',
-    description: 'Use the fastest route available for the selected format. Falls back to ffmpeg.wasm when needed.',
-  },
-  {
-    value: 'native',
-    label: 'Prefer browser-native',
-    description: 'Use browser-native encoding when possible. Falls back to ffmpeg.wasm for unsupported formats.',
-  },
-  {
-    value: 'ffmpeg',
-    label: 'Use ffmpeg.wasm',
-    description: 'Always use the WebAssembly encoder, even when faster browser-native encoding is available.',
-  },
-];
 
 export function SettingsStep({
   busy,
@@ -80,13 +50,9 @@ export function SettingsStep({
   trimStart,
   trimEnd,
   trimValidationError,
-  routePreference,
-  customModuleUrl,
-  defaultModuleUrl,
   outputFileName,
   selectedAdjustments,
   routeDisplayLabel,
-  routePreferenceLabel,
   routeReason,
   canConvert,
   onTargetMimeChange,
@@ -97,8 +63,6 @@ export function SettingsStep({
   onQualityChange,
   onTrimStartChange,
   onTrimEndChange,
-  onRoutePreferenceChange,
-  onCustomModuleUrlChange,
   onBack,
   onConvert,
 }: SettingsStepProps) {
@@ -222,48 +186,10 @@ export function SettingsStep({
               />
             </label>
           </div>
-          <small>Trim controls use ffmpeg when the native browser route cannot apply them.</small>
+          <small>Trim is currently unavailable in native-only mode.</small>
           {trimValidationError ? <p className="form-error">{trimValidationError}</p> : null}
         </div>
       ) : null}
-
-      <details className="field">
-        <summary>Rendering options</summary>
-        <div className="field route-preference-field">
-          <span>Conversion route preference</span>
-          <div className="route-preference-options">
-            {routePreferenceOptions.map((option) => (
-              <label
-                key={option.value}
-                className={`route-preference-option${routePreference === option.value ? ' is-selected' : ''}`}
-              >
-                <input
-                  type="radio"
-                  name="route-preference"
-                  value={option.value}
-                  checked={routePreference === option.value}
-                  disabled={busy}
-                  onChange={(event) => onRoutePreferenceChange(event.target.value as RoutePreference)}
-                />
-                <span>
-                  <strong>{option.label}</strong>
-                  <small>{option.description}</small>
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <label className="field">
-          <span>Override fallback module URL</span>
-          <input
-            type="url"
-            value={customModuleUrl}
-            onChange={(event) => onCustomModuleUrlChange(event.target.value)}
-            placeholder={defaultModuleUrl}
-          />
-          <small>Leave blank to use the bundled fallback module.</small>
-        </label>
-      </details>
 
       <div className="selection-summary">
         <span className="meta-label">Output file</span>
@@ -282,9 +208,6 @@ export function SettingsStep({
       <div className="card route-summary-card">
         <p className="muted">
           Route selected: <strong>{routeDisplayLabel}</strong>
-        </p>
-        <p className="muted">
-          Route preference: <strong>{routePreferenceLabel}</strong>
         </p>
         <p className="muted">{routeReason}</p>
       </div>

@@ -9,8 +9,7 @@ A React + TypeScript + Vite client-side file converter for GitHub Pages.
 - React 19
 - TypeScript
 - Vite
-- Native browser conversion paths first
-- Optional `ffmpeg.wasm` single-thread route for unsupported or user-forced conversions
+- Native browser conversion paths only
 
 ## Features
 
@@ -19,8 +18,6 @@ A React + TypeScript + Vite client-side file converter for GitHub Pages.
 - Built-in Privacy Policy and Terms of Use pages for static deployments
 - Image conversion via Canvas export
 - Audio/video conversion via `MediaRecorder` when supported by the browser
-- Real `ffmpeg.wasm` fallback module (`src/ffmpeg-module.ts`)
-- Worker-based background processing
 - GitHub Pages deployment workflow
 
 ## Local development
@@ -68,47 +65,13 @@ pages so they work on static hosting without additional server routes.
 1. Run `npm run dev` and verify the app loads.
 2. Convert PNG/JPEG/WebP image through the native route.
 3. Convert a small audio/video file where `MediaRecorder` support is reported.
-4. Force an unsupported or manually selected ffmpeg conversion and verify the ffmpeg route runs.
+4. Try an unsupported output and confirm the app reports it as unsupported.
 5. Run the deployed site in Chromium, Firefox, and Safari.
 
 ## Known constraints
 
 - MediaRecorder-based audio/video conversion remains browser-dependent.
-- `ffmpeg.wasm` has a large first-load cost and is slower than native ffmpeg.
-- GitHub Pages hosting means this app uses the single-thread ffmpeg core.
-- ffmpeg progress events are best-effort and can be sparse for long-running jobs.
-- Browser WebAssembly currently imposes a practical input limit of about 2 GB.
+- Native encoding support varies by browser and installed codecs.
+- Trim controls are unavailable in native-only mode.
 - The included privacy and terms copy is product-facing starter content and should be reviewed
   before production/legal use.
-
-## ffmpeg.wasm runtime flow
-
-The fallback module in `src/ffmpeg-module.ts` follows the upstream 0.12 API pattern:
-
-1. `ffmpeg.load()` downloads `@ffmpeg/core@0.12.10` from jsDelivr using the Vite-friendly ESM path.
-2. `ffmpeg.writeFile()` copies the selected input into the in-memory FFmpeg filesystem.
-3. `ffmpeg.exec()` runs the conversion command inside a worker thread.
-4. `ffmpeg.readFile()` reads the generated output from the FFmpeg filesystem.
-5. Temporary files are removed with `ffmpeg.deleteFile()`.
-
-Notes:
-
-- Non-zero `ffmpeg.exec()` exit codes are treated as conversion failures.
-- On long single-thread jobs, log output can pause while the encoder is still running.
-- This app intentionally stays single-thread for GitHub Pages compatibility.
-
-## WASM encoding presets
-
-All video encoder presets are tuned for the single-thread WebAssembly build, which is
-roughly 10–20× slower than native FFmpeg per the upstream FAQ. The defaults prioritise
-actually completing the encode over maximum quality:
-
-| Target | Encoder | Key flags | Why |
-|--------|---------|-----------|-----|
-| WebM VP8 | libvpx | `-deadline realtime -cpu-used 8 -crf 30` | Fastest VP8 mode; previous `-deadline good -crf 10` caused the encoder to stall on the first frame for long videos |
-| WebM VP9 | libvpx-vp9 | `-deadline realtime -cpu-used 8 -crf 35` | VP9 is inherently slower; realtime mode makes it feasible in WASM |
-| MP4 H.264 | libx264 | `-preset ultrafast` | The default `medium` preset is prohibitively slow in WASM |
-| Audio only | libopus / aac | Standard bitrate flags | Audio encoding is fast in any mode |
-
-If you need higher quality output, consider converting shorter clips or using
-desktop FFmpeg for long videos.
