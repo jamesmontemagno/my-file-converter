@@ -27,19 +27,17 @@ self.onmessage = async (event: MessageEvent) => {
 
   try {
     self.postMessage({ id, type: 'progress', progress: 0.1, message: 'Loading ffmpeg module' });
-    const convert =
-      wasmModuleUrl
-        ? (
-            await import(/* @vite-ignore */ wasmModuleUrl)
-          as {
-            convert?: (args: {
-              file: File;
-              targetMime: string;
-              options?: ConversionOptions;
-              onProgress?: (activity: ConversionActivity) => void;
-            }) => Promise<{ blob: Blob; outputName?: string }>;
-          }).convert
-        : convertWithBundledFfmpeg;
+    const customModule = wasmModuleUrl
+      ? (await import(/* @vite-ignore */ wasmModuleUrl) as {
+          convert?: (args: {
+            file: File;
+            targetMime: string;
+            options?: ConversionOptions;
+            onProgress?: (activity: ConversionActivity) => void;
+          }) => Promise<{ blob: Blob; outputName?: string }>;
+        })
+      : undefined;
+    const convert = customModule?.convert ?? convertWithBundledFfmpeg;
 
     if (typeof convert !== 'function') {
       throw new Error("WASM module must export a 'convert' function.");
