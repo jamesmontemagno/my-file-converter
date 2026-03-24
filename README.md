@@ -76,5 +76,23 @@ pages so they work on static hosting without additional server routes.
 - MediaRecorder-based audio/video conversion remains browser-dependent.
 - `ffmpeg.wasm` has a large first-load cost and is slower than native ffmpeg.
 - GitHub Pages hosting means this app uses the single-thread ffmpeg core.
+- ffmpeg progress events are best-effort and can be sparse for long-running jobs.
+- Browser WebAssembly currently imposes a practical input limit of about 2 GB.
 - The included privacy and terms copy is product-facing starter content and should be reviewed
   before production/legal use.
+
+## ffmpeg.wasm runtime flow
+
+The fallback module in `src/ffmpeg-module.ts` follows the upstream 0.12 API pattern:
+
+1. `ffmpeg.load()` downloads `@ffmpeg/core@0.12.10` from jsDelivr using the Vite-friendly ESM path.
+2. `ffmpeg.writeFile()` copies the selected input into the in-memory FFmpeg filesystem.
+3. `ffmpeg.exec()` runs the conversion command inside a worker thread.
+4. `ffmpeg.readFile()` reads the generated output from the FFmpeg filesystem.
+5. Temporary files are removed with `ffmpeg.deleteFile()`.
+
+Notes:
+
+- Non-zero `ffmpeg.exec()` exit codes are treated as conversion failures.
+- On long single-thread jobs, log output can pause while the encoder is still running.
+- This app intentionally stays single-thread for GitHub Pages compatibility.

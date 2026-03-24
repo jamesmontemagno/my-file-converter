@@ -9,6 +9,7 @@ let progressHandlerAttached = false;
 let logHandlerAttached = false;
 let activeProgressHandler: ((activity: ConversionActivity) => void) | undefined;
 let latestProgress = 0;
+const DEFAULT_EXEC_TIMEOUT_MS = -1;
 
 function extForMime(mime: string) {
   if (mime.includes('video/mp4')) return 'mp4';
@@ -229,7 +230,33 @@ export async function convert(args: {
       source: 'ffmpeg',
       rawOutput: `$ ffmpeg ${command.join(' ')}`,
     });
-    await ffmpeg.exec(command);
+    onProgress?.({
+      progress: latestProgress,
+      message: 'ffmpeg command is running',
+      detail:
+        'The encoder is still working in the background. For longer single-thread jobs, log output can pause for a while before completion.',
+      source: 'ffmpeg',
+    });
+    const exitCode = await ffmpeg.exec(command, DEFAULT_EXEC_TIMEOUT_MS);
+    if (exitCode !== 0) {
+      const outputExists = await ffmpeg
+        .listDir('.')
+        .then((nodes) => nodes.some((node) => node.name === outputName))
+        .catch(() => false);
+      throw new Error(
+        outputExists
+          ? `ffmpeg exited with code ${exitCode}. The output file exists but the command reported a non-zero status.`
+          : `ffmpeg exited with code ${exitCode}. The command did not complete successfully before output collection.`,
+      );
+    }
+
+    latestProgress = 0.96;
+    onProgress?.({
+      progress: latestProgress,
+      message: 'ffmpeg command finished',
+      detail: 'The encoding process returned successfully and output collection can begin.',
+      source: 'ffmpeg',
+    });
     latestProgress = 0.97;
     onProgress?.({
       progress: latestProgress,

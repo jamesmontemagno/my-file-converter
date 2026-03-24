@@ -1086,6 +1086,7 @@ export default function App() {
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
   const [statusSource, setStatusSource] = useState<'native' | 'ffmpeg' | undefined>();
+  const [lastActivityAt, setLastActivityAt] = useState(() => Date.now());
   const progressRef = useRef(0);
   const activeAbortController = useRef<AbortController | null>(null);
 
@@ -1143,6 +1144,20 @@ export default function App() {
   useEffect(() => {
     progressRef.current = progress;
   }, [progress]);
+
+  useEffect(() => {
+    if (!busy || statusMode !== 'working' || statusSource !== 'ffmpeg') return;
+
+    const interval = window.setInterval(() => {
+      const ageMs = Date.now() - lastActivityAt;
+      if (ageMs < 15000) return;
+      setStatusDetail(
+        'ffmpeg is still encoding in the background. On single-thread WebAssembly builds, long video jobs may run for several minutes with sparse progress updates.',
+      );
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [busy, lastActivityAt, statusMode, statusSource]);
 
   const defaultModuleUrl = 'Bundled ffmpeg fallback module';
   const moduleUrl = customModuleUrl.trim();
@@ -1262,6 +1277,7 @@ export default function App() {
     setStatusSource(undefined);
     setCancelRequested(false);
     setLogOpen(false);
+    setLastActivityAt(Date.now());
     setActivityLog(
       nextFile
         ? [
@@ -1421,6 +1437,7 @@ export default function App() {
     setStatusDetail(detail);
     setProgress(normalizedProgress);
     setStatusSource(activity.source);
+    setLastActivityAt(Date.now());
     setActivityLog((previous) => {
       const nextEntries = [...previous];
       const timestamp = formatEventTime(new Date());
@@ -1483,6 +1500,7 @@ export default function App() {
     setStatusDetail('The conversion configuration changed. Start a new run when ready.');
     setStatusMode(file ? 'ready' : 'idle');
     setStatusSource(undefined);
+    setLastActivityAt(Date.now());
     if (!busy && file) {
       setActiveStep('settings');
     }
@@ -1552,6 +1570,17 @@ export default function App() {
         source: routeSource,
       },
     );
+
+    if (routeDecision === 'wasm') {
+      const sourceSize = formatBytes(file.size);
+      handleProgress({
+        progress: 0.08,
+        message: 'Using ffmpeg.wasm single-thread route',
+        detail:
+          `This job is running client-side in WebAssembly (${sourceSize} input). Long video conversions can take significantly longer than desktop FFmpeg.`,
+        source: 'ffmpeg',
+      });
+    }
 
     try {
       let next: ConversionResult;
