@@ -182,60 +182,76 @@ export async function convert(args: {
     rawOutput: `$ writeFile ${inputName}`,
   });
   await ffmpeg.writeFile(inputName, await fetchFile(file));
-  const command = ['-i', inputName];
 
-  if (trimStart > 0 || trimEnd > 0) {
-    latestProgress = 0.35;
+  try {
+    // Place -ss before -i for input-level seeking (skips decoding of
+    // skipped portion, which is significantly faster in WebAssembly).
+    const command: string[] = [];
+
+    if (trimStart > 0 || trimEnd > 0) {
+      latestProgress = 0.35;
+      onProgress?.({
+        progress: latestProgress,
+        message: 'Applying trim settings',
+        detail: `Preparing trim window ${trimStart}s → ${trimEnd || 'end of file'}.`,
+        source: 'ffmpeg',
+      });
+      if (trimStart > 0) command.push('-ss', trimStart.toString());
+    }
+
+    command.push('-i', inputName);
+
+    // With input-level seeking (-ss before -i), -to is relative to the
+    // seeked start point, so we output the correct duration.
+    if (trimEnd > 0) {
+      const duration = trimStart > 0 ? trimEnd - trimStart : trimEnd;
+      if (duration > 0) command.push('-t', duration.toString());
+    }
+
+    if (codecConfig.summary) {
+      latestProgress = Math.max(latestProgress, 0.38);
+      onProgress?.({
+        progress: latestProgress,
+        message: 'Configuring output codec',
+        detail: codecConfig.summary,
+        source: 'ffmpeg',
+      });
+    }
+
+    command.push(...codecConfig.args, outputName);
+    latestProgress = Math.max(latestProgress, 0.4);
     onProgress?.({
       progress: latestProgress,
-      message: 'Applying trim settings',
-      detail: `Preparing trim window ${trimStart}s → ${trimEnd || 'end of file'}.`,
+      message: 'Starting ffmpeg command',
+      detail: codecConfig.summary
+        ? `Running ffmpeg to create ${outputName}. ${codecConfig.summary}`
+        : `Running ffmpeg to create ${outputName}.`,
       source: 'ffmpeg',
+      rawOutput: `$ ffmpeg ${command.join(' ')}`,
     });
-    if (trimStart > 0) command.push('-ss', trimStart.toString());
-    if (trimEnd > 0) command.push('-to', trimEnd.toString());
-  }
-
-  if (codecConfig.summary) {
-    latestProgress = Math.max(latestProgress, 0.38);
+    await ffmpeg.exec(command);
+    latestProgress = 0.97;
     onProgress?.({
       progress: latestProgress,
-      message: 'Configuring output codec',
-      detail: codecConfig.summary,
+      message: 'Collecting converted file',
+      detail: `Reading ${outputName} back from ffmpeg.`,
+      source: 'ffmpeg',
+      rawOutput: `$ readFile ${outputName}`,
+    });
+    const data = await ffmpeg.readFile(outputName);
+    onProgress?.({
+      progress: 1,
+      message: 'Done',
+      detail: 'ffmpeg finished and returned the converted output.',
       source: 'ffmpeg',
     });
+
+    return {
+      blob: new Blob([data instanceof Uint8Array ? data.slice().buffer : data], { type: targetMime }),
+      outputName: `${file.name.replace(/\.[^/.]+$/, '')}.${outputExt}`,
+    };
+  } finally {
+    await ffmpeg.deleteFile(inputName).catch(() => {});
+    await ffmpeg.deleteFile(outputName).catch(() => {});
   }
-
-  command.push(...codecConfig.args, outputName);
-  latestProgress = Math.max(latestProgress, 0.4);
-  onProgress?.({
-    progress: latestProgress,
-    message: 'Starting ffmpeg command',
-    detail: codecConfig.summary
-      ? `Running ffmpeg to create ${outputName}. ${codecConfig.summary}`
-      : `Running ffmpeg to create ${outputName}.`,
-    source: 'ffmpeg',
-    rawOutput: `$ ffmpeg ${command.join(' ')}`,
-  });
-  await ffmpeg.exec(command);
-  latestProgress = 0.97;
-  onProgress?.({
-    progress: latestProgress,
-    message: 'Collecting converted file',
-    detail: `Reading ${outputName} back from ffmpeg.`,
-    source: 'ffmpeg',
-    rawOutput: `$ readFile ${outputName}`,
-  });
-  const data = await ffmpeg.readFile(outputName);
-  onProgress?.({
-    progress: 1,
-    message: 'Done',
-    detail: 'ffmpeg finished and returned the converted output.',
-    source: 'ffmpeg',
-  });
-
-  return {
-    blob: new Blob([data instanceof Uint8Array ? data.slice().buffer : data], { type: targetMime }),
-    outputName: `${file.name.replace(/\.[^/.]+$/, '')}.${outputExt}`,
-  };
 }
