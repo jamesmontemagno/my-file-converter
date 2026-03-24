@@ -1,5 +1,6 @@
 import type { ConversionOptions } from './conversion-options';
 import type { ConversionActivity } from './conversion';
+import { convert as convertWithBundledFfmpeg } from './ffmpeg-module';
 
 function extensionFor(mime: string) {
   if (mime.includes('mp4')) return 'mp4';
@@ -18,32 +19,33 @@ self.onmessage = async (event: MessageEvent) => {
     type: string;
     file: File;
     targetMime: string;
-    wasmModuleUrl: string;
+    wasmModuleUrl?: string;
     options?: ConversionOptions;
   };
 
   if (type !== 'convert') return;
 
   try {
-    if (!wasmModuleUrl) {
-      throw new Error('WASM fallback is not configured.');
-    }
-
     self.postMessage({ id, type: 'progress', progress: 0.1, message: 'Loading ffmpeg module' });
-    const module = await import(/* @vite-ignore */ wasmModuleUrl) as {
-      convert: (args: {
-        file: File;
-        targetMime: string;
-        options?: ConversionOptions;
-        onProgress?: (activity: ConversionActivity) => void;
-      }) => Promise<{ blob: Blob; outputName?: string }>;
-    };
+    const convert =
+      wasmModuleUrl
+        ? (
+            await import(/* @vite-ignore */ wasmModuleUrl)
+          as {
+            convert?: (args: {
+              file: File;
+              targetMime: string;
+              options?: ConversionOptions;
+              onProgress?: (activity: ConversionActivity) => void;
+            }) => Promise<{ blob: Blob; outputName?: string }>;
+          }).convert
+        : convertWithBundledFfmpeg;
 
-    if (typeof module.convert !== 'function') {
+    if (typeof convert !== 'function') {
       throw new Error("WASM module must export a 'convert' function.");
     }
 
-    const result = await module.convert({
+    const result = await convert({
       file,
       targetMime,
       options,
