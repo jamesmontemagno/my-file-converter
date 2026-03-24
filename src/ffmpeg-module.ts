@@ -62,7 +62,6 @@ function codecConfigForTargetMime(targetMime: string): OutputCodecConfig {
         '-deadline', 'realtime',
         '-cpu-used', '8',
         '-row-mt', '0',
-        '-b:v', '1M',
         '-crf', '35',
         '-c:a', 'libopus',
         '-b:a', '96k',
@@ -80,7 +79,6 @@ function codecConfigForTargetMime(targetMime: string): OutputCodecConfig {
         '-c:v', 'libvpx',
         '-deadline', 'realtime',
         '-cpu-used', '8',
-        '-b:v', '1M',
         '-crf', '30',
         '-c:a', 'libopus',
         '-b:a', '96k',
@@ -306,6 +304,21 @@ export async function convert(args: {
     if (trimEnd > 0) {
       const duration = trimStart > 0 ? trimEnd - trimStart : trimEnd;
       if (duration > 0) command.push('-t', duration.toString());
+    }
+
+    // -- Memory-saving: scale down large video inputs ---------------------
+    // The single-thread WASM core has limited memory (~256–512 MB usable).
+    // A 145 MB input at 720p already uses most of it before encoding starts.
+    // Scale to 480p for files over 50 MB to keep peak memory manageable.
+    const isVideo = targetMime.startsWith('video/');
+    if (isVideo && file.size > 50 * 1024 * 1024) {
+      command.push('-vf', 'scale=-2:480');
+      onProgress?.({
+        progress: 0.13,
+        message: 'Scaling down for WASM memory',
+        detail: `Input is ${sizeMb} MB — scaling video to 480p to fit within WebAssembly memory limits.`,
+        source: 'ffmpeg',
+      });
     }
 
     command.push(...codecConfig.args, outputName);
