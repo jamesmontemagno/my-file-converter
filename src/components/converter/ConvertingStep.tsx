@@ -33,6 +33,7 @@ type ConvertingStepProps = {
   onToggleLog: () => void;
   onCancel: () => void;
   onConvertAgain: () => void;
+  onAdjustSettings: () => void;
   onRestart: () => void;
   sourceLabel: (source?: 'native') => string;
 };
@@ -53,6 +54,7 @@ export function ConvertingStep({
   onToggleLog,
   onCancel,
   onConvertAgain,
+  onAdjustSettings,
   onRestart,
   sourceLabel,
 }: ConvertingStepProps) {
@@ -137,9 +139,14 @@ export function ConvertingStep({
             {cancelRequested ? 'Canceling…' : 'Cancel conversion'}
           </button>
         ) : (
-          <button type="button" onClick={onConvertAgain} disabled={!canConvert}>
-            Convert again
-          </button>
+          <>
+            <button type="button" onClick={onConvertAgain} disabled={!canConvert}>
+              Convert again
+            </button>
+            <button type="button" className="ghost-button" onClick={onAdjustSettings}>
+              Change format
+            </button>
+          </>
         )}
         <button type="button" className="ghost-button" onClick={onRestart} disabled={busy}>
           Start over

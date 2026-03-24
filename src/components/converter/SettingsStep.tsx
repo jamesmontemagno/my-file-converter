@@ -4,6 +4,89 @@ type FormatOption = {
   supported: boolean;
 };
 
+function guidanceForFormat(targetMime: string, mediaType: string) {
+  if (mediaType === 'image') {
+    if (targetMime === 'image/png') {
+      return {
+        bestFor: 'Logos, screenshots, and sharp graphics',
+        tradeoff: 'Usually larger files than JPEG or WebP.',
+      };
+    }
+
+    if (targetMime === 'image/jpeg') {
+      return {
+        bestFor: 'Photos and broad compatibility',
+        tradeoff: 'Lossy compression can introduce artifacts.',
+      };
+    }
+
+    if (targetMime === 'image/webp') {
+      return {
+        bestFor: 'Smaller web images with good visual quality',
+        tradeoff: 'Some legacy apps may not support WebP.',
+      };
+    }
+
+    if (targetMime === 'image/avif') {
+      return {
+        bestFor: 'Maximum compression for modern browsers',
+        tradeoff: 'Encoding and decoding can be slower on older devices.',
+      };
+    }
+  }
+
+  if (mediaType === 'audio') {
+    if (targetMime.includes('ogg')) {
+      return {
+        bestFor: 'Open audio workflows and lightweight files',
+        tradeoff: 'Playback support is weaker in some Apple-first tools.',
+      };
+    }
+
+    if (targetMime.includes('webm')) {
+      return {
+        bestFor: 'Web playback and efficient speech/music delivery',
+        tradeoff: 'Native support in older desktop software may vary.',
+      };
+    }
+
+    if (targetMime.includes('mp4')) {
+      return {
+        bestFor: 'Maximum compatibility across devices and apps',
+        tradeoff: 'File size can be larger than Opus-based outputs.',
+      };
+    }
+  }
+
+  if (mediaType === 'video') {
+    if (targetMime.includes('vp9')) {
+      return {
+        bestFor: 'Smaller files at similar quality for modern browsers',
+        tradeoff: 'Encoding may take longer than VP8 or H.264.',
+      };
+    }
+
+    if (targetMime.includes('vp8')) {
+      return {
+        bestFor: 'Balanced WebM compatibility and speed',
+        tradeoff: 'Often larger than VP9 for the same visual quality.',
+      };
+    }
+
+    if (targetMime.includes('mp4')) {
+      return {
+        bestFor: 'Broad playback compatibility across platforms',
+        tradeoff: 'May not produce the smallest file for web delivery.',
+      };
+    }
+  }
+
+  return {
+    bestFor: 'General conversion',
+    tradeoff: 'Output quality and size can vary by browser encoder.',
+  };
+}
+
 type SettingsStepProps = {
   busy: boolean;
   mediaType: string;
@@ -58,6 +141,7 @@ export function SettingsStep({
   onConvert,
 }: SettingsStepProps) {
   const selectedOption = targetOptions.find((option) => option.value === targetMime);
+  const guidance = guidanceForFormat(targetMime, mediaType);
 
   return (
     <div className="card wizard-card">
@@ -84,6 +168,16 @@ export function SettingsStep({
           <p className="form-error">This format is not supported in your current browser.</p>
         ) : null}
       </label>
+
+      <div className="format-guidance-card">
+        <span className="meta-label">Format guidance</span>
+        <p>
+          <strong>Best for:</strong> {guidance.bestFor}
+        </p>
+        <p>
+          <strong>Tradeoff:</strong> {guidance.tradeoff}
+        </p>
+      </div>
 
       <label className="field">
         <span>Output file name</span>

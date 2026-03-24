@@ -455,6 +455,20 @@ input[type='range'] {
   border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
+.format-guidance-card {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0 0 1rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.3);
+  border: 1px solid rgba(96, 165, 250, 0.24);
+}
+
+.format-guidance-card p {
+  margin: 0;
+}
+
 .option-summary-list {
   margin: 0;
   padding-left: 1.2rem;

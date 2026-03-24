@@ -16,6 +16,9 @@ type ResultsStepProps = {
   sizeGuidance: string;
   downloadUrl: string;
   resultOutputName: string;
+  retryTargetLabel: string;
+  canTryDifferentFormat: boolean;
+  onTryDifferentFormat: () => void;
   onRestart: () => void;
 };
 
@@ -30,6 +33,9 @@ export function ResultsStep({
   sizeGuidance,
   downloadUrl,
   resultOutputName,
+  retryTargetLabel,
+  canTryDifferentFormat,
+  onTryDifferentFormat,
   onRestart,
 }: ResultsStepProps) {
   return (
@@ -67,6 +73,11 @@ export function ResultsStep({
             <a className="download-button" href={downloadUrl} download={resultOutputName}>
               Download {resultOutputName}
             </a>
+            {canTryDifferentFormat ? (
+              <button type="button" className="ghost-button" onClick={onTryDifferentFormat}>
+                Try {retryTargetLabel}
+              </button>
+            ) : null}
             <button type="button" className="ghost-button" onClick={onRestart}>
               Start over
             </button>

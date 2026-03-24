@@ -269,6 +269,38 @@ function sizeChangeGuidance(args: {
   return 'This output is larger than the source. Try a different format if file size matters more than speed.';
 }
 
+function retryTargetFor(args: {
+  mediaType: MediaKind;
+  currentTargetMime: string;
+  supportedOptions: Array<{ value: string; label: string; supported: boolean }>;
+}) {
+  const { mediaType, currentTargetMime, supportedOptions } = args;
+  const available = supportedOptions.filter((option) => option.supported);
+
+  if (available.length <= 1) {
+    return null;
+  }
+
+  const preferredOrder =
+    mediaType === 'image'
+      ? ['image/webp', 'image/jpeg', 'image/avif', 'image/png']
+      : mediaType === 'audio'
+        ? ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4']
+        : mediaType === 'video'
+          ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2']
+          : [];
+
+  const nextByPreference = preferredOrder
+    .map((mime) => available.find((option) => option.value === mime))
+    .find((option) => option && option.value !== currentTargetMime);
+
+  if (nextByPreference) {
+    return nextByPreference;
+  }
+
+  return available.find((option) => option.value !== currentTargetMime) ?? null;
+}
+
 function previewForResult(downloadUrl: string, result: ConversionResult) {
   if (result.blob.type.startsWith('image/')) {
     return <img className="preview-image" src={downloadUrl} alt={result.outputName} />;
@@ -1111,6 +1143,16 @@ export default function App() {
 
     return `Supported outputs: ${supportedLabels.join(', ')}`;
   }, [file, targetOptionsWithSupport]);
+  const retryTargetOption = useMemo(
+    () =>
+      retryTargetFor({
+        mediaType,
+        currentTargetMime: targetMime,
+        supportedOptions: targetOptionsWithSupport,
+      }),
+    [mediaType, targetMime, targetOptionsWithSupport],
+  );
+  const canTryDifferentFormat = Boolean(retryTargetOption);
   const stepOrder: ConverterStep[] = ['upload', 'settings', 'converting', 'results'];
   const activeStepIndex = stepOrder.indexOf(activeStep);
   const wizardSteps: WizardStep[] = stepOrder.map((step, index) => ({
@@ -1221,6 +1263,21 @@ export default function App() {
     if (!canConvert || busy) return;
     setActiveStep('converting');
     void runConversion();
+  }
+
+  function goToSettingsForAdjustments() {
+    if (busy || !file) return;
+    setActiveStep('settings');
+    setStatusMode('ready');
+    setStatus('Adjust your output settings and run another conversion.');
+    setStatusDetail('Pick a format or quality profile, then convert again.');
+  }
+
+  function tryDifferentFormat() {
+    if (!retryTargetOption || busy || !file) return;
+    setTargetMime(retryTargetOption.value);
+    setActiveStep('settings');
+    markConfigurationChanged(`Switched to ${retryTargetOption.label}. Ready to convert.`);
   }
 
   function handleTargetMimeChange(nextTargetMime: string) {
@@ -1609,6 +1666,7 @@ export default function App() {
             onToggleLog={() => setLogOpen((open) => !open)}
             onCancel={cancelConversion}
             onConvertAgain={startConversionStep}
+            onAdjustSettings={goToSettingsForAdjustments}
             onRestart={restartConverter}
             sourceLabel={sourceLabel}
           />
@@ -1626,6 +1684,9 @@ export default function App() {
             sizeGuidance={sizeGuidance}
             downloadUrl={downloadUrl}
             resultOutputName={resultOutputName}
+            retryTargetLabel={retryTargetOption?.label ?? 'a different format'}
+            canTryDifferentFormat={canTryDifferentFormat}
+            onTryDifferentFormat={tryDifferentFormat}
             onRestart={restartConverter}
           />
         ) : null}
