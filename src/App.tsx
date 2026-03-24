@@ -215,14 +215,13 @@ function isNativeConversionRoute(route: string) {
 }
 
 function resolveRoute(args: {
-  enableWasmFallback: boolean;
   file: File | null;
   routePreference: RoutePreference;
   targetMime: string;
   trimRequested: boolean;
   trimValidationError: string;
 }): ResolvedRoute {
-  const { enableWasmFallback, file, routePreference, targetMime, trimRequested, trimValidationError } = args;
+  const { file, routePreference, targetMime, trimRequested, trimValidationError } = args;
 
   if (!file || !targetMime) {
     return {
@@ -239,37 +238,24 @@ function resolveRoute(args: {
   }
 
   if (routePreference === 'ffmpeg') {
-    return enableWasmFallback
-      ? {
-          decision: 'wasm',
-          reason: trimRequested
-            ? 'Force ffmpeg.wasm is enabled, so trim settings and conversion will stay on the WebAssembly route.'
-            : 'Force ffmpeg.wasm is enabled, so this job will skip browser-native encoding and use the WebAssembly route.',
-          source: 'ffmpeg',
-        }
-      : {
-          decision: 'blocked',
-          reason: 'Force ffmpeg.wasm is selected, but the fallback route is disabled. Enable it to continue.',
-        };
+    return {
+      decision: 'wasm',
+      reason: trimRequested
+        ? 'ffmpeg.wasm is selected — trim settings and conversion will use the WebAssembly route.'
+        : 'ffmpeg.wasm is selected — this job will use the WebAssembly encoder.',
+      source: 'ffmpeg',
+    };
   }
 
   if (trimRequested) {
-    return enableWasmFallback
-      ? {
-          decision: 'wasm',
-          reason:
-            routePreference === 'native'
-              ? 'Browser-native routing was preferred, but trim settings require ffmpeg.wasm for this conversion.'
-              : 'Trim settings require ffmpeg and will switch this job to the fallback route.',
-          source: 'ffmpeg',
-        }
-      : {
-          decision: 'blocked',
-          reason:
-            routePreference === 'native'
-              ? 'Browser-native routing was preferred, but trim settings still require ffmpeg. Enable the fallback route to continue.'
-              : 'Trim settings require ffmpeg. Enable the fallback route to continue.',
-        };
+    return {
+      decision: 'wasm',
+      reason:
+        routePreference === 'native'
+          ? 'Browser-native routing was preferred, but trim settings require ffmpeg.wasm.'
+          : 'Trim settings require ffmpeg.wasm for this conversion.',
+      source: 'ffmpeg',
+    };
   }
 
   if (supportsNativeRoute(file, targetMime)) {
@@ -278,28 +264,18 @@ function resolveRoute(args: {
       reason:
         routePreference === 'native'
           ? 'Browser-native routing is preferred and supported for this format combination.'
-          : 'Current settings can stay on the native browser route.',
+          : 'This format combination can use the fast native browser route.',
       source: 'native',
     };
   }
 
-  if (enableWasmFallback) {
-    return {
-      decision: 'wasm',
-      reason:
-        routePreference === 'native'
-          ? 'Browser-native routing was preferred, but this format combination needs ffmpeg.wasm instead.'
-          : 'This format combination is not supported natively, so ffmpeg fallback will be used.',
-      source: 'ffmpeg',
-    };
-  }
-
   return {
-    decision: 'blocked',
+    decision: 'wasm',
     reason:
       routePreference === 'native'
-        ? 'This format combination cannot stay on the browser-native route, and ffmpeg fallback is disabled.'
-        : 'This format combination needs ffmpeg fallback, but fallback is disabled.',
+        ? 'Browser-native routing was preferred, but this format combination needs ffmpeg.wasm.'
+        : 'This format combination is not supported natively — ffmpeg.wasm will be used automatically.',
+    source: 'ffmpeg',
   };
 }
 
@@ -1075,7 +1051,6 @@ export default function App() {
   const [statusDetail, setStatusDetail] = useState('Load a file and the converter will start reporting activity here.');
   const [progress, setProgress] = useState(0);
   const [statusMode, setStatusMode] = useState<StatusMode>('idle');
-  const [enableWasmFallback, setEnableWasmFallback] = useState(true);
   const [routePreference, setRoutePreference] = useState<RoutePreference>('auto');
   const [customModuleUrl, setCustomModuleUrl] = useState('');
   const [result, setResult] = useState<ConversionResult | null>(null);
@@ -1201,14 +1176,13 @@ export default function App() {
   const resolvedRoute = useMemo(
     () =>
       resolveRoute({
-        enableWasmFallback,
         file,
         routePreference,
         targetMime,
         trimRequested,
         trimValidationError,
       }),
-    [enableWasmFallback, file, routePreference, targetMime, trimRequested, trimValidationError],
+    [file, routePreference, targetMime, trimRequested, trimValidationError],
   );
   const routeDecision = resolvedRoute.decision;
   const routeReason = resolvedRoute.reason;
@@ -1311,7 +1285,6 @@ export default function App() {
   function restartConverter() {
     if (busy) return;
     setQuality(0.9);
-    setEnableWasmFallback(true);
     setRoutePreference('auto');
     setCustomModuleUrl('');
     initializeForFile(null);
@@ -1394,17 +1367,6 @@ export default function App() {
     setRoutePreference(nextRoutePreference);
     if (file) {
       markConfigurationChanged('Route preference updated. Ready to convert.');
-    }
-  }
-
-  function handleEnableWasmFallbackChange(enabled: boolean) {
-    setEnableWasmFallback(enabled);
-    if (file) {
-      markConfigurationChanged(
-        enabled
-          ? 'ffmpeg.wasm fallback enabled. Ready to convert.'
-          : 'ffmpeg.wasm fallback disabled. Ready to convert.',
-      );
     }
   }
 
@@ -1605,7 +1567,7 @@ export default function App() {
                 onProgress: handleProgress,
                 signal: abortController.signal,
               });
-      } else if (routeDecision === 'wasm' && enableWasmFallback) {
+      } else if (routeDecision === 'wasm') {
         next = await convertWithWasmFallback({
           file,
           targetMime,
@@ -1748,7 +1710,6 @@ export default function App() {
             trimEnd={trimEnd}
             trimValidationError={trimValidationError}
             routePreference={routePreference}
-            enableWasmFallback={enableWasmFallback}
             customModuleUrl={customModuleUrl}
             defaultModuleUrl={defaultModuleUrl}
             outputFileName={outputFileName}
@@ -1766,7 +1727,6 @@ export default function App() {
             onTrimStartChange={handleTrimStartChange}
             onTrimEndChange={handleTrimEndChange}
             onRoutePreferenceChange={handleRoutePreferenceChange}
-            onEnableWasmFallbackChange={handleEnableWasmFallbackChange}
             onCustomModuleUrlChange={handleCustomModuleUrlChange}
             onBack={goBackToUploadStep}
             onConvert={startConversionStep}

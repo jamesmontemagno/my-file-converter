@@ -21,7 +21,6 @@ type SettingsStepProps = {
   trimEnd: string;
   trimValidationError: string;
   routePreference: RoutePreference;
-  enableWasmFallback: boolean;
   customModuleUrl: string;
   defaultModuleUrl: string;
   outputFileName: string;
@@ -39,7 +38,6 @@ type SettingsStepProps = {
   onTrimStartChange: (value: string) => void;
   onTrimEndChange: (value: string) => void;
   onRoutePreferenceChange: (value: RoutePreference) => void;
-  onEnableWasmFallbackChange: (value: boolean) => void;
   onCustomModuleUrlChange: (value: string) => void;
   onBack: () => void;
   onConvert: () => void;
@@ -53,17 +51,17 @@ const routePreferenceOptions: {
   {
     value: 'auto',
     label: 'Auto',
-    description: 'Pick the best route automatically for the selected format.',
+    description: 'Use the fastest route available for the selected format. Falls back to ffmpeg.wasm when needed.',
   },
   {
     value: 'native',
     label: 'Prefer browser-native',
-    description: 'Stay on browser-native encoding when possible, then fall back if required.',
+    description: 'Use browser-native encoding when possible. Falls back to ffmpeg.wasm for unsupported formats.',
   },
   {
     value: 'ffmpeg',
-    label: 'Force ffmpeg.wasm',
-    description: 'Always use the WebAssembly encoder when the fallback module is enabled.',
+    label: 'Use ffmpeg.wasm',
+    description: 'Always use the WebAssembly encoder, even when faster browser-native encoding is available.',
   },
 ];
 
@@ -83,7 +81,6 @@ export function SettingsStep({
   trimEnd,
   trimValidationError,
   routePreference,
-  enableWasmFallback,
   customModuleUrl,
   defaultModuleUrl,
   outputFileName,
@@ -101,7 +98,6 @@ export function SettingsStep({
   onTrimStartChange,
   onTrimEndChange,
   onRoutePreferenceChange,
-  onEnableWasmFallbackChange,
   onCustomModuleUrlChange,
   onBack,
   onConvert,
@@ -257,14 +253,6 @@ export function SettingsStep({
             ))}
           </div>
         </div>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={enableWasmFallback}
-            onChange={(event) => onEnableWasmFallbackChange(event.target.checked)}
-          />
-          Enable ffmpeg.wasm fallback
-        </label>
         <label className="field">
           <span>Override fallback module URL</span>
           <input
