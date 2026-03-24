@@ -23,6 +23,89 @@ function extForMime(mime: string) {
   return 'bin';
 }
 
+type OutputCodecConfig = {
+  args: string[];
+  summary?: string;
+};
+
+function codecConfigForTargetMime(targetMime: string): OutputCodecConfig {
+  const normalized = targetMime.toLowerCase();
+
+  if (normalized.startsWith('video/webm')) {
+    if (normalized.includes('codecs=vp9')) {
+      return {
+        args: [
+          '-c:v',
+          'libvpx-vp9',
+          '-deadline',
+          'good',
+          '-cpu-used',
+          '4',
+          '-b:v',
+          '0',
+          '-crf',
+          '32',
+          '-c:a',
+          'libopus',
+          '-b:a',
+          '96k',
+        ],
+        summary: 'Encoding WebM with VP9 video and Opus audio. VP9 is the slower WebAssembly path for longer videos.',
+      };
+    }
+
+    return {
+      args: [
+        '-c:v',
+        'libvpx',
+        '-deadline',
+        'good',
+        '-cpu-used',
+        '4',
+        '-b:v',
+        '1M',
+        '-crf',
+        '10',
+        '-c:a',
+        'libopus',
+        '-b:a',
+        '96k',
+      ],
+      summary: 'Encoding WebM with VP8 video and Opus audio for a faster WebAssembly conversion path.',
+    };
+  }
+
+  if (normalized.startsWith('audio/webm')) {
+    return {
+      args: ['-c:a', 'libopus', '-b:a', '96k'],
+      summary: 'Encoding WebM audio with Opus.',
+    };
+  }
+
+  if (normalized.startsWith('audio/ogg')) {
+    return {
+      args: ['-c:a', 'libopus', '-b:a', '96k'],
+      summary: 'Encoding Ogg audio with Opus.',
+    };
+  }
+
+  if (normalized.startsWith('video/mp4')) {
+    return {
+      args: ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart'],
+      summary: 'Encoding MP4 with H.264 video and AAC audio.',
+    };
+  }
+
+  if (normalized.startsWith('audio/mp4')) {
+    return {
+      args: ['-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart'],
+      summary: 'Encoding MP4 audio with AAC.',
+    };
+  }
+
+  return { args: [] };
+}
+
 async function ensureLoaded(onProgress?: (activity: ConversionActivity) => void) {
   activeProgressHandler = onProgress;
   if (loaded) return;
@@ -85,6 +168,7 @@ export async function convert(args: {
   const outputName = `output.${outputExt}`;
   const trimStart = Math.max(0, options?.media.trimStart ?? 0);
   const trimEnd = Math.max(0, options?.media.trimEnd ?? 0);
+  const codecConfig = codecConfigForTargetMime(targetMime);
 
   latestProgress = 0.2;
   onProgress?.({
@@ -109,12 +193,24 @@ export async function convert(args: {
     if (trimEnd > 0) command.push('-to', trimEnd.toString());
   }
 
-  command.push(outputName);
+  if (codecConfig.summary) {
+    latestProgress = Math.max(latestProgress, 0.38);
+    onProgress?.({
+      progress: latestProgress,
+      message: 'Configuring output codec',
+      detail: codecConfig.summary,
+      source: 'ffmpeg',
+    });
+  }
+
+  command.push(...codecConfig.args, outputName);
   latestProgress = Math.max(latestProgress, 0.4);
   onProgress?.({
     progress: latestProgress,
     message: 'Starting ffmpeg command',
-    detail: `Running ffmpeg to create ${outputName}.`,
+    detail: codecConfig.summary
+      ? `Running ffmpeg to create ${outputName}. ${codecConfig.summary}`
+      : `Running ffmpeg to create ${outputName}.`,
     source: 'ffmpeg',
     rawOutput: `$ ffmpeg ${command.join(' ')}`,
   });
