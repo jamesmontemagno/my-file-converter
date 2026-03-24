@@ -225,7 +225,7 @@ function resolveRoute(args: {
   if (trimRequested) {
     return {
       decision: 'blocked',
-      reason: 'Trim settings are currently unavailable in native-only mode.',
+      reason: 'Trim settings are currently unavailable in this native-only release.',
     };
   }
 
@@ -239,7 +239,7 @@ function resolveRoute(args: {
 
   return {
     decision: 'blocked',
-    reason: 'This format combination is not supported natively in your browser.',
+    reason: 'This format combination is not supported by your browser\'s native encoders.',
   };
 }
 
@@ -597,7 +597,7 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
 
       <section className="hero">
         <div className="hero-copy">
-          <span className="eyebrow">Private. Fast. Browser-native.</span>
+          <span className="eyebrow">Private. Fast. Browser-native only.</span>
           <h1>Convert video, audio, and images locally without uploading your files.</h1>
           <p className="hero-text">
             {APP_NAME} uses browser-native APIs for all conversions. The experience is designed so
@@ -619,8 +619,8 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
 
         <div className="hero-panel">
           <div className="hero-stat">
-            <strong>Native-first routing</strong>
-            <p>Use fast built-in browser capabilities whenever possible.</p>
+            <strong>Native browser routing</strong>
+            <p>Uses built-in browser capabilities whenever the selected format is supported.</p>
           </div>
           <div className="hero-stat">
             <strong>Native-only pipeline</strong>
@@ -686,7 +686,7 @@ function PrivacyPage() {
   return (
     <LegalLayout
       title="Privacy Policy"
-      summary={`${APP_NAME} is built for local, in-browser conversion. This policy explains what data stays on your device, what limited technical data may still be processed by hosting providers, and what to keep in mind when enabling optional external modules.`}
+      summary={`${APP_NAME} is built for local, in-browser conversion. This policy explains what data stays on your device and what limited technical data may still be processed by hosting providers.`}
     >
       <section>
         <h2>1. Local file processing</h2>
@@ -909,7 +909,7 @@ function DocsPage() {
       </section>
 
       <section>
-        <h2>3. Conversion route selection</h2>
+        <h2>3. Conversion route status</h2>
         <p>
           The converter shows a route indicator before and during conversion so you always know
           which path is active:
@@ -925,7 +925,7 @@ function DocsPage() {
           </li>
         </ul>
         <p>
-          Trim settings are currently unavailable in native-only mode.
+          Trim settings are currently unavailable in this native-only release.
         </p>
       </section>
 
