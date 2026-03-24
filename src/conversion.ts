@@ -164,25 +164,31 @@ export async function convertImage(args: {
     source: 'native',
   });
   const blob = await new Promise<Blob>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => signal?.removeEventListener('abort', handleAbort);
+    const settle = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback();
+    };
+    const handleAbort = () => settle(() => reject(createConversionAbortError()));
+    signal?.addEventListener('abort', handleAbort, { once: true });
     if (signal?.aborted) {
-      reject(createConversionAbortError());
+      handleAbort();
       return;
     }
-
-    const handleAbort = () => reject(createConversionAbortError());
-    signal?.addEventListener('abort', handleAbort, { once: true });
     canvas.toBlob(
       (result) => {
-        signal?.removeEventListener('abort', handleAbort);
         if (signal?.aborted) {
-          reject(createConversionAbortError());
+          handleAbort();
           return;
         }
         if (!result) {
-          reject(new Error(`Unable to encode as ${targetMime}.`));
+          settle(() => reject(new Error(`Unable to encode as ${targetMime}.`)));
           return;
         }
-        resolve(result);
+        settle(() => resolve(result));
       },
       targetMime,
       quality,
