@@ -370,6 +370,10 @@ export async function convertAudioToMp3(args: {
     source: 'encoder',
   });
 
+  const mpegModeModule = await import('lamejs/src/js/MPEGMode.js');
+  (globalThis as { MPEGMode?: unknown }).MPEGMode =
+    (mpegModeModule as { default?: unknown }).default ?? mpegModeModule;
+
   const lamejsModule = await import('lamejs');
   const Mp3Encoder = (lamejsModule as { Mp3Encoder: new (...args: number[]) => any }).Mp3Encoder;
 

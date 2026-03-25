@@ -5,3 +5,15 @@ declare module 'lamejs' {
     flush(): Int8Array;
   }
 }
+
+declare module 'lamejs/src/js/MPEGMode.js' {
+  const MPEGMode: {
+    STEREO: unknown;
+    JOINT_STEREO: unknown;
+    DUAL_CHANNEL: unknown;
+    MONO: unknown;
+    NOT_SET: unknown;
+  };
+
+  export default MPEGMode;
+}
