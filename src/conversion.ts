@@ -99,6 +99,7 @@ function resolveImageSize(sourceWidth: number, sourceHeight: number, options?: I
 }
 
 function mimeToExt(mime: string) {
+  if (mime.includes('audio/wav')) return 'wav';
   if (mime.includes('audio/mpeg')) return 'mp3';
   if (mime.includes('png')) return 'png';
   if (mime.includes('jpeg')) return 'jpg';
@@ -118,6 +119,116 @@ function replaceExtension(name: string, ext: string) {
   return `${base}.${ext}`;
 }
 
+function isHeicLikeFile(file: File) {
+  const type = file.type.toLowerCase();
+  if (type === 'image/heic' || type === 'image/heif' || type === 'image/heic-sequence' || type === 'image/heif-sequence') {
+    return true;
+  }
+
+  const lowerName = file.name.toLowerCase();
+  return lowerName.endsWith('.heic') || lowerName.endsWith('.heif');
+}
+
+async function prepareImageDecodeBlob(file: File, onProgress?: (activity: ConversionActivity) => void) {
+  if (!isHeicLikeFile(file)) return file;
+
+  onProgress?.({
+    progress: 0.16,
+    message: 'Decoding HEIC/HEIF image',
+    detail: 'Converting source image to a browser-decodable bitmap.',
+    source: 'encoder',
+  });
+
+  const heic2anyModule = await import('heic2any');
+  const converted = await heic2anyModule.default({
+    blob: file,
+    toType: 'image/png',
+  });
+
+  return Array.isArray(converted) ? converted[0] : converted;
+}
+
+async function decodeMediaAudioBuffer(args: {
+  file: File;
+  signal?: AbortSignal;
+  onProgress?: (activity: ConversionActivity) => void;
+}) {
+  const { file, signal, onProgress } = args;
+  const AudioContextCtor = getAudioContextCtor();
+  if (!AudioContextCtor) {
+    throw new Error('Web Audio API is not supported in this browser.');
+  }
+
+  const sourceBytes = await raceWithAbort(file.arrayBuffer(), signal);
+  throwIfConversionAborted(signal);
+
+  const audioContext = new AudioContextCtor();
+  try {
+    onProgress?.({
+      progress: 0.22,
+      message: 'Decoding source audio',
+      detail: 'Using Web Audio to decode media samples.',
+      source: 'encoder',
+    });
+
+    return await raceWithAbort(audioContext.decodeAudioData(sourceBytes.slice(0)), signal, () => {
+      void audioContext.close();
+    });
+  } finally {
+    await audioContext.close();
+  }
+}
+
+function createWavBlob(audioBuffer: AudioBuffer) {
+  const channels = Math.min(2, audioBuffer.numberOfChannels);
+  const sampleRate = audioBuffer.sampleRate;
+  const samples = audioBuffer.length;
+  const bytesPerSample = 2;
+  const blockAlign = channels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = samples * blockAlign;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  const writeAscii = (offset: number, value: string) => {
+    for (let index = 0; index < value.length; index += 1) {
+      view.setUint8(offset + index, value.charCodeAt(index));
+    }
+  };
+
+  writeAscii(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeAscii(8, 'WAVE');
+  writeAscii(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, channels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true);
+  writeAscii(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  const left = audioBuffer.getChannelData(0);
+  const right = channels > 1 ? audioBuffer.getChannelData(1) : null;
+
+  for (let sample = 0; sample < samples; sample += 1) {
+    const l = Math.max(-1, Math.min(1, left[sample]));
+    view.setInt16(offset, l < 0 ? l * 0x8000 : l * 0x7fff, true);
+    offset += 2;
+
+    if (right) {
+      const r = Math.max(-1, Math.min(1, right[sample]));
+      view.setInt16(offset, r < 0 ? r * 0x8000 : r * 0x7fff, true);
+      offset += 2;
+    }
+  }
+
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
 export async function convertImage(args: {
   file: File;
   targetMime: string;
@@ -134,7 +245,8 @@ export async function convertImage(args: {
     detail: `Reading ${file.type || 'source image'} into the browser canvas.`,
     source: 'native',
   });
-  const bitmap = await raceWithAbort(createImageBitmap(file), signal);
+  const decodeBlob = await raceWithAbort(prepareImageDecodeBlob(file, onProgress), signal);
+  const bitmap = await raceWithAbort(createImageBitmap(decodeBlob), signal);
   const nextSize = resolveImageSize(bitmap.width, bitmap.height, imageOptions);
   const canvas = document.createElement('canvas');
   canvas.width = nextSize.width;
@@ -241,8 +353,8 @@ export async function convertAudioToMp3(args: {
 }): Promise<ConversionResult> {
   const { file, onProgress, signal } = args;
   const mediaType = classifyMediaType(file);
-  if (mediaType !== 'audio') {
-    throw new Error('MP3 encoding currently supports audio input only.');
+  if (mediaType !== 'audio' && mediaType !== 'video') {
+    throw new Error('MP3 encoding currently supports audio or video input.');
   }
 
   const AudioContextCtor = getAudioContextCtor();
@@ -261,25 +373,7 @@ export async function convertAudioToMp3(args: {
   const lamejsModule = await import('lamejs');
   const Mp3Encoder = (lamejsModule as { Mp3Encoder: new (...args: number[]) => any }).Mp3Encoder;
 
-  const audioBytes = await raceWithAbort(file.arrayBuffer(), signal);
-  throwIfConversionAborted(signal);
-
-  onProgress?.({
-    progress: 0.22,
-    message: 'Decoding source audio',
-    detail: 'Using Web Audio to decode samples before MP3 encoding.',
-    source: 'encoder',
-  });
-
-  const audioContext = new AudioContextCtor();
-  let audioBuffer: AudioBuffer;
-  try {
-    audioBuffer = await raceWithAbort(audioContext.decodeAudioData(audioBytes.slice(0)), signal, () => {
-      void audioContext.close();
-    });
-  } finally {
-    await audioContext.close();
-  }
+  const audioBuffer = await decodeMediaAudioBuffer({ file, signal, onProgress });
 
   throwIfConversionAborted(signal);
 
@@ -332,8 +426,44 @@ export async function convertAudioToMp3(args: {
 
   return {
     blob: new Blob(mp3Chunks, { type: 'audio/mpeg' }),
-    outputName: replaceExtension(file.name, 'mp3'),
+    outputName: replaceExtension(file.name, mimeToExt('audio/mpeg')),
     route: 'encoder-mp3',
+  };
+}
+
+export async function convertAudioToWav(args: {
+  file: File;
+  onProgress?: (activity: ConversionActivity) => void;
+  signal?: AbortSignal;
+}): Promise<ConversionResult> {
+  const { file, onProgress, signal } = args;
+  const mediaType = classifyMediaType(file);
+  if (mediaType !== 'audio' && mediaType !== 'video') {
+    throw new Error('WAV encoding currently supports audio or video input.');
+  }
+
+  throwIfConversionAborted(signal);
+  onProgress?.({
+    progress: 0.08,
+    message: 'Preparing WAV export',
+    detail: 'Reading media stream for lossless PCM packaging.',
+    source: 'encoder',
+  });
+
+  const audioBuffer = await decodeMediaAudioBuffer({ file, signal, onProgress });
+  throwIfConversionAborted(signal);
+
+  onProgress?.({
+    progress: 0.7,
+    message: 'Packaging WAV output',
+    detail: 'Writing RIFF/WAVE container from decoded samples.',
+    source: 'encoder',
+  });
+
+  return {
+    blob: createWavBlob(audioBuffer),
+    outputName: replaceExtension(file.name, mimeToExt('audio/wav')),
+    route: 'encoder-wav',
   };
 }
 

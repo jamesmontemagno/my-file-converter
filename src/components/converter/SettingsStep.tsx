@@ -36,6 +36,13 @@ function guidanceForFormat(targetMime: string, mediaType: string) {
   }
 
   if (mediaType === 'audio') {
+    if (targetMime.includes('wav')) {
+      return {
+        bestFor: 'Lossless exports for editing, archiving, and production workflows',
+        tradeoff: 'Files are much larger than MP3/Opus formats.',
+      };
+    }
+
     if (targetMime.includes('mpeg')) {
       return {
         bestFor: 'Universal playback and sharing across apps/devices',
@@ -66,6 +73,20 @@ function guidanceForFormat(targetMime: string, mediaType: string) {
   }
 
   if (mediaType === 'video') {
+    if (targetMime.includes('mpeg')) {
+      return {
+        bestFor: 'Extracting a shareable MP3 track from video footage',
+        tradeoff: 'Audio is extracted and encoded in software, so long videos can take time.',
+      };
+    }
+
+    if (targetMime.includes('wav')) {
+      return {
+        bestFor: 'Extracting lossless audio from video for editing',
+        tradeoff: 'WAV exports are large and best for quality-first workflows.',
+      };
+    }
+
     if (targetMime.includes('vp9')) {
       return {
         bestFor: 'Smaller files at similar quality for modern browsers',

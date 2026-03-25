@@ -18,9 +18,9 @@ export type CapabilityReport = {
 };
 
 export function detectCapabilities(): CapabilityReport {
-    const hasMp3EncoderContext =
-      typeof window.AudioContext !== 'undefined' ||
-      typeof (window as Window & { webkitAudioContext?: unknown }).webkitAudioContext !== 'undefined';
+  const hasMp3EncoderContext =
+    typeof window.AudioContext !== 'undefined' ||
+    typeof (window as Window & { webkitAudioContext?: unknown }).webkitAudioContext !== 'undefined';
 
   const windowWithPickers = window as Window & {
     showOpenFilePicker?: unknown;
@@ -92,6 +92,7 @@ export function targetFormatsFor(mediaType: MediaKind) {
       { value: 'audio/ogg;codecs=opus', label: 'Ogg Opus (.ogg)' },
       { value: 'audio/mp4', label: 'MP4 Audio (.m4a)' },
       { value: 'audio/mpeg', label: 'MP3 (.mp3)' },
+      { value: 'audio/wav', label: 'WAV PCM (.wav)' },
     ];
   }
 
@@ -100,6 +101,8 @@ export function targetFormatsFor(mediaType: MediaKind) {
       { value: 'video/webm;codecs=vp8,opus', label: 'WebM VP8+Opus (.webm)' },
       { value: 'video/webm;codecs=vp9,opus', label: 'WebM VP9+Opus (.webm)' },
       { value: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', label: 'MP4 H.264+AAC (.mp4)' },
+      { value: 'audio/mpeg', label: 'Extract audio as MP3 (.mp3)' },
+      { value: 'audio/wav', label: 'Extract audio as WAV (.wav)' },
     ];
   }
 
@@ -112,7 +115,7 @@ export function isTargetMimeSupported(
 ) {
   if (!capabilities) return false;
 
-  if (targetMime === 'audio/mpeg') {
+  if (targetMime === 'audio/mpeg' || targetMime === 'audio/wav') {
     return capabilities.mp3Encoder === true;
   }
 

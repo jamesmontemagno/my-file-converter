@@ -10,6 +10,7 @@ import {
 } from './capabilities';
 import {
   convertAudioToMp3,
+  convertAudioToWav,
   convertImage,
   convertViaMediaRecorder,
   isConversionAbortError,
@@ -182,7 +183,7 @@ function setCanonicalTag(href: string) {
 
 function routeLabel(route: RouteDecision) {
   if (route === 'native') return 'Native browser path';
-  if (route === 'encoder') return 'MP3 encoder path';
+  if (route === 'encoder') return 'Audio encoder path';
   return 'Waiting for input';
 }
 
@@ -211,18 +212,19 @@ function resolveRoute(args: {
     };
   }
 
-  if (targetMime === 'audio/mpeg') {
-    if (mediaType === 'audio' && targetSupported) {
+  if (targetMime === 'audio/mpeg' || targetMime === 'audio/wav') {
+    if ((mediaType === 'audio' || mediaType === 'video') && targetSupported) {
+      const extractionHint = mediaType === 'video' ? ' Audio will be extracted from the video track.' : '';
       return {
         decision: 'encoder',
-        reason: 'This conversion will use the local MP3 software encoder path.',
+        reason: `This conversion will use the local software audio encoder path.${extractionHint}`,
         source: 'encoder',
       };
     }
 
     return {
       decision: 'blocked',
-      reason: 'MP3 output currently supports audio input files only.',
+      reason: 'Audio encoder outputs currently support audio or video input files only.',
     };
   }
 
@@ -304,9 +306,15 @@ function retryTargetFor(args: {
     mediaType === 'image'
       ? ['image/webp', 'image/jpeg', 'image/avif', 'image/png']
       : mediaType === 'audio'
-        ? ['audio/mpeg', 'audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4']
+        ? ['audio/mpeg', 'audio/wav', 'audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4']
         : mediaType === 'video'
-          ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2']
+          ? [
+              'audio/mpeg',
+              'audio/wav',
+              'video/webm;codecs=vp9,opus',
+              'video/webm;codecs=vp8,opus',
+              'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+            ]
           : [];
 
   const nextByPreference = preferredOrder
@@ -380,7 +388,7 @@ function statusCopyFor(mode: StatusMode) {
 
 function sourceLabel(source?: 'native' | 'encoder') {
   if (source === 'native') return 'Browser pipeline';
-  if (source === 'encoder') return 'MP3 software encoder';
+  if (source === 'encoder') return 'Software audio encoder';
   return '';
 }
 
@@ -950,8 +958,8 @@ function DocsPage() {
             your browser with no additional modules required.
           </li>
           <li>
-            <strong>MP3 encoder path</strong> — audio files targeting MP3 are processed with a
-            local software encoder running in your browser tab.
+            <strong>Audio encoder path</strong> — MP3 and WAV audio outputs are processed with a
+            local software encoder running in your browser tab, including extraction from video.
           </li>
           <li>
             <strong>Waiting for input / Unsupported</strong> — conversion cannot run until a
@@ -1158,12 +1166,23 @@ export default function App() {
   const canConvert = Boolean(file && targetMime && routeDecision !== 'blocked');
   const uploadSupportSummary = useMemo(() => {
     if (!file) return 'Select a file to preview supported output formats.';
+    const lowerName = file.name.toLowerCase();
+    const isHeicLike =
+      file.type.includes('heic') ||
+      file.type.includes('heif') ||
+      lowerName.endsWith('.heic') ||
+      lowerName.endsWith('.heif');
+
     const supportedLabels = targetOptionsWithSupport
       .filter((option) => option.supported)
       .map((option) => option.label.replace(/\s*\(.*?\)$/, ''));
 
     if (!supportedLabels.length) {
       return 'No compatible output formats detected for this file type in your browser.';
+    }
+
+    if (isHeicLike) {
+      return `Supported outputs: ${supportedLabels.join(', ')}. HEIC/HEIF input is decoded locally before export.`;
     }
 
     return `Supported outputs: ${supportedLabels.join(', ')}`;
@@ -1528,11 +1547,18 @@ export default function App() {
                 signal: abortController.signal,
               });
       } else if (routeDecision === 'encoder') {
-        next = await convertAudioToMp3({
-          file,
-          onProgress: handleProgress,
-          signal: abortController.signal,
-        });
+        next =
+          targetMime === 'audio/wav'
+            ? await convertAudioToWav({
+                file,
+                onProgress: handleProgress,
+                signal: abortController.signal,
+              })
+            : await convertAudioToMp3({
+                file,
+                onProgress: handleProgress,
+                signal: abortController.signal,
+              });
       } else {
         throw new Error(routeReason);
       }
