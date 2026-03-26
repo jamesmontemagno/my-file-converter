@@ -17,3 +17,8 @@ declare module 'lamejs/src/js/MPEGMode.js' {
 
   export default MPEGMode;
 }
+
+declare module 'lamejs/src/js/Lame.js' {
+  const Lame: unknown;
+  export default Lame;
+}
