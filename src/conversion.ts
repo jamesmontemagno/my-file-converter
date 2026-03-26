@@ -159,6 +159,13 @@ async function decodeMediaAudioBuffer(args: {
     throw new Error('Web Audio API is not supported in this browser.');
   }
 
+  onProgress?.({
+    progress: 0.14,
+    message: 'Reading source file',
+    detail: `Loading ${(file.size / 1024 / 1024).toFixed(1)} MB into memory.`,
+    source: 'encoder',
+  });
+
   const sourceBytes = await raceWithAbort(file.arrayBuffer(), signal);
   throwIfConversionAborted(signal);
 
@@ -167,13 +174,22 @@ async function decodeMediaAudioBuffer(args: {
     onProgress?.({
       progress: 0.22,
       message: 'Decoding source audio',
-      detail: 'Using Web Audio to decode media samples.',
+      detail: 'Using Web Audio to decode media samples. This may take a moment for longer files.',
       source: 'encoder',
     });
 
-    return await raceWithAbort(audioContext.decodeAudioData(sourceBytes.slice(0)), signal, () => {
+    const decoded = await raceWithAbort(audioContext.decodeAudioData(sourceBytes.slice(0)), signal, () => {
       void audioContext.close();
     });
+
+    onProgress?.({
+      progress: 0.30,
+      message: 'Audio decoded successfully',
+      detail: `${decoded.numberOfChannels} channel(s), ${decoded.sampleRate} Hz, ${(decoded.duration).toFixed(1)}s duration.`,
+      source: 'encoder',
+    });
+
+    return decoded;
   } finally {
     await audioContext.close();
   }
@@ -246,7 +262,23 @@ export async function convertImage(args: {
     source: 'native',
   });
   const decodeBlob = await raceWithAbort(prepareImageDecodeBlob(file, onProgress), signal);
+
+  onProgress?.({
+    progress: 0.2,
+    message: 'Creating bitmap',
+    detail: 'Decoding image pixels for processing.',
+    source: 'native',
+  });
+
   const bitmap = await raceWithAbort(createImageBitmap(decodeBlob), signal);
+
+  onProgress?.({
+    progress: 0.3,
+    message: 'Image decoded',
+    detail: `Source dimensions: ${bitmap.width}×${bitmap.height}.`,
+    source: 'native',
+  });
+
   const nextSize = resolveImageSize(bitmap.width, bitmap.height, imageOptions);
   const canvas = document.createElement('canvas');
   canvas.width = nextSize.width;
@@ -302,6 +334,13 @@ export async function convertImage(args: {
       targetMime,
       quality,
     );
+  });
+
+  onProgress?.({
+    progress: 0.95,
+    message: 'Image file ready',
+    detail: `Output size: ${(blob.size / 1024).toFixed(0)} KB.`,
+    source: 'native',
   });
 
   return {
@@ -385,6 +424,13 @@ export async function convertAudioToMp3(args: {
   const lamejsModule = await import('lamejs');
   const Mp3Encoder = (lamejsModule as { Mp3Encoder: new (...args: number[]) => any }).Mp3Encoder;
 
+  onProgress?.({
+    progress: 0.12,
+    message: 'MP3 encoder loaded',
+    detail: 'Encoder modules ready. Now reading and decoding source audio.',
+    source: 'encoder',
+  });
+
   const audioBuffer = await decodeMediaAudioBuffer({ file, signal, onProgress });
 
   throwIfConversionAborted(signal);
@@ -428,16 +474,34 @@ export async function convertAudioToMp3(args: {
         detail: `Encoded ${Math.round(completion * 100)}% of audio samples.`,
         source: 'encoder',
       });
+      // Yield to the browser event loop so the UI can repaint and stay responsive
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
     }
   }
+
+  onProgress?.({
+    progress: 0.94,
+    message: 'Finalizing MP3',
+    detail: 'Flushing encoder and assembling output file.',
+    source: 'encoder',
+  });
 
   const flush = encoder.flush();
   if (flush.length) {
     mp3Chunks.push(Uint8Array.from(flush).buffer);
   }
 
+  const mp3Blob = new Blob(mp3Chunks, { type: 'audio/mpeg' });
+
+  onProgress?.({
+    progress: 0.98,
+    message: 'MP3 file ready',
+    detail: `Output size: ${(mp3Blob.size / 1024).toFixed(0)} KB.`,
+    source: 'encoder',
+  });
+
   return {
-    blob: new Blob(mp3Chunks, { type: 'audio/mpeg' }),
+    blob: mp3Blob,
     outputName: replaceExtension(file.name, mimeToExt('audio/mpeg')),
     route: 'encoder-mp3',
   };
@@ -472,8 +536,17 @@ export async function convertAudioToWav(args: {
     source: 'encoder',
   });
 
+  const wavBlob = createWavBlob(audioBuffer);
+
+  onProgress?.({
+    progress: 0.98,
+    message: 'WAV file ready',
+    detail: `Output size: ${(wavBlob.size / 1024).toFixed(0)} KB.`,
+    source: 'encoder',
+  });
+
   return {
-    blob: createWavBlob(audioBuffer),
+    blob: wavBlob,
     outputName: replaceExtension(file.name, mimeToExt('audio/wav')),
     route: 'encoder-wav',
   };
