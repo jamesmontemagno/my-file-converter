@@ -22,3 +22,8 @@ declare module 'lamejs/src/js/Lame.js' {
   const Lame: unknown;
   export default Lame;
 }
+
+declare module 'lamejs/src/js/BitStream.js' {
+  const BitStream: unknown;
+  export default BitStream;
+}
