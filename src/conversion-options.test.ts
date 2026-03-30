@@ -83,15 +83,15 @@ describe('conversion-options', () => {
 
   describe('hasMediaTrim', () => {
     it('returns true when trim start is set', () => {
-      expect(hasMediaTrim({ trimStart: 2.5, trimEnd: 0 })).toBe(true);
+      expect(hasMediaTrim({ trimStart: 2.5, trimEnd: 0, channelMode: 'auto' })).toBe(true);
     });
 
     it('returns true when trim end is set', () => {
-      expect(hasMediaTrim({ trimStart: 0, trimEnd: 42 })).toBe(true);
+      expect(hasMediaTrim({ trimStart: 0, trimEnd: 42, channelMode: 'auto' })).toBe(true);
     });
 
     it('returns false when neither trim boundary is set', () => {
-      expect(hasMediaTrim({ trimStart: 0, trimEnd: 0 })).toBe(false);
+      expect(hasMediaTrim({ trimStart: 0, trimEnd: 0, channelMode: 'auto' })).toBe(false);
     });
   });
 
@@ -106,6 +106,7 @@ describe('conversion-options', () => {
       media: {
         trimStart: 0,
         trimEnd: 0,
+        channelMode: 'auto',
       },
     };
 
@@ -138,11 +139,11 @@ describe('conversion-options', () => {
     it('returns media trim text for audio and video', () => {
       const audioEntries = describeSelectedOptions('audio', {
         ...baseOptions,
-        media: { trimStart: 1, trimEnd: 3.5 },
+        media: { trimStart: 1, trimEnd: 3.5, channelMode: 'auto' },
       });
       const videoEntries = describeSelectedOptions('video', {
         ...baseOptions,
-        media: { trimStart: 0.5, trimEnd: 0 },
+        media: { trimStart: 0.5, trimEnd: 0, channelMode: 'auto' },
       });
 
       expect(audioEntries).toEqual(['Trim from 1.0s to 3.5s']);

@@ -63,7 +63,7 @@ describe('capabilities', () => {
   describe('targetFormatsFor', () => {
     it('returns expected image targets', () => {
       const targets = targetFormatsFor('image').map((entry) => entry.value);
-      expect(targets).toEqual(['image/png', 'image/jpeg', 'image/webp', 'image/avif']);
+      expect(targets).toEqual(['image/png', 'image/jpeg', 'image/webp', 'image/avif', 'image/gif', 'image/bmp']);
     });
 
     it('returns expected audio targets', () => {
@@ -83,6 +83,7 @@ describe('capabilities', () => {
         'video/webm;codecs=vp8,opus',
         'video/webm;codecs=vp9,opus',
         'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+        'video/webm;codecs=av01',
         'audio/mpeg',
         'audio/wav',
       ]);

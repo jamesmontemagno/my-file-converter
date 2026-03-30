@@ -33,6 +33,20 @@ function guidanceForFormat(targetMime: string, mediaType: string) {
         tradeoff: 'Encoding and decoding can be slower on older devices.',
       };
     }
+
+    if (targetMime === 'image/gif') {
+      return {
+        bestFor: 'Simple graphics, icons, and legacy compatibility',
+        tradeoff: 'Limited to 256 colors. Not ideal for photos.',
+      };
+    }
+
+    if (targetMime === 'image/bmp') {
+      return {
+        bestFor: 'Uncompressed pixel-perfect output for editing tools',
+        tradeoff: 'Very large files with no compression.',
+      };
+    }
   }
 
   if (mediaType === 'audio') {
@@ -107,6 +121,13 @@ function guidanceForFormat(targetMime: string, mediaType: string) {
         tradeoff: 'May not produce the smallest file for web delivery.',
       };
     }
+
+    if (targetMime.includes('av01')) {
+      return {
+        bestFor: 'Next-generation compression with excellent quality at low bitrates',
+        tradeoff: 'Encoding is slower and requires WebCodecs hardware support.',
+      };
+    }
   }
 
   return {
@@ -127,6 +148,9 @@ type SettingsStepProps = {
   imageHeight: string;
   keepAspectRatio: boolean;
   quality: number;
+  trimStart: string;
+  trimEnd: string;
+  channelMode: string;
   outputFileName: string;
   selectedAdjustments: string[];
   routeDisplayLabel: string;
@@ -138,6 +162,9 @@ type SettingsStepProps = {
   onImageHeightChange: (value: string) => void;
   onKeepAspectRatioChange: (value: boolean) => void;
   onQualityChange: (value: number) => void;
+  onTrimStartChange: (value: string) => void;
+  onTrimEndChange: (value: string) => void;
+  onChannelModeChange: (value: string) => void;
   onBack: () => void;
   onConvert: () => void;
 };
@@ -154,6 +181,9 @@ export function SettingsStep({
   imageHeight,
   keepAspectRatio,
   quality,
+  trimStart,
+  trimEnd,
+  channelMode,
   outputFileName,
   selectedAdjustments,
   routeDisplayLabel,
@@ -165,6 +195,9 @@ export function SettingsStep({
   onImageHeightChange,
   onKeepAspectRatioChange,
   onQualityChange,
+  onTrimStartChange,
+  onTrimEndChange,
+  onChannelModeChange,
   onBack,
   onConvert,
 }: SettingsStepProps) {
@@ -277,7 +310,50 @@ export function SettingsStep({
       {(mediaType === 'audio' || mediaType === 'video') ? (
         <div className="option-section">
           <h3>Media options</h3>
-          <p className="muted">Trim controls are not available in this native-only release yet.</p>
+          <div className="option-grid">
+            <label className="field">
+              <span>Trim start (seconds)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                inputMode="decimal"
+                value={trimStart}
+                disabled={busy}
+                onChange={(event) => onTrimStartChange(event.target.value)}
+                placeholder="0"
+              />
+            </label>
+            <label className="field">
+              <span>Trim end (seconds)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                inputMode="decimal"
+                value={trimEnd}
+                disabled={busy}
+                onChange={(event) => onTrimEndChange(event.target.value)}
+                placeholder="End of file"
+              />
+            </label>
+          </div>
+          <small>Leave blank to use the full duration. Set trim end to stop at a specific time.</small>
+
+          {(targetMime === 'audio/mpeg' || targetMime === 'audio/wav' || targetMime.startsWith('audio/')) ? (
+            <label className="field">
+              <span>Channels</span>
+              <select
+                value={channelMode}
+                disabled={busy}
+                onChange={(event) => onChannelModeChange(event.target.value)}
+              >
+                <option value="auto">Auto (keep source)</option>
+                <option value="mono">Mono</option>
+                <option value="stereo">Stereo</option>
+              </select>
+            </label>
+          ) : null}
         </div>
       ) : null}
 
