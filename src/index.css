@@ -988,6 +988,43 @@ pre {
   margin-bottom: 0.5rem;
 }
 
+.supported-formats-grid {
+  margin-bottom: 1rem;
+}
+
+.supported-format-card {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.supported-format-card h3,
+.install-tabpanel h3 {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  color: #bfdbfe;
+}
+
+.supported-format-card p {
+  margin-bottom: 0;
+  color: #c9d7ee;
+  line-height: 1.6;
+}
+
+.supported-format-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #dbeafe;
+}
+
+.supported-format-list li + li {
+  margin-top: 0.45rem;
+}
+
+.supported-formats-note {
+  margin: 0;
+  color: #a7b7d1;
+}
+
 .tab-bar {
   display: flex;
   gap: 0.25rem;
@@ -1037,12 +1074,6 @@ pre {
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 22px;
   box-shadow: 0 24px 60px rgba(2, 6, 23, 0.24);
-}
-
-.install-tabpanel h3 {
-  font-size: 1rem;
-  margin-bottom: 0.75rem;
-  color: #bfdbfe;
 }
 
 .install-steps-list {
