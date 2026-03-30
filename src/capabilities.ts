@@ -83,6 +83,8 @@ export function targetFormatsFor(mediaType: MediaKind) {
       { value: 'image/jpeg', label: 'JPEG (.jpg)' },
       { value: 'image/webp', label: 'WebP (.webp)' },
       { value: 'image/avif', label: 'AVIF (.avif)' },
+      { value: 'image/gif', label: 'GIF (.gif)' },
+      { value: 'image/bmp', label: 'BMP (.bmp)' },
     ];
   }
 
@@ -101,6 +103,7 @@ export function targetFormatsFor(mediaType: MediaKind) {
       { value: 'video/webm;codecs=vp8,opus', label: 'WebM VP8+Opus (.webm)' },
       { value: 'video/webm;codecs=vp9,opus', label: 'WebM VP9+Opus (.webm)' },
       { value: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', label: 'MP4 H.264+AAC (.mp4)' },
+      { value: 'video/webm;codecs=av01', label: 'WebM AV1 (.webm)' },
       { value: 'audio/mpeg', label: 'Extract audio as MP3 (.mp3)' },
       { value: 'audio/wav', label: 'Extract audio as WAV (.wav)' },
     ];
@@ -117,6 +120,16 @@ export function isTargetMimeSupported(
 
   if (targetMime === 'audio/mpeg' || targetMime === 'audio/wav') {
     return capabilities.mp3Encoder === true;
+  }
+
+  // GIF and BMP use software encoders — always supported
+  if (targetMime === 'image/gif' || targetMime === 'image/bmp') {
+    return true;
+  }
+
+  // AV1 via WebCodecs
+  if (targetMime === 'video/webm;codecs=av01') {
+    return capabilities.webCodecs.videoEncoder === true;
   }
 
   if (targetMime.startsWith('image/')) {

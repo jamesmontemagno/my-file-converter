@@ -12,7 +12,10 @@ import {
   convertAudioToMp3,
   convertAudioToWav,
   convertImage,
+  convertImageToBmp,
+  convertImageToGif,
   convertViaMediaRecorder,
+  convertVideoWithWebCodecs,
   isConversionAbortError,
   supportsNativeRoute,
   type ConversionActivity,
@@ -41,7 +44,7 @@ type Page = 'landing' | 'app' | 'privacy' | 'terms' | 'docs';
 type StatusMode = 'idle' | 'ready' | 'working' | 'success' | 'error' | 'canceled';
 type ActivityTone = 'info' | 'success' | 'error';
 type ActivityVariant = 'milestone' | 'raw';
-type RouteDecision = 'native' | 'encoder' | 'blocked';
+type RouteDecision = 'native' | 'encoder' | 'webcodecs' | 'blocked';
 type ConverterStep = 'upload' | 'settings' | 'converting' | 'results';
 type StepState = 'done' | 'current' | 'pending';
 type ActivityEntry = {
@@ -183,13 +186,14 @@ function setCanonicalTag(href: string) {
 
 function routeLabel(route: RouteDecision) {
   if (route === 'native') return 'Native browser path';
-  if (route === 'encoder') return 'Audio encoder path';
+  if (route === 'encoder') return 'Software encoder path';
+  if (route === 'webcodecs') return 'WebCodecs hardware path';
   return 'Waiting for input';
 }
 
 function sourceForRouteDecision(route: RouteDecision) {
   if (route === 'native') return 'native' as const;
-  if (route === 'encoder') return 'encoder' as const;
+  if (route === 'encoder' || route === 'webcodecs') return 'encoder' as const;
   return undefined;
 }
 
@@ -225,6 +229,36 @@ function resolveRoute(args: {
     return {
       decision: 'blocked',
       reason: 'Audio encoder outputs currently support audio or video input files only.',
+    };
+  }
+
+  // GIF and BMP use software encoders
+  if (targetMime === 'image/gif' || targetMime === 'image/bmp') {
+    if (mediaType === 'image') {
+      return {
+        decision: 'encoder',
+        reason: `This conversion uses a local software encoder for ${targetMime === 'image/gif' ? 'GIF' : 'BMP'} output.`,
+        source: 'encoder',
+      };
+    }
+    return {
+      decision: 'blocked',
+      reason: 'This image format requires an image input file.',
+    };
+  }
+
+  // AV1 via WebCodecs
+  if (targetMime === 'video/webm;codecs=av01') {
+    if (mediaType === 'video' && targetSupported) {
+      return {
+        decision: 'webcodecs',
+        reason: 'This conversion uses the WebCodecs API for hardware-accelerated AV1 encoding.',
+        source: 'encoder',
+      };
+    }
+    return {
+      decision: 'blocked',
+      reason: 'AV1 encoding requires a video input and WebCodecs VideoEncoder support.',
     };
   }
 
@@ -967,7 +1001,8 @@ function DocsPage() {
           </li>
         </ul>
         <p>
-          Trim settings are currently unavailable in this native-only release.
+          Trim controls let you select a start and end time for audio and video conversions.
+          Channel mode lets you choose mono or stereo output for MP3 and WAV exports.
         </p>
       </section>
 
@@ -1045,6 +1080,9 @@ export default function App() {
   const [imageWidth, setImageWidth] = useState('');
   const [imageHeight, setImageHeight] = useState('');
   const [keepAspectRatio, setKeepAspectRatio] = useState(true);
+  const [trimStart, setTrimStart] = useState('');
+  const [trimEnd, setTrimEnd] = useState('');
+  const [channelMode, setChannelMode] = useState('auto');
 
   useEffect(() => {
     const onHashChange = () => setPage(getPageFromHash());
@@ -1113,11 +1151,12 @@ export default function App() {
         keepAspectRatio,
       },
       media: {
-        trimStart: 0,
-        trimEnd: 0,
+        trimStart: parseFloat(trimStart) || 0,
+        trimEnd: parseFloat(trimEnd) || 0,
+        channelMode: channelMode as 'auto' | 'mono' | 'stereo',
       },
     }),
-    [imageHeight, imageWidth, keepAspectRatio, outputBaseName],
+    [imageHeight, imageWidth, keepAspectRatio, outputBaseName, trimStart, trimEnd, channelMode],
   );
   const selectedTargetOption = useMemo(
     () => targetOptionsWithSupport.find((option) => option.value === targetMime),
@@ -1543,22 +1582,51 @@ export default function App() {
             : await convertViaMediaRecorder({
                 file,
                 targetMime,
+                trimStart: requestedOptions.media.trimStart,
+                trimEnd: requestedOptions.media.trimEnd,
                 onProgress: handleProgress,
                 signal: abortController.signal,
               });
       } else if (routeDecision === 'encoder') {
-        next =
-          targetMime === 'audio/wav'
-            ? await convertAudioToWav({
-                file,
-                onProgress: handleProgress,
-                signal: abortController.signal,
-              })
-            : await convertAudioToMp3({
-                file,
-                onProgress: handleProgress,
-                signal: abortController.signal,
-              });
+        if (targetMime === 'image/gif') {
+          next = await convertImageToGif({
+            file,
+            imageOptions: requestedOptions.image,
+            onProgress: handleProgress,
+            signal: abortController.signal,
+          });
+        } else if (targetMime === 'image/bmp') {
+          next = await convertImageToBmp({
+            file,
+            imageOptions: requestedOptions.image,
+            onProgress: handleProgress,
+            signal: abortController.signal,
+          });
+        } else if (targetMime === 'audio/wav') {
+          next = await convertAudioToWav({
+            file,
+            channelMode: requestedOptions.media.channelMode,
+            trimStart: requestedOptions.media.trimStart,
+            trimEnd: requestedOptions.media.trimEnd,
+            onProgress: handleProgress,
+            signal: abortController.signal,
+          });
+        } else {
+          next = await convertAudioToMp3({
+            file,
+            channelMode: requestedOptions.media.channelMode,
+            trimStart: requestedOptions.media.trimStart,
+            trimEnd: requestedOptions.media.trimEnd,
+            onProgress: handleProgress,
+            signal: abortController.signal,
+          });
+        }
+      } else if (routeDecision === 'webcodecs') {
+        next = await convertVideoWithWebCodecs({
+          file,
+          onProgress: handleProgress,
+          signal: abortController.signal,
+        });
       } else {
         throw new Error(routeReason);
       }
@@ -1690,6 +1758,9 @@ export default function App() {
             imageHeight={imageHeight}
             keepAspectRatio={keepAspectRatio}
             quality={quality}
+            trimStart={trimStart}
+            trimEnd={trimEnd}
+            channelMode={channelMode}
             outputFileName={outputFileName}
             selectedAdjustments={selectedAdjustments}
             routeDisplayLabel={routeDisplayLabel}
@@ -1701,6 +1772,9 @@ export default function App() {
             onImageHeightChange={handleImageHeightChange}
             onKeepAspectRatioChange={handleKeepAspectRatioChange}
             onQualityChange={handleQualityChange}
+            onTrimStartChange={setTrimStart}
+            onTrimEndChange={setTrimEnd}
+            onChannelModeChange={setChannelMode}
             onBack={goBackToUploadStep}
             onConvert={startConversionStep}
           />

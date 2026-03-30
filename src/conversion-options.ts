@@ -6,9 +6,12 @@ export type ImageConversionOptions = {
   keepAspectRatio: boolean;
 };
 
+import type { AudioChannelMode } from './conversion';
+
 export type MediaConversionOptions = {
   trimStart: number;
   trimEnd: number;
+  channelMode: AudioChannelMode;
 };
 
 export type ConversionOptions = {
@@ -32,6 +35,8 @@ export function extensionForMime(mime: string) {
   if (mime.includes('jpeg')) return 'jpg';
   if (mime.includes('webp')) return 'webp';
   if (mime.includes('avif')) return 'avif';
+  if (mime.includes('gif')) return 'gif';
+  if (mime.includes('bmp')) return 'bmp';
   return 'bin';
 }
 
@@ -67,6 +72,10 @@ export function describeSelectedOptions(mediaType: MediaKind, options: Conversio
     const startLabel = `${options.media.trimStart.toFixed(1)}s`;
     const endLabel = options.media.trimEnd > 0 ? `${options.media.trimEnd.toFixed(1)}s` : 'the end';
     entries.push(`Trim from ${startLabel} to ${endLabel}`);
+  }
+
+  if ((mediaType === 'audio' || mediaType === 'video') && options.media.channelMode !== 'auto') {
+    entries.push(`Output channels: ${options.media.channelMode}`);
   }
 
   if (options.outputBaseName.trim()) {
