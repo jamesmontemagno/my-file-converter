@@ -564,6 +564,33 @@ const INSTALL_STEPS: { platform: string; steps: string[] }[] = [
   },
 ];
 
+const SUPPORTED_FORMAT_HIGHLIGHTS: {
+  title: string;
+  description: string;
+  examples: string[];
+}[] = [
+  {
+    title: 'Images',
+    description: 'Useful for screenshots, product shots, and assets you need in a different format.',
+    examples: ['PNG to JPEG', 'PNG or JPEG to WebP', 'HEIC / HEIF to PNG', 'Image to GIF or BMP'],
+  },
+  {
+    title: 'Audio',
+    description: 'Great for recordings, podcast clips, and extracting audio you can reuse elsewhere.',
+    examples: ['Audio to MP3', 'Audio to WAV', 'Audio to Ogg Opus', 'Video to MP3 or WAV'],
+  },
+  {
+    title: 'Video',
+    description: 'Helpful when you need a more compatible video format or a browser-friendly export.',
+    examples: [
+      'Video to WebM (VP8 or VP9)',
+      'Video to MP4 when supported',
+      'Video to WebM AV1 on supported browsers',
+      'Video to MP3 or WAV',
+    ],
+  },
+];
+
 function FeaturesSection({ onOpenApp }: { onOpenApp: () => void }) {
   return (
     <section className="landing-section">
@@ -601,6 +628,38 @@ function FeaturesSection({ onOpenApp }: { onOpenApp: () => void }) {
         <h2>Ready to try the full converter experience?</h2>
         <button onClick={onOpenApp}>Go to the app workspace</button>
       </section>
+    </section>
+  );
+}
+
+function SupportedFormatsSection() {
+  return (
+    <section className="landing-section">
+      <div className="section-header">
+        <span className="eyebrow">Supported conversions</span>
+        <h2>Popular file formats you can convert right in the browser</h2>
+        <p className="hero-text">
+          Here are some of the most useful conversions {APP_NAME} already supports. This is not the
+          full list, and the exact outputs shown in the app can vary by browser.
+        </p>
+      </div>
+      <div className="feature-grid supported-formats-grid">
+        {SUPPORTED_FORMAT_HIGHLIGHTS.map((group) => (
+          <article key={group.title} className="feature-card supported-format-card">
+            <h3>{group.title}</h3>
+            <p>{group.description}</p>
+            <ul className="supported-format-list">
+              {group.examples.map((example) => (
+                <li key={example}>{example}</li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </div>
+      <p className="supported-formats-note">
+        Want the full breakdown? Open the app to see live browser support, or check the{' '}
+        <a href="#/docs">documentation</a> for more details.
+      </p>
     </section>
   );
 }
@@ -706,6 +765,7 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
       </section>
 
       <FeaturesSection onOpenApp={onOpenApp} />
+      <SupportedFormatsSection />
 
       <InstallSection />
 
