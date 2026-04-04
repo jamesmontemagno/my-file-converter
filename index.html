@@ -34,7 +34,7 @@
     <meta name="twitter:image" content="https://localmorph.com/og-image.png" />
     <meta name="twitter:image:alt" content="LocalMorph — private, browser-native file converter" />
 
-    <!-- JSON-LD structured data -->
+    <!-- JSON-LD structured data: WebApplication -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -45,6 +45,7 @@
       "applicationCategory": "UtilitiesApplication",
       "operatingSystem": "Any",
       "browserRequirements": "Requires a modern browser with JavaScript enabled",
+      "screenshot": "https://localmorph.com/og-image.png",
       "offers": {
         "@type": "Offer",
         "price": "0",
@@ -64,6 +65,52 @@
         "name": "LocalMorph",
         "url": "https://localmorph.com/"
       }
+    }
+    </script>
+
+    <!-- JSON-LD structured data: HowTo (enables rich results for conversion steps) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "How to convert a file with LocalMorph",
+      "description": "Convert images, audio, and video files locally in your browser in four steps — no uploads required.",
+      "totalTime": "PT1M",
+      "estimatedCost": {
+        "@type": "MonetaryAmount",
+        "currency": "USD",
+        "value": "0"
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Choose your file",
+          "text": "Drag and drop or click to select the image, audio, or video file you want to convert.",
+          "url": "https://localmorph.com/#/app"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Pick an output format",
+          "text": "Select the target format from the dropdown list (e.g. PNG → WebP, MP4 → WebM, WAV → MP3).",
+          "url": "https://localmorph.com/#/app"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Convert with full visibility",
+          "text": "Click Convert and watch the live status as your file is processed entirely within your browser.",
+          "url": "https://localmorph.com/#/app"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Preview and download",
+          "text": "Preview the converted file directly in the browser, then download it to your device.",
+          "url": "https://localmorph.com/#/app"
+        }
+      ]
     }
     </script>
 
