@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import {
   classifyMediaType,
@@ -27,6 +27,15 @@ import {
   stripExtension,
   type ConversionOptions,
 } from './conversion-options';
+import {
+  BridgeError,
+  convertThroughBridge,
+  normalizeBridgeTargetMime,
+  normalizeBridgeConnection,
+  probeBridge,
+  type BridgeConnection,
+  type BridgeHealth,
+} from './bridge/client';
 import { LogoIcon } from './Logo';
 import {
   ConvertingStep,
@@ -44,9 +53,10 @@ type Page = 'landing' | 'app' | 'privacy' | 'terms' | 'docs';
 type StatusMode = 'idle' | 'ready' | 'working' | 'success' | 'error' | 'canceled';
 type ActivityTone = 'info' | 'success' | 'error';
 type ActivityVariant = 'milestone' | 'raw';
-type RouteDecision = 'native' | 'encoder' | 'webcodecs' | 'blocked';
+type RouteDecision = 'bridge' | 'native' | 'encoder' | 'webcodecs' | 'blocked';
 type ConverterStep = 'upload' | 'settings' | 'converting' | 'results';
 type StepState = 'done' | 'current' | 'pending';
+type BridgeState = 'disconnected' | 'connecting' | 'available' | 'missing-ffmpeg' | 'error';
 type ActivityEntry = {
   id: number;
   message: string;
@@ -55,12 +65,12 @@ type ActivityEntry = {
   tone: ActivityTone;
   timestamp: string;
   variant: ActivityVariant;
-  source?: 'native' | 'encoder';
+  source?: 'native' | 'encoder' | 'bridge';
 };
 type ResolvedRoute = {
   decision: RouteDecision;
   reason: string;
-  source?: 'native' | 'encoder';
+  source?: 'native' | 'encoder' | 'bridge';
 };
 type SizeChangeSummary = {
   trend: 'smaller' | 'larger' | 'same';
@@ -144,14 +154,14 @@ function titleForPage(page: Page) {
 
 function descriptionForPage(page: Page) {
   if (page === 'app')
-    return 'Convert images, audio, and video files directly in your browser. No uploads, no servers — everything stays on your device.';
+    return 'Convert images, audio, and video on your device with browser tools or an optional local FFmpeg bridge. No managed-server uploads.';
   if (page === 'privacy')
-    return 'LocalMorph privacy policy. Learn how we handle your data — spoiler: we never receive your files because all conversion happens locally in your browser.';
+    return 'LocalMorph privacy policy. Learn how browser and optional bridge conversion keep selected files on your device.';
   if (page === 'terms')
     return 'LocalMorph terms of use. Review the conditions under which you may use this browser-based file converter.';
   if (page === 'docs')
     return 'LocalMorph documentation. Learn about supported file formats and how browser-native conversion works.';
-  return 'LocalMorph converts images, audio, and video files directly in your browser — no uploads, no servers, no privacy risks. Free, fast, and 100% client-side.';
+  return 'LocalMorph converts images, audio, and video on your device with browser tools or an optional local FFmpeg bridge — no managed-server uploads.';
 }
 
 function canonicalForPage(page: Page) {
@@ -185,6 +195,7 @@ function setCanonicalTag(href: string) {
 }
 
 function routeLabel(route: RouteDecision) {
+  if (route === 'bridge') return 'Local FFmpeg Bridge';
   if (route === 'native') return 'Native browser path';
   if (route === 'encoder') return 'Software encoder path';
   if (route === 'webcodecs') return 'WebCodecs hardware path';
@@ -192,6 +203,7 @@ function routeLabel(route: RouteDecision) {
 }
 
 function sourceForRouteDecision(route: RouteDecision) {
+  if (route === 'bridge') return 'bridge' as const;
   if (route === 'native') return 'native' as const;
   if (route === 'encoder' || route === 'webcodecs') return 'encoder' as const;
   return undefined;
@@ -205,9 +217,20 @@ function resolveRoute(args: {
   file: File | null;
   mediaType: MediaKind;
   targetMime: string;
-  targetSupported: boolean;
+  browserTargetSupported: boolean;
+  bridgeTargetSupported: boolean;
+  bridgeAvailable: boolean;
+  routePreference: 'auto' | 'browser';
 }): ResolvedRoute {
-  const { file, mediaType, targetMime, targetSupported } = args;
+  const {
+    file,
+    mediaType,
+    targetMime,
+    browserTargetSupported,
+    bridgeTargetSupported,
+    bridgeAvailable,
+    routePreference,
+  } = args;
 
   if (!file || !targetMime) {
     return {
@@ -216,8 +239,16 @@ function resolveRoute(args: {
     };
   }
 
+  if (routePreference === 'auto' && bridgeAvailable && bridgeTargetSupported) {
+    return {
+      decision: 'bridge',
+      reason: 'This conversion will use the connected LocalMorph Bridge and FFmpeg on this device.',
+      source: 'bridge',
+    };
+  }
+
   if (targetMime === 'audio/mpeg' || targetMime === 'audio/wav') {
-    if ((mediaType === 'audio' || mediaType === 'video') && targetSupported) {
+    if ((mediaType === 'audio' || mediaType === 'video') && browserTargetSupported) {
       const extractionHint = mediaType === 'video' ? ' Audio will be extracted from the video track.' : '';
       return {
         decision: 'encoder',
@@ -249,7 +280,7 @@ function resolveRoute(args: {
 
   // AV1 via WebCodecs
   if (targetMime === 'video/webm;codecs=av01') {
-    if (mediaType === 'video' && targetSupported) {
+    if (mediaType === 'video' && browserTargetSupported) {
       return {
         decision: 'webcodecs',
         reason: 'This conversion uses the WebCodecs API for hardware-accelerated AV1 encoding.',
@@ -262,7 +293,7 @@ function resolveRoute(args: {
     };
   }
 
-  if (targetSupported && supportsNativeRoute(file, targetMime)) {
+  if (browserTargetSupported && supportsNativeRoute(file, targetMime)) {
     return {
       decision: 'native',
       reason: 'This format combination can use the fast native browser route.',
@@ -420,7 +451,8 @@ function statusCopyFor(mode: StatusMode) {
   };
 }
 
-function sourceLabel(source?: 'native' | 'encoder') {
+function sourceLabel(source?: 'native' | 'encoder' | 'bridge') {
+  if (source === 'bridge') return 'Local FFmpeg Bridge';
   if (source === 'native') return 'Browser pipeline';
   if (source === 'encoder') return 'Software audio encoder';
   return '';
@@ -476,8 +508,8 @@ function Footer() {
       </div>
       <div className="footer-meta">
         <p className="muted footer-note">
-          {APP_NAME} is designed for browser-based local conversion. Review the legal pages before
-          using it in production or for sensitive workflows.
+          {APP_NAME} keeps conversion on your device through browser tools or an optional local
+          bridge. Review the legal pages before using it for sensitive workflows.
         </p>
         <a
           className="footer-project-link"
@@ -518,7 +550,7 @@ function UpdateNotification() {
       <div className="pwa-toast-actions">
         {needRefresh && (
           <button className="ghost-button pwa-toast-btn" onClick={() => updateServiceWorker(true)}>
-            Update
+            Update now
           </button>
         )}
         <button className="ghost-button pwa-toast-btn" onClick={close}>
@@ -712,62 +744,145 @@ function InstallSection() {
 
 function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
   return (
-    <main className="page">
-      <header className="topbar">
+    <main className="landing-page">
+      <header className="landing-topbar">
         <a className="brand brand-link" href="#">
           <LogoIcon size={28} />
           {APP_NAME}
         </a>
-        <nav className="nav-actions">
-          <button className="ghost-button" onClick={onOpenApp}>
-            Open app
+        <nav className="landing-nav" aria-label="Main navigation">
+          <a href="#/docs">How it works</a>
+          <a href="#/privacy">Privacy</a>
+          <button className="landing-nav-action" onClick={onOpenApp}>
+            Open converter
           </button>
-          <HamburgerMenu />
         </nav>
       </header>
 
-      <section className="hero">
-        <div className="hero-copy">
-          <span className="eyebrow">Private. Fast. Browser-native only.</span>
-          <h1>Convert video, audio, and images locally without uploading your files.</h1>
-          <p className="hero-text">
-            {APP_NAME} uses browser-native APIs for all conversions. The experience is designed so
-            people always know what route is being used, what the browser supports, and what
-            happens to their files.
+      <section className="landing-hero">
+        <div className="landing-copy">
+          <p className="landing-kicker">Private conversion, plainly explained.</p>
+          <h1>Move your file into the format you actually need.</h1>
+          <p>
+            Convert images, audio, and video on your device. LocalMorph shows exactly how each file
+            is handled, so there is no mystery between selection and download.
           </p>
-          <div className="hero-actions">
-            <button onClick={onOpenApp}>Start converting</button>
-            <a className="text-link" href="#/privacy">
-              Privacy policy
+          <div className="landing-actions">
+            <button className="landing-primary-action" onClick={onOpenApp}>
+              Open converter
+            </button>
+            <a href="#/docs">
+              Explore formats <span aria-hidden="true">→</span>
             </a>
           </div>
-          <div className="hero-badges">
-            <span>Client-side processing</span>
-            <span>Image, audio, video</span>
-            <span>Preview after conversion</span>
+          <div className="landing-example">
+            <span>PNG</span>
+            <i aria-hidden="true" />
+            <strong>WEBP</strong>
+            <small>ready to export</small>
           </div>
         </div>
 
-        <div className="hero-panel">
-          <div className="hero-stat">
-            <strong>Native browser routing</strong>
-            <p>Uses built-in browser capabilities whenever the selected format is supported.</p>
+        <figure className="route-board">
+          <figcaption className="route-board-header">
+            <span>Conversion route</span>
+            <b>On this device</b>
+          </figcaption>
+          <dl className="route-file route-file-source">
+            <dt>Input</dt>
+            <dd>
+              <strong>summer-photo.heic</strong>
+              <small>24.8 MB</small>
+            </dd>
+          </dl>
+          <div className="route-line" aria-hidden="true">
+            <span />
+            <i />
+            <span />
           </div>
-          <div className="hero-stat">
-            <strong>Native-only pipeline</strong>
-            <p>Uses built-in browser encoders and clearly reports unsupported outputs.</p>
-          </div>
-          <div className="hero-stat">
-            <strong>Clear status and output</strong>
-            <p>Progress, route visibility, and visual output preview built in.</p>
-          </div>
+          <dl className="route-engine">
+            <dt>Selected engine</dt>
+            <dd>
+              <strong>Browser conversion</strong>
+              <small>Optional FFmpeg bridge available</small>
+            </dd>
+          </dl>
+          <dl className="route-file route-file-output">
+            <dt>Output</dt>
+            <dd>
+              <strong>summer-photo.webp</strong>
+              <small>ready when you are</small>
+            </dd>
+          </dl>
+        </figure>
+      </section>
+
+      <section className="landing-assurances" aria-label="LocalMorph assurances">
+        <div>
+          <strong>Stays on your device</strong>
+          <p>No managed-server upload is needed to convert a file.</p>
+        </div>
+        <div>
+          <strong>One clear route</strong>
+          <p>See whether your browser or local FFmpeg is doing the work.</p>
+        </div>
+        <div>
+          <strong>Output you can inspect</strong>
+          <p>Preview the result and download only when it looks right.</p>
         </div>
       </section>
 
-      <FeaturesSection onOpenApp={onOpenApp} />
-      <SupportedFormatsSection />
+      <section className="landing-lanes">
+        <div className="landing-section-intro">
+          <h2>Made for the conversions that interrupt your day.</h2>
+          <p>
+            Change a format, trim a clip, or pull out an audio track without handing the file to
+            another service.
+          </p>
+        </div>
+        <div className="conversion-lanes">
+          <article>
+            <span>01</span>
+            <div>
+              <h3>Image formats</h3>
+              <p>Resize and export supported image formats through the route available on your device.</p>
+            </div>
+            <strong>PNG → WebP</strong>
+          </article>
+          <article>
+            <span>02</span>
+            <div>
+              <h3>Audio files</h3>
+              <p>Create supported MP3, WAV, and web-ready audio exports when the selected route allows it.</p>
+            </div>
+            <strong>Video → MP3</strong>
+          </article>
+          <article>
+            <span>03</span>
+            <div>
+              <h3>Video exports</h3>
+              <p>Trim source footage and choose an available browser or local route for compatibility.</p>
+            </div>
+            <strong>Video → WebM</strong>
+          </article>
+        </div>
+      </section>
 
-      <InstallSection />
+      <section className="landing-bridge">
+        <div>
+          <p className="landing-kicker">When browser support is not enough</p>
+          <h2>Bring your own FFmpeg, keep the same private workflow.</h2>
+        </div>
+        <div>
+          <p>
+            LocalMorph Bridge is a small, user-started companion that can use an FFmpeg installation
+            already on your computer. Pair it only when you need broader local conversion support.
+          </p>
+          <a className="landing-secondary-action" href="#/docs">
+            Set up LocalMorph Bridge
+          </a>
+        </div>
+      </section>
 
       <Footer />
     </main>
@@ -777,12 +892,10 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
 function LegalLayout({
   title,
   summary,
-  eyebrow = 'Legal',
   children,
 }: {
   title: string;
   summary: string;
-  eyebrow?: string;
   children: ReactNode;
 }) {
   return (
@@ -794,7 +907,7 @@ function LegalLayout({
         </a>
         <nav className="nav-actions">
           <a className="text-link" href="#/app">
-            Open app
+            Open converter
           </a>
           <HamburgerMenu />
         </nav>
@@ -802,7 +915,6 @@ function LegalLayout({
 
       <section className="legal-shell">
         <article className="card legal-card">
-          <span className="eyebrow">{eyebrow}</span>
           <h1>{title}</h1>
           <p className="legal-summary">{summary}</p>
           {children}
@@ -818,14 +930,15 @@ function PrivacyPage() {
   return (
     <LegalLayout
       title="Privacy Policy"
-      summary={`${APP_NAME} is built for local, in-browser conversion. This policy explains what data stays on your device and what limited technical data may still be processed by hosting providers.`}
+      summary={`${APP_NAME} is built for local conversion. This policy explains what stays on your device in browser and optional bridge workflows, plus what limited technical data hosting providers may process.`}
     >
       <section>
         <h2>1. Local file processing</h2>
         <p>
-          Files selected in {APP_NAME} are intended to be processed in your browser on your device.
-          The app does not require you to upload files to a managed application server to convert
-          them.
+          Files selected in {APP_NAME} are processed on your device. Browser routes keep them in
+          the browser tab. If you explicitly connect LocalMorph Bridge, the browser sends them to
+          that authenticated loopback process on the same device for FFmpeg conversion. The app
+          does not upload files to a managed application server.
         </p>
       </section>
 
@@ -853,13 +966,15 @@ function PrivacyPage() {
       </section>
 
       <section>
-        <h2>4. Browser environment considerations</h2>
+        <h2>4. Local environment considerations</h2>
         <p>
-          {APP_NAME} runs using browser-native APIs. Output quality, codec support, and conversion
-          availability may vary by browser version, OS, and installed media components.
+          {APP_NAME} can use browser-native APIs or an optional LocalMorph Bridge. Output quality,
+          codec support, and conversion availability may vary by browser version, OS, installed
+          media components, and the FFmpeg available to the bridge.
         </p>
         <ul>
-          <li>Your files are intended to remain local in the browser workflow.</li>
+          <li>Your files remain on your device in both browser and bridge workflows.</li>
+          <li>The bridge uses a per-launch pairing token and deletes temporary job files after use.</li>
           <li>Different browsers may support different output formats and codecs.</li>
           <li>Large files may fail based on device memory and browser limits.</li>
         </ul>
@@ -956,12 +1071,144 @@ function TermsPage() {
   );
 }
 
+const BRIDGE_RELEASES_URL = 'https://github.com/jamesmontemagno/my-file-converter/releases/latest';
+
+type BridgePlatform = 'windows' | 'macos' | 'linux';
+
+const bridgePlatformGuides: Record<
+  BridgePlatform,
+  { label: string; asset: string; instructions: string; command: string }
+> = {
+  windows: {
+    label: 'Windows',
+    asset: 'localmorph-bridge-windows-x64.zip',
+    instructions:
+      'Extract the ZIP, install FFmpeg with Winget, then open PowerShell in the extracted folder and start the bridge.',
+    command: `winget install --id Gyan.FFmpeg.Shared -e
+.\\localmorph-bridge.exe`,
+  },
+  macos: {
+    label: 'macOS',
+    asset: 'localmorph-bridge-macos-arm64.tar.gz or localmorph-bridge-macos-x64.tar.gz',
+    instructions:
+      'Download the archive matching your Mac, extract it, install FFmpeg with Homebrew, then start the bridge from Terminal.',
+    command: `brew install ffmpeg
+chmod +x localmorph-bridge
+./localmorph-bridge`,
+  },
+  linux: {
+    label: 'Linux',
+    asset: 'localmorph-bridge-linux-x64.tar.gz',
+    instructions:
+      'Extract the archive, install your distribution’s FFmpeg package, then start the bridge from a terminal.',
+    command: `sudo apt install ffmpeg
+chmod +x localmorph-bridge
+./localmorph-bridge`,
+  },
+};
+
+const bridgePlatforms = Object.keys(bridgePlatformGuides) as BridgePlatform[];
+
+function BridgeInstallGuide() {
+  const [platform, setPlatform] = useState<BridgePlatform>('windows');
+
+  function selectPlatform(nextPlatform: BridgePlatform) {
+    setPlatform(nextPlatform);
+    document.getElementById(`bridge-tab-${nextPlatform}`)?.focus();
+  }
+
+  function handlePlatformKeyDown(event: KeyboardEvent<HTMLButtonElement>, currentPlatform: BridgePlatform) {
+    const currentIndex = bridgePlatforms.indexOf(currentPlatform);
+    let nextIndex = currentIndex;
+
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % bridgePlatforms.length;
+    if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + bridgePlatforms.length) % bridgePlatforms.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = bridgePlatforms.length - 1;
+    if (nextIndex === currentIndex) return;
+
+    event.preventDefault();
+    selectPlatform(bridgePlatforms[nextIndex]);
+  }
+
+  return (
+    <section className="bridge-install-guide">
+      <h2>3. Install Local FFmpeg Bridge</h2>
+      <p>
+        The bridge is optional. Download it from Releases when you need a format the browser cannot
+        convert well; browser conversion works without any installation.
+      </p>
+      <a className="bridge-download-action" href={BRIDGE_RELEASES_URL} target="_blank" rel="noreferrer">
+        Download the latest bridge release
+      </a>
+      <p className="bridge-download-note">
+        Choose the archive for your operating system, then compare its SHA-256 file before opening
+        it. Releases include LocalMorph Bridge only; install FFmpeg separately below.
+      </p>
+      <div className="bridge-platform-tabs">
+        <div role="tablist" aria-label="Bridge setup operating system">
+          {bridgePlatforms.map((option) => (
+            <button
+              key={option}
+              type="button"
+              role="tab"
+              aria-selected={platform === option}
+              aria-controls={`bridge-guide-${option}`}
+              id={`bridge-tab-${option}`}
+              className={platform === option ? 'is-active' : ''}
+              onClick={() => selectPlatform(option)}
+              onKeyDown={(event) => handlePlatformKeyDown(event, option)}
+            >
+              {bridgePlatformGuides[option].label}
+            </button>
+          ))}
+        </div>
+        {bridgePlatforms.map((option) => {
+          const guide = bridgePlatformGuides[option];
+          return (
+            <div
+              key={option}
+              id={`bridge-guide-${option}`}
+              role="tabpanel"
+              aria-labelledby={`bridge-tab-${option}`}
+              className="bridge-platform-panel"
+              hidden={platform !== option}
+            >
+              <p>
+                <strong>Release asset:</strong> <code>{guide.asset}</code>
+              </p>
+              <p>{guide.instructions}</p>
+              <pre>
+                <code>{guide.command}</code>
+              </pre>
+            </div>
+          );
+        })}
+      </div>
+      <p>
+        The bridge prints a loopback URL and a new pairing token every time it starts. Copy both
+        into the converter&apos;s Local FFmpeg Bridge section, then choose <strong>Connect bridge</strong>.
+        Keep the token private and pair again after restarting the bridge.
+      </p>
+      <p>
+        <a
+          className="bridge-guide-link"
+          href="https://github.com/jamesmontemagno/my-file-converter/tree/main/bridge"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Open the bridge security and troubleshooting guide
+        </a>
+      </p>
+    </section>
+  );
+}
+
 function DocsPage() {
   return (
       <LegalLayout
-        eyebrow="Docs"
         title="Documentation"
-        summary={`${APP_NAME} converts images, audio, and video files entirely in your browser. This page explains what formats are supported and how the browser-native conversion technology works.`}
+        summary={`${APP_NAME} converts images, audio, and video on your device. This page explains browser-native formats and the optional Local FFmpeg Bridge.`}
       >
       <section>
         <h2>1. Supported formats</h2>
@@ -1023,9 +1270,9 @@ function DocsPage() {
       <section>
         <h2>2. How conversion works</h2>
         <p>
-          {APP_NAME} uses a browser-native conversion path. The app checks your browser&apos;s
-          capabilities and selected format combination, then either runs a native conversion or
-          reports that the format is unsupported.
+          {APP_NAME} checks the selected format and available local conversion paths. It uses a
+          connected Local FFmpeg Bridge when selected, otherwise it runs a browser-native conversion
+          or reports that the format is unavailable.
         </p>
         <h3>Native browser route</h3>
         <p>
@@ -1038,10 +1285,19 @@ function DocsPage() {
           pipes the stream into the MediaRecorder API, which re-encodes it in the selected format.
           This path works well for WebM output in Chrome and Firefox.
         </p>
+        <h3>Local FFmpeg Bridge route</h3>
+        <p>
+          LocalMorph Bridge is a separately started, lightweight companion that detects an FFmpeg
+          installation on your device. Pair it with the loopback URL and one-time token shown at
+          startup. Selected files are sent only to the authenticated bridge on your device, which
+          runs FFmpeg and returns the output to the browser.
+        </p>
       </section>
 
+      <BridgeInstallGuide />
+
       <section>
-        <h2>3. Conversion route status</h2>
+        <h2>4. Conversion route status</h2>
         <p>
           The converter shows a route indicator before and during conversion so you always know
           which path is active:
@@ -1056,6 +1312,10 @@ function DocsPage() {
             local software encoder running in your browser tab, including extraction from video.
           </li>
           <li>
+            <strong>Local FFmpeg Bridge</strong> — the selected file is converted by FFmpeg through
+            a paired loopback companion on this device.
+          </li>
+          <li>
             <strong>Waiting for input / Unsupported</strong> — conversion cannot run until a
             compatible file and output format are selected.
           </li>
@@ -1067,7 +1327,7 @@ function DocsPage() {
       </section>
 
       <section>
-        <h2>4. Browser requirements</h2>
+        <h2>5. Browser requirements</h2>
         <p>
           {APP_NAME} requires a modern browser released in the last two to three years. The
           following capabilities are used:
@@ -1083,6 +1343,10 @@ function DocsPage() {
             <strong>Blob and URL APIs</strong> — used for generating download links and previewing
             output in the browser.
           </li>
+          <li>
+            <strong>LocalMorph Bridge (optional)</strong> — requires a separately started bridge
+            and an FFmpeg executable on its PATH.
+          </li>
         </ul>
         <p>
           Chrome, Edge, and Firefox provide the broadest format coverage. Safari supports images and
@@ -1091,10 +1355,11 @@ function DocsPage() {
       </section>
 
       <section>
-        <h2>5. Privacy and data flow</h2>
+        <h2>6. Privacy and data flow</h2>
         <p>
-          Files are processed in memory inside your browser tab. They are not sent to any server as
-          part of the conversion workflow.
+          Files are never sent to a managed application server as part of conversion. Browser routes
+          process them in the tab; bridge routes send them only to the paired loopback process on the
+          same device for temporary FFmpeg processing.
         </p>
         <p>
           See the <a href="#/privacy">Privacy Policy</a> for the full data handling disclosure.
@@ -1116,25 +1381,39 @@ export default function App() {
   const [result, setResult] = useState<ConversionResult | null>(null);
   const [downloadUrl, setDownloadUrl] = useState('');
   const [capabilities, setCapabilities] = useState<CapabilityReport | null>(null);
+  const [bridgeConnection, setBridgeConnection] = useState<BridgeConnection | null>(null);
+  const [bridgeHealth, setBridgeHealth] = useState<BridgeHealth | null>(null);
+  const [bridgeState, setBridgeState] = useState<BridgeState>('disconnected');
+  const [bridgeUrl, setBridgeUrl] = useState('');
+  const [bridgeToken, setBridgeToken] = useState('');
+  const [bridgeDetail, setBridgeDetail] = useState('');
+  const [routePreference, setRoutePreference] = useState<'auto' | 'browser'>('auto');
   const [busy, setBusy] = useState(false);
   const [cancelRequested, setCancelRequested] = useState(false);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
-  const [statusSource, setStatusSource] = useState<'native' | 'encoder' | undefined>();
+  const [statusSource, setStatusSource] = useState<'native' | 'encoder' | 'bridge' | undefined>();
   const [lastActivityAt, setLastActivityAt] = useState(() => Date.now());
   const progressRef = useRef(0);
   const activeAbortController = useRef<AbortController | null>(null);
 
   const mediaType: MediaKind = classifyMediaType(file);
   const targetOptions = useMemo(() => targetFormatsFor(mediaType), [mediaType]);
-  const targetOptionsWithSupport = useMemo(
-    () =>
-      targetOptions.map((option) => ({
+  const targetOptionsWithSupport = useMemo(() => {
+    const bridgeTargets = new Set(bridgeHealth?.supportedTargets ?? []);
+    return targetOptions.map((option) => {
+      const browserSupported = isTargetMimeSupported(option.value, capabilities);
+      const bridgeTargetMime = normalizeBridgeTargetMime(option.value);
+      const bridgeSupported =
+        bridgeState === 'available' && bridgeTargetMime !== null && bridgeTargets.has(bridgeTargetMime);
+      return {
         ...option,
-        supported: isTargetMimeSupported(option.value, capabilities),
-      })),
-    [capabilities, targetOptions],
-  );
+        browserSupported,
+        bridgeSupported,
+        supported: browserSupported || (routePreference === 'auto' && bridgeSupported),
+      };
+    });
+  }, [bridgeHealth, bridgeState, capabilities, routePreference, targetOptions]);
   const [targetMime, setTargetMime] = useState('');
   const [outputBaseName, setOutputBaseName] = useState('');
   const [imageWidth, setImageWidth] = useState('');
@@ -1222,7 +1501,8 @@ export default function App() {
     () => targetOptionsWithSupport.find((option) => option.value === targetMime),
     [targetMime, targetOptionsWithSupport],
   );
-  const targetSupported = selectedTargetOption?.supported ?? false;
+  const browserTargetSupported = selectedTargetOption?.browserSupported ?? false;
+  const bridgeTargetSupported = selectedTargetOption?.bridgeSupported ?? false;
   const selectedOptions = useMemo(
     () => describeSelectedOptions(mediaType, requestedOptions),
     [mediaType, requestedOptions],
@@ -1240,9 +1520,20 @@ export default function App() {
         file,
         mediaType,
         targetMime,
-        targetSupported,
+        browserTargetSupported,
+        bridgeTargetSupported,
+        bridgeAvailable: bridgeState === 'available',
+        routePreference,
       }),
-    [file, mediaType, targetMime, targetSupported],
+    [
+      bridgeState,
+      bridgeTargetSupported,
+      browserTargetSupported,
+      file,
+      mediaType,
+      routePreference,
+      targetMime,
+    ],
   );
   const routeDecision = resolvedRoute.decision;
   const recommendedTargetLabel = useMemo(
@@ -1250,7 +1541,7 @@ export default function App() {
     [targetOptionsWithSupport],
   );
   const routeReason = useMemo(() => {
-    if (resolvedRoute.decision === 'blocked' && file && targetMime && !targetSupported) {
+    if (resolvedRoute.decision === 'blocked' && file && targetMime && !browserTargetSupported) {
       if (recommendedTargetLabel) {
         return `This output format is not available in your browser. Try ${recommendedTargetLabel}.`;
       }
@@ -1258,7 +1549,7 @@ export default function App() {
     }
 
     return resolvedRoute.reason;
-  }, [file, recommendedTargetLabel, resolvedRoute, targetMime, targetSupported]);
+  }, [browserTargetSupported, file, recommendedTargetLabel, resolvedRoute, targetMime]);
   const routeSource = resolvedRoute.source;
   const routeDisplayLabel = routeLabel(routeDecision);
 
@@ -1277,15 +1568,19 @@ export default function App() {
       .map((option) => option.label.replace(/\s*\(.*?\)$/, ''));
 
     if (!supportedLabels.length) {
-      return 'No compatible output formats detected for this file type in your browser.';
+      return 'No compatible output formats detected for this file type. Connect LocalMorph Bridge to use local FFmpeg.';
     }
 
     if (isHeicLike) {
       return `Supported outputs: ${supportedLabels.join(', ')}. HEIC/HEIF input is decoded locally before export.`;
     }
 
-    return `Supported outputs: ${supportedLabels.join(', ')}`;
-  }, [file, targetOptionsWithSupport]);
+    const bridgeSuffix =
+      bridgeState === 'available' && routePreference === 'auto'
+        ? ' Local FFmpeg Bridge is connected and preferred.'
+        : '';
+    return `Supported outputs: ${supportedLabels.join(', ')}.${bridgeSuffix}`;
+  }, [bridgeState, file, routePreference, targetOptionsWithSupport]);
   const retryTargetOption = useMemo(
     () =>
       retryTargetFor({
@@ -1400,6 +1695,47 @@ export default function App() {
   function goToSettingsStep() {
     if (!file || busy) return;
     setActiveStep('settings');
+  }
+
+  function clearBridgeConnection() {
+    setBridgeConnection(null);
+    setBridgeHealth(null);
+    setBridgeState('disconnected');
+    setBridgeDetail('');
+  }
+
+  async function connectBridge() {
+    setBridgeState('connecting');
+    setBridgeDetail('');
+
+    try {
+      const connection = normalizeBridgeConnection(bridgeUrl, bridgeToken);
+      const health = await probeBridge(connection);
+      setBridgeConnection(connection);
+      setBridgeHealth(health);
+      setBridgeState('available');
+      setBridgeDetail(
+        `Connected to LocalMorph Bridge ${health.version} with FFmpeg ${health.ffmpeg.version ?? 'available'}.`,
+      );
+      if (file) {
+        markConfigurationChanged('Local FFmpeg Bridge connected. This conversion will use FFmpeg on this device.');
+      }
+    } catch (error) {
+      setBridgeConnection(null);
+      setBridgeHealth(null);
+      setBridgeState(error instanceof BridgeError && error.code === 'ffmpeg-missing' ? 'missing-ffmpeg' : 'error');
+      setBridgeDetail(error instanceof Error ? error.message : 'Could not connect to LocalMorph Bridge.');
+    }
+  }
+
+  function handleBridgeUrlChange(nextBridgeUrl: string) {
+    setBridgeUrl(nextBridgeUrl);
+    if (bridgeConnection) clearBridgeConnection();
+  }
+
+  function handleBridgeTokenChange(nextBridgeToken: string) {
+    setBridgeToken(nextBridgeToken);
+    if (bridgeConnection) clearBridgeConnection();
   }
 
   function startConversionStep() {
@@ -1647,6 +1983,32 @@ export default function App() {
                 onProgress: handleProgress,
                 signal: abortController.signal,
               });
+      } else if (routeDecision === 'bridge') {
+        if (!bridgeConnection) {
+          throw new BridgeError('LocalMorph Bridge is no longer connected. Reconnect it and try again.', 'connection');
+        }
+        const blob = await convertThroughBridge({
+          connection: bridgeConnection,
+          file,
+          targetMime,
+          mediaType,
+          quality,
+          options: requestedOptions,
+          signal: abortController.signal,
+          onProgress: (event) =>
+            handleProgress({
+              progress: event.progress,
+              message: event.message,
+              detail: event.detail,
+              rawOutput: event.rawOutput,
+              source: 'bridge',
+            }),
+        });
+        next = {
+          blob,
+          outputName: '',
+          route: 'local-ffmpeg-bridge',
+        };
       } else if (routeDecision === 'encoder') {
         if (targetMime === 'image/gif') {
           next = await convertImageToGif({
@@ -1780,7 +2142,6 @@ export default function App() {
 
       <section className="workspace-hero">
         <div>
-          <span className="eyebrow">Converter workspace</span>
           <h1>Convert files locally.</h1>
           <p className="hero-text compact">
             Choose a file, compare the route, inspect the size change, and convert.
@@ -1825,6 +2186,11 @@ export default function App() {
             selectedAdjustments={selectedAdjustments}
             routeDisplayLabel={routeDisplayLabel}
             routeReason={routeReason}
+            routePreference={routePreference}
+            bridgeState={bridgeState}
+            bridgeUrl={bridgeUrl}
+            bridgeToken={bridgeToken}
+            bridgeDetail={bridgeDetail}
             canConvert={canConvert}
             onTargetMimeChange={handleTargetMimeChange}
             onOutputBaseNameChange={handleOutputBaseNameChange}
@@ -1835,6 +2201,10 @@ export default function App() {
             onTrimStartChange={setTrimStart}
             onTrimEndChange={setTrimEnd}
             onChannelModeChange={setChannelMode}
+            onRoutePreferenceChange={setRoutePreference}
+            onBridgeUrlChange={handleBridgeUrlChange}
+            onBridgeTokenChange={handleBridgeTokenChange}
+            onConnectBridge={() => void connectBridge()}
             onBack={goBackToUploadStep}
             onConvert={startConversionStep}
           />

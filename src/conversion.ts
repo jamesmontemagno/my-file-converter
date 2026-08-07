@@ -14,7 +14,7 @@ export type ConversionActivity = {
   message: string;
   detail?: string;
   rawOutput?: string;
-  source?: 'native' | 'encoder';
+  source?: 'native' | 'encoder' | 'bridge';
 };
 
 export function createConversionAbortError() {

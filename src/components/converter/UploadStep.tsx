@@ -22,7 +22,10 @@ export function UploadStep({
   return (
     <div className="card wizard-card">
       <h2>1. Choose file</h2>
-      <p className="muted">Pick a local file to begin. Nothing is uploaded to a server.</p>
+      <p className="muted">
+        Pick a local file to begin. Nothing is uploaded to a server; an optional LocalMorph Bridge
+        processes files only on this device.
+      </p>
       <label className="field">
         <span>Input file</span>
         <input

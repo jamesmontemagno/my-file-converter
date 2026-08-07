@@ -8,13 +8,17 @@ type WizardStep = {
 
 export function WizardStepper({ steps }: { steps: WizardStep[] }) {
   return (
-    <section className="wizard-stepper" aria-label="Conversion steps">
+    <ol className="wizard-stepper" aria-label="Conversion steps">
       {steps.map((step) => (
-        <div key={step.id} className={`wizard-step wizard-step-${step.state}`}>
+        <li
+          key={step.id}
+          className={`wizard-step wizard-step-${step.state}`}
+          aria-current={step.state === 'current' ? 'step' : undefined}
+        >
           <span className="step-dot" />
           <span>{step.label}</span>
-        </div>
+        </li>
       ))}
-    </section>
+    </ol>
   );
 }

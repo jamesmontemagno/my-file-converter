@@ -58,6 +58,12 @@ describe('capabilities', () => {
       expect(classifyMediaType(new File(['x'], 'data.bin', { type: 'application/octet-stream' }))).toBe('unknown');
       expect(classifyMediaType(new File(['x'], 'no-type'))).toBe('unknown');
     });
+
+    it('uses familiar media filename extensions when a browser omits the MIME type', () => {
+      expect(classifyMediaType(new File(['x'], 'archive-source.mkv'))).toBe('video');
+      expect(classifyMediaType(new File(['x'], 'lossless.flac'))).toBe('audio');
+      expect(classifyMediaType(new File(['x'], 'camera.heic'))).toBe('image');
+    });
   });
 
   describe('targetFormatsFor', () => {
