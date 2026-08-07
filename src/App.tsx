@@ -32,11 +32,13 @@ import {
   convertThroughBridge,
   normalizeBridgeTargetMime,
   normalizeBridgeConnection,
+  normalizeBridgeProgress,
   probeBridge,
   type BridgeConnection,
   type BridgeHealth,
 } from './bridge/client';
 import { LogoIcon } from './Logo';
+import { BridgeLaunchActions } from './components/BridgeLaunchActions';
 import {
   ConvertingStep,
   ResultsStep,
@@ -1074,39 +1076,32 @@ function TermsPage() {
   );
 }
 
-const BRIDGE_RELEASES_URL = 'https://github.com/jamesmontemagno/my-file-converter/releases/latest';
-
 type BridgePlatform = 'windows' | 'macos' | 'linux';
 
 const bridgePlatformGuides: Record<
   BridgePlatform,
-  { label: string; asset: string; instructions: string; command: string }
+  { label: string; instructions: string; command: string }
 > = {
   windows: {
     label: 'Windows',
-    asset: 'localmorph-bridge-windows-x64.zip',
     instructions:
-      'Extract the ZIP, install FFmpeg with Winget, then open PowerShell in the extracted folder and start the bridge.',
+      'Install FFmpeg with Winget, then use the command above in PowerShell or Windows Terminal.',
     command: `winget install --id Gyan.FFmpeg.Shared -e
-.\\localmorph-bridge.exe`,
+dnx LocalMorph.Bridge`,
   },
   macos: {
     label: 'macOS',
-    asset: 'localmorph-bridge-macos-arm64.tar.gz or localmorph-bridge-macos-x64.tar.gz',
     instructions:
-      'Download the archive matching your Mac, extract it, install FFmpeg with Homebrew, then start the bridge from Terminal.',
+      'Install FFmpeg with Homebrew, then use the command above in Terminal.',
     command: `brew install ffmpeg
-chmod +x localmorph-bridge
-./localmorph-bridge`,
+dnx LocalMorph.Bridge`,
   },
   linux: {
     label: 'Linux',
-    asset: 'localmorph-bridge-linux-x64.tar.gz',
     instructions:
-      'Extract the archive, install your distribution’s FFmpeg package, then start the bridge from a terminal.',
+      'Install your distribution’s FFmpeg package, then use the command above in a terminal.',
     command: `sudo apt install ffmpeg
-chmod +x localmorph-bridge
-./localmorph-bridge`,
+dnx LocalMorph.Bridge`,
   },
 };
 
@@ -1138,16 +1133,11 @@ function BridgeInstallGuide() {
     <section className="bridge-install-guide">
       <h2>3. Install Local FFmpeg Bridge</h2>
       <p>
-        The bridge is optional. Download it from Releases when you need a format the browser cannot
+        The bridge is optional. It runs as a .NET tool when you need a format the browser cannot
         convert well; browser conversion works without any installation.
       </p>
-      <a className="bridge-download-action" href={BRIDGE_RELEASES_URL} target="_blank" rel="noreferrer">
-        Download the latest bridge release
-      </a>
-      <p className="bridge-download-note">
-        Choose the archive for your operating system, then compare its SHA-256 file before opening
-        it. Releases include LocalMorph Bridge only; install FFmpeg separately below.
-      </p>
+      <BridgeLaunchActions />
+      <p className="bridge-download-note">The bridge requires .NET 10 and a separately installed FFmpeg.</p>
       <div className="bridge-platform-tabs">
         <div role="tablist" aria-label="Bridge setup operating system">
           {bridgePlatforms.map((option) => (
@@ -1178,9 +1168,6 @@ function BridgeInstallGuide() {
               className="bridge-platform-panel"
               hidden={platform !== option}
             >
-              <p>
-                <strong>Release asset:</strong> <code>{guide.asset}</code>
-              </p>
               <p>{guide.instructions}</p>
               <pre>
                 <code>{guide.command}</code>
@@ -1197,11 +1184,11 @@ function BridgeInstallGuide() {
       <p>
         <a
           className="bridge-guide-link"
-          href="https://github.com/jamesmontemagno/my-file-converter/tree/main/bridge"
+          href="https://www.nuget.org/packages/LocalMorph.Bridge"
           target="_blank"
           rel="noreferrer"
         >
-          Open the bridge security and troubleshooting guide
+          Open the LocalMorph Bridge package
         </a>
       </p>
     </section>
@@ -2006,7 +1993,7 @@ export default function App() {
           signal: abortController.signal,
           onProgress: (event) =>
             handleProgress({
-              progress: event.progress,
+              progress: normalizeBridgeProgress(event.progress),
               message: event.message,
               detail: event.detail,
               rawOutput: event.rawOutput,

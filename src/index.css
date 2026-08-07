@@ -2210,6 +2210,23 @@ pre {
   gap: 0.85rem;
 }
 
+.page .bridge-launch-actions {
+  display: grid;
+  gap: 0.7rem;
+  justify-items: start;
+}
+
+.page .bridge-launch-actions pre {
+  width: 100%;
+}
+
+.page .bridge-launch-note {
+  max-width: 65ch;
+  margin: 0;
+  color: var(--lm-text-muted);
+  font-size: 0.92rem;
+}
+
 .page .bridge-install-guide > p {
   margin-bottom: 0;
 }

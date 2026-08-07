@@ -41,6 +41,10 @@ export class BridgeError extends Error {
   }
 }
 
+export function normalizeBridgeProgress(progress: number) {
+  return Math.max(0, Math.min(1, progress / 100));
+}
+
 const bridgeExtensions: Record<BridgeTargetMime, string> = {
   'video/mp4': 'mp4',
   'video/quicktime': 'mov',

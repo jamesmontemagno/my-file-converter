@@ -1,3 +1,5 @@
+import { BridgeLaunchActions } from '../BridgeLaunchActions';
+
 type FormatOption = {
   value: string;
   label: string;
@@ -473,16 +475,9 @@ export function SettingsStep({
           {bridgeState === 'connecting' ? 'Checking bridge…' : 'Connect bridge'}
         </button>
         <div className="bridge-setup-actions">
-          <a
-            className="bridge-download-link"
-            href="https://github.com/jamesmontemagno/my-file-converter/releases/latest"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Download LocalMorph Bridge
-          </a>
+          <BridgeLaunchActions />
           <a className="bridge-setup-link" href="#/docs">
-            View Windows, macOS, and Linux setup
+            View bridge setup
           </a>
         </div>
         {bridgeDetail ? (
