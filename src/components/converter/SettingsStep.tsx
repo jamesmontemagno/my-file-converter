@@ -451,7 +451,8 @@ export function SettingsStep({
         </div>
       </fieldset>
 
-      <div className="bridge-setup-card">
+      {routePreference === 'auto' ? (
+        <div className="bridge-setup-card">
         <div>
           <span className="meta-label">Local FFmpeg Bridge</span>
           <strong>
@@ -528,7 +529,8 @@ export function SettingsStep({
             package manager.
           </p>
         ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <div className="card route-summary-card">
         <p className="muted">
