@@ -26,6 +26,13 @@ export function BridgeLaunchActions() {
           ? 'Copy was blocked. Select the command below and paste it into your terminal.'
           : 'Run this command in a terminal to start the bridge.'}
       </p>
+      <p className="bridge-launch-note">
+        Requires the{' '}
+        <a href="https://dotnet.microsoft.com/download/dotnet/10.0" target="_blank" rel="noreferrer">
+          .NET 10 SDK
+        </a>{' '}
+        and FFmpeg.
+      </p>
       <pre>
         <code>{bridgeLaunchCommand}</code>
       </pre>

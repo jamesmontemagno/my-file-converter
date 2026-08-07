@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { BridgeError, parseBridgeStartupLine } from '../../bridge/client';
 import { BridgeLaunchActions } from '../BridgeLaunchActions';
 
 type FormatOption = {
@@ -225,6 +227,26 @@ export function SettingsStep({
 }: SettingsStepProps) {
   const selectedOption = targetOptions.find((option) => option.value === targetMime);
   const guidance = guidanceForFormat(targetMime, mediaType);
+  const [startupLine, setStartupLine] = useState('');
+  const [startupLineDetail, setStartupLineDetail] = useState('');
+
+  function handleStartupLineChange(value: string) {
+    setStartupLine(value);
+    if (!value.trim()) {
+      setStartupLineDetail('');
+      return;
+    }
+
+    try {
+      const connection = parseBridgeStartupLine(value);
+      onBridgeUrlChange(connection.baseUrl);
+      onBridgeTokenChange(connection.token);
+      setStartupLine('');
+      setStartupLineDetail('Bridge URL and pairing token filled in. Select Connect bridge.');
+    } catch (error) {
+      setStartupLineDetail(error instanceof BridgeError ? error.message : 'Could not read the bridge startup line.');
+    }
+  }
 
   return (
     <div className="card wizard-card">
@@ -443,9 +465,23 @@ export function SettingsStep({
           </strong>
         </div>
         <p className="muted">
-          Start the lightweight LocalMorph Bridge, then copy its loopback URL and one-time pairing token.
-          Files stay on this device and are sent only to the running bridge.
+          Start the lightweight LocalMorph Bridge, then paste its complete <code>LOCALMORPH_BRIDGE=...</code>
+          line below. Files stay on this device and are sent only to the running bridge.
         </p>
+        <label className="field">
+          <span>Bridge startup line</span>
+          <input
+            type="text"
+            value={startupLine}
+            placeholder={'LOCALMORPH_BRIDGE={"baseUrl":"http://127.0.0.1:49321","token":"..."}'}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={bridgeState === 'connecting'}
+            onChange={(event) => handleStartupLineChange(event.target.value)}
+          />
+          <small aria-live="polite">{startupLineDetail || 'Copy and paste the entire line printed by the tool.'}</small>
+        </label>
+        <p className="muted">Or enter the values manually:</p>
         <label className="field">
           <span>Bridge URL</span>
           <input

@@ -1085,22 +1085,25 @@ const bridgePlatformGuides: Record<
   windows: {
     label: 'Windows',
     instructions:
-      'Install FFmpeg with Winget, then use the command above in PowerShell or Windows Terminal.',
-    command: `winget install --id Gyan.FFmpeg.Shared -e
+      'Install the .NET 10 SDK and FFmpeg with Winget, then start the bridge in PowerShell or Windows Terminal.',
+    command: `winget install --id Microsoft.DotNet.SDK.10 -e
+winget install --id Gyan.FFmpeg.Shared -e
 dnx LocalMorph.Bridge`,
   },
   macos: {
     label: 'macOS',
     instructions:
-      'Install FFmpeg with Homebrew, then use the command above in Terminal.',
-    command: `brew install ffmpeg
+      'Install the .NET SDK and FFmpeg with Homebrew, verify the SDK reports version 10, then start the bridge.',
+    command: `brew install --cask dotnet-sdk
+brew install ffmpeg
+dotnet --version
 dnx LocalMorph.Bridge`,
   },
   linux: {
     label: 'Linux',
     instructions:
-      'Install your distribution’s FFmpeg package, then use the command above in a terminal.',
-    command: `sudo apt install ffmpeg
+      'Install the .NET 10 SDK and FFmpeg packages for your distribution, then start the bridge.',
+    command: `sudo apt install dotnet-sdk-10.0 ffmpeg
 dnx LocalMorph.Bridge`,
   },
 };
@@ -1137,7 +1140,16 @@ function BridgeInstallGuide() {
         convert well; browser conversion works without any installation.
       </p>
       <BridgeLaunchActions />
-      <p className="bridge-download-note">The bridge requires .NET 10 and a separately installed FFmpeg.</p>
+      <p className="bridge-download-note">
+        <a href="https://dotnet.microsoft.com/download/dotnet/10.0" target="_blank" rel="noreferrer">
+          Download the .NET 10 SDK
+        </a>{' '}
+        or use the platform commands below. Linux package availability depends on your distribution; see the{' '}
+        <a href="https://learn.microsoft.com/dotnet/core/install/linux" target="_blank" rel="noreferrer">
+          official Linux installation guide
+        </a>
+        .
+      </p>
       <div className="bridge-platform-tabs">
         <div role="tablist" aria-label="Bridge setup operating system">
           {bridgePlatforms.map((option) => (
@@ -1177,9 +1189,9 @@ function BridgeInstallGuide() {
         })}
       </div>
       <p>
-        The bridge prints a loopback URL and a new pairing token every time it starts. Copy both
-        into the converter&apos;s Local FFmpeg Bridge section, then choose <strong>Connect bridge</strong>.
-        Keep the token private and pair again after restarting the bridge.
+        The bridge prints a new <code>LOCALMORPH_BRIDGE=...</code> line every time it starts. Paste
+        that complete line into the converter&apos;s Bridge startup line field, then choose{' '}
+        <strong>Connect bridge</strong>. Keep the token private and pair again after restarting the bridge.
       </p>
       <p>
         <a
