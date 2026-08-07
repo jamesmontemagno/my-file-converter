@@ -36,13 +36,26 @@ npm run build
 
 ## Optional LocalMorph Bridge
 
-For conversions that need FFmpeg, install FFmpeg separately and make `ffmpeg`
-available on `PATH`, then explicitly start the lightweight LocalMorph Bridge on
-the same Windows, macOS, or Linux device. The hosted PWA cannot launch local
-programs. Copy the per-launch loopback URL and pairing token printed by the
-bridge into the converter settings. See [`bridge/README.md`](bridge/README.md)
-for source builds, FFmpeg setup, and release-download/checksum/signature
-verification guidance. The bridge package and releases do not redistribute
+For conversions that need FFmpeg, install .NET 10 and FFmpeg separately, then
+run the lightweight LocalMorph Bridge on the same Windows, macOS, or Linux
+device:
+
+```bash
+dnx LocalMorph.Bridge
+```
+
+Alternatively, install it permanently with:
+
+```bash
+dotnet tool install --global LocalMorph.Bridge
+localmorph-bridge
+```
+
+The website can copy the command with one click. Browsers cannot execute local
+terminal commands directly, including through Windows Terminal, without a
+separately installed protocol handler. Paste the copied command into your
+terminal, then copy the per-launch loopback URL and pairing token printed by the
+bridge into the converter settings. The bridge package does not redistribute
 FFmpeg.
 
 ## Deployment

@@ -3,12 +3,12 @@ name: Bridge CI
 on:
   push:
     paths:
-      - 'bridge/**'
+      - 'dotnet/**'
       - 'README.md'
       - '.github/workflows/bridge-ci.yml'
   pull_request:
     paths:
-      - 'bridge/**'
+      - 'dotnet/**'
       - 'README.md'
       - '.github/workflows/bridge-ci.yml'
 
@@ -22,13 +22,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-    defaults:
-      run:
-        working-directory: bridge
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-dotnet@v4
         with:
-          components: rustfmt
-      - run: cargo fmt --check
-      - run: cargo test --locked
+          dotnet-version: 10.0.x
+      - run: dotnet test dotnet/LocalMorph.Bridge.sln --configuration Release
+      - run: dotnet pack dotnet/src/LocalMorph.Bridge/LocalMorph.Bridge.csproj --configuration Release --no-build

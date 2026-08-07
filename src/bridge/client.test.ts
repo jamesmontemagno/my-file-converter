@@ -3,10 +3,20 @@ import { describe, expect, it } from 'vitest';
 import {
   BridgeError,
   normalizeBridgeConnection,
+  normalizeBridgeProgress,
   normalizeBridgeQuality,
   normalizeBridgeRequest,
   normalizeBridgeTargetMime,
 } from './client';
+
+describe('normalizeBridgeProgress', () => {
+  it('maps the bridge percentage contract to application progress', () => {
+    expect(normalizeBridgeProgress(0)).toBe(0);
+    expect(normalizeBridgeProgress(50)).toBe(0.5);
+    expect(normalizeBridgeProgress(100)).toBe(1);
+    expect(normalizeBridgeProgress(120)).toBe(1);
+  });
+});
 
 const defaultOptions = {
   outputBaseName: '',
