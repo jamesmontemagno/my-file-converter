@@ -1,5 +1,9 @@
 export type MediaKind = 'image' | 'audio' | 'video' | 'unknown';
 
+const IMAGE_EXTENSIONS = new Set(['avif', 'bmp', 'gif', 'heic', 'heif', 'jpeg', 'jpg', 'png', 'tif', 'tiff', 'webp']);
+const AUDIO_EXTENSIONS = new Set(['aac', 'aiff', 'alac', 'flac', 'm4a', 'mp3', 'ogg', 'opus', 'wav', 'wma']);
+const VIDEO_EXTENSIONS = new Set(['3gp', 'avi', 'flv', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ts', 'webm', 'wmv']);
+
 export type CapabilityReport = {
   mediaRecorder: boolean;
   mp3Encoder: boolean;
@@ -69,10 +73,16 @@ export function detectCapabilities(): CapabilityReport {
 }
 
 export function classifyMediaType(file: File | null | undefined): MediaKind {
-  if (!file?.type) return 'unknown';
+  if (!file) return 'unknown';
   if (file.type.startsWith('image/')) return 'image';
   if (file.type.startsWith('audio/')) return 'audio';
   if (file.type.startsWith('video/')) return 'video';
+
+  const extension = file.name.toLowerCase().split('.').pop();
+  if (extension && IMAGE_EXTENSIONS.has(extension)) return 'image';
+  if (extension && AUDIO_EXTENSIONS.has(extension)) return 'audio';
+  if (extension && VIDEO_EXTENSIONS.has(extension)) return 'video';
+
   return 'unknown';
 }
 

@@ -1,0 +1,101 @@
+name: Publish LocalMorph Bridge
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create or update, for example v0.1.0
+        required: true
+        type: string
+      prerelease:
+        description: Mark this release as a prerelease
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Package ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            asset: localmorph-bridge-windows-x64.zip
+          - name: macOS Intel
+            os: macos-15-intel
+            asset: localmorph-bridge-macos-x64.tar.gz
+          - name: macOS Apple Silicon
+            os: macos-14
+            asset: localmorph-bridge-macos-arm64.tar.gz
+          - name: Linux x64
+            os: ubuntu-latest
+            asset: localmorph-bridge-linux-x64.tar.gz
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build bridge
+        working-directory: bridge
+        run: cargo build --release --locked
+      - name: Package Windows asset
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          ASSET: ${{ matrix.asset }}
+        run: |
+          New-Item -ItemType Directory -Force -Path bridge\release\localmorph-bridge | Out-Null
+          Copy-Item bridge\target\release\localmorph-bridge.exe bridge\release\localmorph-bridge\
+          Copy-Item bridge\README.md bridge\release\localmorph-bridge\
+          Copy-Item LICENSE bridge\release\localmorph-bridge\
+          Compress-Archive -Path bridge\release\localmorph-bridge\* -DestinationPath bridge\release\$env:ASSET
+          $hash = (Get-FileHash bridge\release\$env:ASSET -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $env:ASSET" | Set-Content bridge\release\$env:ASSET.sha256 -NoNewline
+      - name: Package macOS or Linux asset
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          ASSET: ${{ matrix.asset }}
+        run: |
+          mkdir -p bridge/release/localmorph-bridge
+          cp bridge/target/release/localmorph-bridge bridge/release/localmorph-bridge/
+          cp bridge/README.md bridge/release/localmorph-bridge/
+          cp LICENSE bridge/release/localmorph-bridge/
+          tar -C bridge/release -czf "bridge/release/$ASSET" localmorph-bridge
+          shasum -a 256 "bridge/release/$ASSET" > "bridge/release/$ASSET.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: |
+            bridge/release/*.zip
+            bridge/release/*.tar.gz
+            bridge/release/*.sha256
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            args=(--title "LocalMorph Bridge $TAG" --generate-notes)
+            if [ "$PRERELEASE" = "true" ]; then
+              args+=(--prerelease)
+            fi
+            gh release create "$TAG" "${args[@]}"
+          fi
+          find release-assets -type f -print0 | xargs -0 gh release upload "$TAG" --clobber

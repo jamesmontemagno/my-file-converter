@@ -1,0 +1,34 @@
+name: Bridge CI
+
+on:
+  push:
+    paths:
+      - 'bridge/**'
+      - 'README.md'
+      - '.github/workflows/bridge-ci.yml'
+  pull_request:
+    paths:
+      - 'bridge/**'
+      - 'README.md'
+      - '.github/workflows/bridge-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: bridge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --check
+      - run: cargo test --locked

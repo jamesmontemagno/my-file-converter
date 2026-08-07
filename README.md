@@ -9,7 +9,7 @@ A React + TypeScript + Vite client-side file converter for GitHub Pages.
 - React 19
 - TypeScript
 - Vite
-- Native browser conversion paths only
+- Browser-native conversion paths with an optional local FFmpeg bridge
 
 ## Features
 
@@ -18,6 +18,7 @@ A React + TypeScript + Vite client-side file converter for GitHub Pages.
 - Built-in Privacy Policy and Terms of Use pages for static deployments
 - Image conversion via Canvas export
 - Audio/video conversion via `MediaRecorder` when supported by the browser
+- Optional LocalMorph Bridge integration for FFmpeg conversion on the same device
 - GitHub Pages deployment workflow
 
 ## Local development
@@ -32,6 +33,17 @@ npm run dev
 ```bash
 npm run build
 ```
+
+## Optional LocalMorph Bridge
+
+For conversions that need FFmpeg, install FFmpeg separately and make `ffmpeg`
+available on `PATH`, then explicitly start the lightweight LocalMorph Bridge on
+the same Windows, macOS, or Linux device. The hosted PWA cannot launch local
+programs. Copy the per-launch loopback URL and pairing token printed by the
+bridge into the converter settings. See [`bridge/README.md`](bridge/README.md)
+for source builds, FFmpeg setup, and release-download/checksum/signature
+verification guidance. The bridge package and releases do not redistribute
+FFmpeg.
 
 ## Deployment
 
@@ -65,13 +77,19 @@ pages so they work on static hosting without additional server routes.
 1. Run `npm run dev` and verify the app loads.
 2. Convert PNG/JPEG/WebP image through the native route.
 3. Convert a small audio/video file where `MediaRecorder` support is reported.
-4. Try an unsupported output and confirm the app reports it as unsupported.
-5. Run the deployed site in Chromium, Firefox, and Safari.
+4. Start LocalMorph Bridge with FFmpeg on `PATH`, pair it in the converter settings, and verify
+   that the Local FFmpeg Bridge route completes.
+5. Try an unsupported output with browser-only mode and confirm the app reports it as unsupported.
+6. Run the deployed site in Chromium, Firefox, and Safari.
 
 ## Known constraints
 
 - MediaRecorder-based audio/video conversion remains browser-dependent.
 - Native encoding support varies by browser and installed codecs.
-- Trim controls are unavailable in native-only mode.
+- Local FFmpeg Bridge is an optional, separately started companion. It requires FFmpeg to be
+  installed and available on the bridge process's `PATH`.
+- The bridge uses a per-launch URL/token pair and loopback connection. Files are sent only to that
+  running process on the same device, never to a managed application server; the bridge retains
+  completed, failed, and canceled job files for up to one hour before cleanup.
 - The included privacy and terms copy is product-facing starter content and should be reviewed
   before production/legal use.

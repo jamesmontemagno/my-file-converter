@@ -4,6 +4,8 @@ type FormatOption = {
   supported: boolean;
 };
 
+type BridgeState = 'disconnected' | 'connecting' | 'available' | 'missing-ffmpeg' | 'error';
+
 function guidanceForFormat(targetMime: string, mediaType: string) {
   if (mediaType === 'image') {
     if (targetMime === 'image/png') {
@@ -155,6 +157,11 @@ type SettingsStepProps = {
   selectedAdjustments: string[];
   routeDisplayLabel: string;
   routeReason: string;
+  routePreference: 'auto' | 'browser';
+  bridgeState: BridgeState;
+  bridgeUrl: string;
+  bridgeToken: string;
+  bridgeDetail: string;
   canConvert: boolean;
   onTargetMimeChange: (value: string) => void;
   onOutputBaseNameChange: (value: string) => void;
@@ -165,6 +172,10 @@ type SettingsStepProps = {
   onTrimStartChange: (value: string) => void;
   onTrimEndChange: (value: string) => void;
   onChannelModeChange: (value: string) => void;
+  onRoutePreferenceChange: (value: 'auto' | 'browser') => void;
+  onBridgeUrlChange: (value: string) => void;
+  onBridgeTokenChange: (value: string) => void;
+  onConnectBridge: () => void;
   onBack: () => void;
   onConvert: () => void;
 };
@@ -188,6 +199,11 @@ export function SettingsStep({
   selectedAdjustments,
   routeDisplayLabel,
   routeReason,
+  routePreference,
+  bridgeState,
+  bridgeUrl,
+  bridgeToken,
+  bridgeDetail,
   canConvert,
   onTargetMimeChange,
   onOutputBaseNameChange,
@@ -198,6 +214,10 @@ export function SettingsStep({
   onTrimStartChange,
   onTrimEndChange,
   onChannelModeChange,
+  onRoutePreferenceChange,
+  onBridgeUrlChange,
+  onBridgeTokenChange,
+  onConnectBridge,
   onBack,
   onConvert,
 }: SettingsStepProps) {
@@ -221,12 +241,12 @@ export function SettingsStep({
         >
           {targetOptions.map((option) => (
             <option key={option.value} value={option.value} disabled={!option.supported}>
-              {option.label}{option.supported ? '' : ' (Unsupported in this browser)'}
+              {option.label}{option.supported ? '' : ' (Unavailable with the current route)'}
             </option>
           ))}
         </select>
         {selectedOption && !selectedOption.supported ? (
-          <p className="form-error">This format is not supported in your current browser.</p>
+          <p className="form-error">This format is unavailable with the selected conversion route.</p>
         ) : null}
       </label>
 
@@ -369,6 +389,114 @@ export function SettingsStep({
         ) : (
           <p className="muted">No extra adjustments selected yet.</p>
         )}
+      </div>
+
+      <fieldset className="route-preference-field" disabled={busy}>
+        <legend>Conversion engine</legend>
+        <div className="route-preference-options">
+          <label className={`route-preference-option ${routePreference === 'auto' ? 'is-selected' : ''}`}>
+            <input
+              type="radio"
+              name="route-preference"
+              value="auto"
+              checked={routePreference === 'auto'}
+              onChange={() => onRoutePreferenceChange('auto')}
+            />
+            <span>
+              <strong>Prefer Local FFmpeg Bridge</strong>
+              <small>
+                {bridgeState === 'available'
+                  ? 'Connected. Supported conversions use FFmpeg on this device.'
+                  : 'Connect a running bridge below, otherwise browser conversion stays selected.'}
+              </small>
+            </span>
+          </label>
+          <label className={`route-preference-option ${routePreference === 'browser' ? 'is-selected' : ''}`}>
+            <input
+              type="radio"
+              name="route-preference"
+              value="browser"
+              checked={routePreference === 'browser'}
+              onChange={() => onRoutePreferenceChange('browser')}
+            />
+            <span>
+              <strong>Browser only</strong>
+              <small>Use the current browser-native and software conversion paths.</small>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div className="bridge-setup-card">
+        <div>
+          <span className="meta-label">Local FFmpeg Bridge</span>
+          <strong>
+            {bridgeState === 'available'
+              ? 'Connected'
+              : bridgeState === 'connecting'
+                ? 'Connecting…'
+                : bridgeState === 'missing-ffmpeg'
+                  ? 'FFmpeg missing'
+                  : 'Not connected'}
+          </strong>
+        </div>
+        <p className="muted">
+          Start the lightweight LocalMorph Bridge, then copy its loopback URL and one-time pairing token.
+          Files stay on this device and are sent only to the running bridge.
+        </p>
+        <label className="field">
+          <span>Bridge URL</span>
+          <input
+            type="url"
+            value={bridgeUrl}
+            placeholder="http://127.0.0.1:49321"
+            disabled={bridgeState === 'connecting'}
+            onChange={(event) => onBridgeUrlChange(event.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>Pairing token</span>
+          <input
+            type="text"
+            value={bridgeToken}
+            placeholder="Shown when the bridge starts"
+            disabled={bridgeState === 'connecting'}
+            onChange={(event) => onBridgeTokenChange(event.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={onConnectBridge}
+          disabled={bridgeState === 'connecting'}
+        >
+          {bridgeState === 'connecting' ? 'Checking bridge…' : 'Connect bridge'}
+        </button>
+        <div className="bridge-setup-actions">
+          <a
+            className="bridge-download-link"
+            href="https://github.com/jamesmontemagno/my-file-converter/releases/latest"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Download LocalMorph Bridge
+          </a>
+          <a className="bridge-setup-link" href="#/docs">
+            View Windows, macOS, and Linux setup
+          </a>
+        </div>
+        {bridgeDetail ? (
+          <p className={bridgeState === 'error' || bridgeState === 'missing-ffmpeg' ? 'form-error' : 'muted'}>
+            {bridgeDetail}
+          </p>
+        ) : null}
+        {bridgeState === 'missing-ffmpeg' ? (
+          <p className="muted">
+            Install FFmpeg, make it available on your PATH, then restart LocalMorph Bridge. On Windows,
+            use a trusted FFmpeg distribution; on macOS use Homebrew; on Linux use your distribution&apos;s
+            package manager.
+          </p>
+        ) : null}
       </div>
 
       <div className="card route-summary-card">

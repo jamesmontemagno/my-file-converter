@@ -75,7 +75,7 @@ export function ResultsStep({
             </a>
             {canTryDifferentFormat ? (
               <button type="button" className="ghost-button" onClick={onTryDifferentFormat}>
-                Try {retryTargetLabel}
+                Convert to {retryTargetLabel} instead
               </button>
             ) : null}
             <button type="button" className="ghost-button" onClick={onRestart}>
