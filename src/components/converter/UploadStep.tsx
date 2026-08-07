@@ -23,8 +23,8 @@ export function UploadStep({
     <div className="card wizard-card">
       <h2>1. Choose file</h2>
       <p className="muted">
-        Pick a local file to begin. Nothing is uploaded to a server; an optional LocalMorph Bridge
-        processes files only on this device.
+        Pick a local file to begin. Nothing is uploaded to a managed application server. If you opt
+        in to LocalMorph Bridge, the file is sent only to the paired loopback service on this device.
       </p>
       <label className="field">
         <span>Input file</span>

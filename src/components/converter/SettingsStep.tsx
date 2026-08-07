@@ -450,6 +450,7 @@ export function SettingsStep({
             type="url"
             value={bridgeUrl}
             placeholder="http://127.0.0.1:49321"
+            disabled={bridgeState === 'connecting'}
             onChange={(event) => onBridgeUrlChange(event.target.value)}
           />
         </label>
@@ -459,6 +460,7 @@ export function SettingsStep({
             type="text"
             value={bridgeToken}
             placeholder="Shown when the bridge starts"
+            disabled={bridgeState === 'connecting'}
             onChange={(event) => onBridgeTokenChange(event.target.value)}
           />
         </label>

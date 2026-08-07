@@ -46,6 +46,7 @@ pub struct AppState {
     pub config: Arc<BridgeConfig>,
     pub ffmpeg: Option<FfmpegBinary>,
     pub jobs: Arc<JobStore>,
+    pub job_root: PathBuf,
 }
 
 pub fn router(state: AppState) -> Router {
@@ -89,7 +90,11 @@ async fn auth_and_origin(
         .and_then(|value| value.to_str().ok())
         != Some(expected.as_str())
     {
-        return api_error(StatusCode::UNAUTHORIZED, "missing or invalid bearer token");
+        return cors_api_error(
+            StatusCode::UNAUTHORIZED,
+            "missing or invalid bearer token",
+            &origin,
+        );
     }
     let mut response = next.run(request).await;
     add_cors_headers(response.headers_mut(), &origin, false);
@@ -136,6 +141,12 @@ fn api_error(status: StatusCode, message: &'static str) -> Response {
     (status, Json(ErrorBody { error: message })).into_response()
 }
 
+fn cors_api_error(status: StatusCode, message: &'static str, origin: &str) -> Response {
+    let mut response = api_error(status, message);
+    add_cors_headers(response.headers_mut(), origin, false);
+    response
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Health {
@@ -180,7 +191,7 @@ async fn create_job(State(state): State<AppState>, mut multipart: Multipart) -> 
         );
     };
     let id = Uuid::new_v4();
-    let directory = job_directory(id);
+    let directory = job_directory(&state.job_root, id);
     let input = directory.join("input");
     let mut cleanup = JobDirectoryGuard::new(directory.clone());
     let (request, uploaded) = match collect_multipart(&mut multipart, &directory, &input).await {
@@ -417,11 +428,11 @@ async fn download_output(State(state): State<AppState>, AxumPath(id): AxumPath<U
     }
 }
 
-fn job_directory(id: Uuid) -> PathBuf {
-    job_root().join(id.to_string())
+fn job_directory(root: &Path, id: Uuid) -> PathBuf {
+    root.join(id.to_string())
 }
 
-fn job_root() -> PathBuf {
+pub fn new_job_root() -> PathBuf {
     #[cfg(windows)]
     let root = std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
@@ -430,11 +441,13 @@ fn job_root() -> PathBuf {
     let root = std::env::var_os("HOME")
         .map(|home| PathBuf::from(home).join(".local").join("share"))
         .unwrap_or_else(|| PathBuf::from("."));
-    root.join("LocalMorphBridge").join("jobs")
+    root.join("LocalMorphBridge")
+        .join("jobs")
+        .join(Uuid::new_v4().to_string())
 }
 
-pub async fn cleanup_orphaned_job_directories() -> io::Result<()> {
-    match tokio::fs::remove_dir_all(job_root()).await {
+pub async fn cleanup_job_root(root: &Path) -> io::Result<()> {
+    match tokio::fs::remove_dir_all(root).await {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error),
@@ -451,6 +464,7 @@ fn spawn_job(
     cancellation: Arc<tokio::sync::Notify>,
 ) {
     tokio::spawn(async move {
+        let duration_us = probe_duration_us(&ffmpeg, &input, &request).await;
         jobs.transition(id, JobStatus::Running, Some(0), None).await;
         if !matches!(
             jobs.view(id).await.map(|job| job.status),
@@ -476,7 +490,7 @@ fn spawn_job(
         let stderr = child.stderr.take();
         let progress_task = stdout.map(|stdout| {
             let jobs = jobs.clone();
-            tokio::spawn(read_progress(stdout, jobs, id))
+            tokio::spawn(read_progress(stdout, jobs, id, duration_us))
         });
         let stderr_task = stderr.map(|stderr| tokio::spawn(read_stderr(stderr)));
         let cancel = cancellation.notified();
@@ -521,14 +535,79 @@ fn spawn_job(
     });
 }
 
-async fn read_progress(stdout: impl AsyncRead + Unpin, jobs: Arc<JobStore>, id: Uuid) {
-    let mut parser = ProgressParser::new(None);
+async fn read_progress(
+    stdout: impl AsyncRead + Unpin,
+    jobs: Arc<JobStore>,
+    id: Uuid,
+    duration_us: Option<u64>,
+) {
+    let mut parser = ProgressParser::new(duration_us);
     let mut lines = BufReader::new(stdout).lines();
     while let Ok(Some(line)) = lines.next_line().await {
         if let Some(update) = parser.consume(&line) {
             jobs.progress(id, update.percent).await;
         }
     }
+}
+
+async fn probe_duration_us(
+    ffmpeg: &Path,
+    input: &Path,
+    request: &ConversionRequest,
+) -> Option<u64> {
+    let ffprobe = ffmpeg.with_file_name(if cfg!(windows) {
+        "ffprobe.exe"
+    } else {
+        "ffprobe"
+    });
+    let output = tokio::time::timeout(
+        Duration::from_secs(5),
+        Command::new(ffprobe)
+            .args([
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+            ])
+            .arg(input)
+            .output(),
+    )
+    .await
+    .ok()?
+    .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let seconds = String::from_utf8(output.stdout)
+        .ok()?
+        .trim()
+        .parse::<f64>()
+        .ok()?;
+    if !seconds.is_finite() || seconds <= 0.0 {
+        return None;
+    }
+    let input_duration_us = (seconds * 1_000_000.0) as u64;
+    effective_duration_us(input_duration_us, request)
+}
+
+fn effective_duration_us(input_duration_us: u64, request: &ConversionRequest) -> Option<u64> {
+    let trim_start_us = seconds_to_us(request.media.trim_start.unwrap_or(0.0));
+    let available_duration_us = input_duration_us.saturating_sub(trim_start_us);
+    let effective_duration_us = request
+        .media
+        .trim_end
+        .map(|trim_end| {
+            available_duration_us.min(seconds_to_us(trim_end).saturating_sub(trim_start_us))
+        })
+        .unwrap_or(available_duration_us);
+    (effective_duration_us > 0).then_some(effective_duration_us)
+}
+
+fn seconds_to_us(seconds: f64) -> u64 {
+    (seconds * 1_000_000.0).max(0.0) as u64
 }
 
 async fn read_stderr(stderr: impl AsyncRead + Unpin) -> String {
@@ -569,6 +648,7 @@ mod tests {
             config: Arc::new(BridgeConfig::new(0, "secret".to_owned())),
             ffmpeg: None,
             jobs: Arc::new(JobStore::new()),
+            job_root: PathBuf::from("unused-jobs"),
         }
     }
 
@@ -620,6 +700,25 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn returns_cors_headers_for_an_invalid_token_from_an_allowed_origin() {
+        let response = router(test_state())
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/health")
+                    .header(header::ORIGIN, "http://localhost:5173")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            response.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN),
+            Some(&HeaderValue::from_static("http://localhost:5173"))
+        );
     }
 
     #[tokio::test]

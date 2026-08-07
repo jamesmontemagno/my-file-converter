@@ -505,7 +505,7 @@ a:hover {
 }
 
 :focus-visible {
-  outline: 3px solid var(--lm-lime);
+  outline: 3px solid var(--lm-blue-deep);
   outline-offset: 3px;
 }
 
@@ -1865,7 +1865,7 @@ pre {
 .page input[type='number']:focus,
 .page input[type='url']:focus,
 .page select:focus {
-  outline: 3px solid var(--lm-lime);
+  outline: 3px solid var(--lm-blue-deep);
   outline-offset: 2px;
   border-color: var(--lm-ink);
 }

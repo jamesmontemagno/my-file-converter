@@ -38,7 +38,7 @@ pub struct JobRecord {
     pub directory: PathBuf,
     pub output: PathBuf,
     pub output_name: String,
-    pub created_at: SystemTime,
+    pub terminal_at: Option<SystemTime>,
     pub events: broadcast::Sender<JobView>,
     pub cancellation: Arc<Notify>,
 }
@@ -77,7 +77,7 @@ impl JobStore {
                 directory,
                 output,
                 output_name,
-                created_at: SystemTime::now(),
+                terminal_at: None,
                 events,
                 cancellation: cancellation.clone(),
             },
@@ -119,6 +119,7 @@ impl JobStore {
         if !job.view.status.is_terminal() {
             if job.view.status == JobStatus::Queued {
                 job.view.status = JobStatus::Canceled;
+                job.terminal_at = Some(SystemTime::now());
                 job.events.send(job.view.clone()).ok();
             }
             // There is one worker per job. `notify_one` retains a permit when
@@ -141,6 +142,9 @@ impl JobStore {
                 job.view.status = status;
                 job.view.progress_percent = progress_percent.or(job.view.progress_percent);
                 job.view.error = error;
+                if status.is_terminal() {
+                    job.terminal_at = Some(SystemTime::now());
+                }
                 job.events.send(job.view.clone()).ok();
             }
         }
@@ -161,7 +165,10 @@ impl JobStore {
         let expired: Vec<_> = jobs
             .iter()
             .filter(|(_, job)| {
-                job.view.status.is_terminal() && job.created_at.elapsed().unwrap_or_default() >= ttl
+                job.view.status.is_terminal()
+                    && job
+                        .terminal_at
+                        .is_some_and(|terminal_at| terminal_at.elapsed().unwrap_or_default() >= ttl)
             })
             .map(|(id, job)| (*id, job.directory.clone()))
             .collect();
@@ -177,6 +184,7 @@ impl JobStore {
             if !job.view.status.is_terminal() {
                 if job.view.status == JobStatus::Queued {
                     job.view.status = JobStatus::Canceled;
+                    job.terminal_at = Some(SystemTime::now());
                     job.events.send(job.view.clone()).ok();
                 }
                 job.cancellation.notify_one();

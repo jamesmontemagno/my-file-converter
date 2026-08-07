@@ -408,14 +408,19 @@ export async function convertThroughBridge(args: CreateBridgeJobArgs & {
 
   try {
     for await (const event of streamBridgeEvents(args.connection, jobId, args.signal)) {
-      args.onProgress(event);
-      if (event.status === 'completed' || event.status === 'failed' || event.status === 'canceled') {
+      const isTerminal =
+        event.status === 'completed' || event.status === 'failed' || event.status === 'canceled';
+      if (isTerminal) {
         terminalEvent = event;
-        break;
       }
+      args.onProgress(event);
+      if (isTerminal) break;
     }
   } finally {
     args.signal?.removeEventListener('abort', abortHandler);
+    if (!terminalEvent) {
+      await cancelBridgeJob(args.connection, jobId).catch(() => undefined);
+    }
   }
 
   if (args.signal?.aborted) {

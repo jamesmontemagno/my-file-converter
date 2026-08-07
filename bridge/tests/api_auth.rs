@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use axum::{
     body::{to_bytes, Body},
@@ -16,6 +16,7 @@ fn app() -> axum::Router {
         config: Arc::new(BridgeConfig::new(0, "test-token".to_owned())),
         ffmpeg: None,
         jobs: Arc::new(JobStore::new()),
+        job_root: PathBuf::from("unused-jobs"),
     })
 }
 

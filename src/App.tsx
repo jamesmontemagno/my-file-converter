@@ -974,7 +974,10 @@ function PrivacyPage() {
         </p>
         <ul>
           <li>Your files remain on your device in both browser and bridge workflows.</li>
-          <li>The bridge uses a per-launch pairing token and deletes temporary job files after use.</li>
+          <li>
+            The bridge uses a per-launch pairing token and retains temporary job files for up to one
+            hour after a conversion completes, fails, or is canceled.
+          </li>
           <li>Different browsers may support different output formats and codecs.</li>
           <li>Large files may fail based on device memory and browser limits.</li>
         </ul>
@@ -1155,6 +1158,7 @@ function BridgeInstallGuide() {
               aria-selected={platform === option}
               aria-controls={`bridge-guide-${option}`}
               id={`bridge-tab-${option}`}
+              tabIndex={platform === option ? 0 : -1}
               className={platform === option ? 'is-active' : ''}
               onClick={() => selectPlatform(option)}
               onKeyDown={(event) => handlePlatformKeyDown(event, option)}
@@ -1450,8 +1454,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const firstSupported = targetOptionsWithSupport.find((option) => option.supported);
-    setTargetMime(firstSupported?.value ?? targetOptionsWithSupport[0]?.value ?? '');
+    setTargetMime((currentTarget) => {
+      const currentOption = targetOptionsWithSupport.find((option) => option.value === currentTarget);
+      if (currentOption?.supported) return currentTarget;
+
+      const firstSupported = targetOptionsWithSupport.find((option) => option.supported);
+      return firstSupported?.value ?? targetOptionsWithSupport[0]?.value ?? '';
+    });
   }, [targetOptionsWithSupport]);
 
   useEffect(() => {

@@ -17,14 +17,14 @@ use state::JobStore;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub async fn start(config: BridgeConfig) -> io::Result<(SocketAddr, AppState)> {
-    api::cleanup_orphaned_job_directories().await?;
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", config.port)).await?;
     let ffmpeg = discover_ffmpeg();
     let state = AppState {
         config: Arc::new(config),
         ffmpeg,
         jobs: Arc::new(JobStore::new()),
+        job_root: api::new_job_root(),
     };
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", state.config.port)).await?;
     let address = listener.local_addr()?;
     let app = router(state.clone());
     api::spawn_cleanup(state.clone());
@@ -41,4 +41,5 @@ pub async fn shutdown(state: AppState) {
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
     state.jobs.cleanup_all().await;
+    let _ = api::cleanup_job_root(&state.job_root).await;
 }
