@@ -1,9 +1,0 @@
-G:\copilot-worktrees\my-file-converter\motz-silver-carnival\bridge\target\debug\deps\futures_macro-40d6bb28b6dc631f.d: C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\lib.rs C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\executor.rs C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\join.rs C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\select.rs C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\stream_select.rs
-
-G:\copilot-worktrees\my-file-converter\motz-silver-carnival\bridge\target\debug\deps\futures_macro-40d6bb28b6dc631f.dll: C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\lib.rs C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\executor.rs C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\join.rs C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\select.rs C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\stream_select.rs
-
-C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\lib.rs:
-C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\executor.rs:
-C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\join.rs:
-C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\select.rs:
-C:\Users\jamont\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.33\src\stream_select.rs:
