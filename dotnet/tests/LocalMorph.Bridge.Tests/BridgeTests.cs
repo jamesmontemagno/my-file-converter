@@ -96,6 +96,9 @@ public sealed class BridgeTests : IAsyncLifetime
         Assert.Equal(["-hide_banner", "-y", "-i", "input.bin"], command.ArgumentList.Take(4));
         Assert.Contains("-c:v", command.ArgumentList);
         Assert.DoesNotContain(command.ArgumentList, argument => argument.Contains(';'));
+        Assert.Equal(
+            "ffmpeg -hide_banner -y -i \"input file.bin\" -progress pipe:1 -nostats -c:v libx264 -preset medium -crf 27 -c:a aac -fs 2147483648 output.mp4",
+            Ffmpeg.DescribeCommand(Ffmpeg.BuildCommand("ffmpeg", "input file.bin", "output.mp4", request)));
     }
 
     [Fact]

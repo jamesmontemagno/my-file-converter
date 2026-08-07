@@ -36,9 +36,16 @@ npm run build
 
 ## Optional LocalMorph Bridge
 
-For conversions that need FFmpeg, install .NET 10 and FFmpeg separately, then
-run the lightweight LocalMorph Bridge on the same Windows, macOS, or Linux
-device:
+For conversions that need FFmpeg, install the
+[.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and FFmpeg
+separately, then run the lightweight LocalMorph Bridge on the same Windows,
+macOS, or Linux device. On Windows, the SDK is also available through Winget:
+
+```powershell
+winget install --id Microsoft.DotNet.SDK.10 -e
+```
+
+Verify `dotnet --version` reports 10.x before starting the bridge:
 
 ```bash
 dnx LocalMorph.Bridge
@@ -54,9 +61,10 @@ localmorph-bridge
 The website can copy the command with one click. Browsers cannot execute local
 terminal commands directly, including through Windows Terminal, without a
 separately installed protocol handler. Paste the copied command into your
-terminal, then copy the per-launch loopback URL and pairing token printed by the
-bridge into the converter settings. The bridge package does not redistribute
-FFmpeg.
+terminal, then copy the complete `LOCALMORPH_BRIDGE={...}` startup line and
+paste it once into the converter settings. LocalMorph validates the loopback
+URL and fills in both connection values. The bridge package does not
+redistribute FFmpeg.
 
 ## Deployment
 

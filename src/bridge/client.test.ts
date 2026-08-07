@@ -7,6 +7,7 @@ import {
   normalizeBridgeQuality,
   normalizeBridgeRequest,
   normalizeBridgeTargetMime,
+  parseBridgeStartupLine,
 } from './client';
 
 describe('normalizeBridgeProgress', () => {
@@ -38,6 +39,7 @@ describe('normalizeBridgeConnection', () => {
       baseUrl: 'http://127.0.0.1:49321',
       token: 'bridge-token',
     });
+
   });
 
   it('rejects non-loopback and malformed bridge URLs', () => {
@@ -48,6 +50,33 @@ describe('normalizeBridgeConnection', () => {
 
   it('requires a pairing token', () => {
     expect(() => normalizeBridgeConnection('http://localhost:49321', '   ')).toThrow(BridgeError);
+  });
+});
+
+describe('parseBridgeStartupLine', () => {
+  it('extracts both connection values from the complete CLI output', () => {
+    expect(
+      parseBridgeStartupLine(
+        'LOCALMORPH_BRIDGE={"baseUrl":"http://127.0.0.1:53421","token":"pairing-token","version":"0.1.0"}',
+      ),
+    ).toEqual({
+      baseUrl: 'http://127.0.0.1:53421',
+      token: 'pairing-token',
+    });
+  });
+
+  it('also accepts the copied JSON payload without the label', () => {
+    expect(parseBridgeStartupLine('{"baseUrl":"http://localhost:49321","token":"token"}')).toEqual({
+      baseUrl: 'http://localhost:49321',
+      token: 'token',
+    });
+  });
+
+  it('rejects malformed or non-loopback startup details', () => {
+    expect(() => parseBridgeStartupLine('not bridge output')).toThrow(BridgeError);
+    expect(() =>
+      parseBridgeStartupLine('LOCALMORPH_BRIDGE={"baseUrl":"https://example.com","token":"token"}'),
+    ).toThrow(BridgeError);
   });
 });
 

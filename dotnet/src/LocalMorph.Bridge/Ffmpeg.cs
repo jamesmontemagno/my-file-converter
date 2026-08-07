@@ -100,12 +100,20 @@ public static class Ffmpeg
         return new ProgressUpdate(percent, false);
     }
 
+    public static string DescribeCommand(ProcessStartInfo startInfo) =>
+        string.Join(' ', new[] { startInfo.FileName }.Concat(startInfo.ArgumentList).Select(QuoteForDisplay));
+
     private static void Add(ProcessStartInfo startInfo, params string[] arguments)
     {
         foreach (var argument in arguments) startInfo.ArgumentList.Add(argument);
     }
 
     private static int QualityToCrf(int quality) => 51 - quality * 33 / 100;
+
+    private static string QuoteForDisplay(string value) =>
+        value.Any(char.IsWhiteSpace) || value.Contains('"')
+            ? $"\"{value.Replace("\"", "\\\"")}\""
+            : value;
 
     private static string GifFilter(ImageOptions image) => (image.Width, image.Height, image.KeepAspectRatio) switch
     {

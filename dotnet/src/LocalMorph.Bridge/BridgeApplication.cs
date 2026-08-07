@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Logging.Console;
 
 namespace LocalMorph.Bridge;
 
@@ -18,8 +19,16 @@ public static class BridgeApplication
     public static WebApplication Create(string[] args, BridgeOptions? suppliedOptions = null, FfmpegInfo? suppliedFfmpeg = null, Action<WebApplicationBuilder>? configure = null, bool discoverFfmpeg = true)
     {
         var builder = WebApplication.CreateBuilder(args);
-        configure?.Invoke(builder);
         builder.Logging.ClearProviders();
+        builder.Logging.AddSimpleConsole(console =>
+        {
+            console.SingleLine = true;
+            console.TimestampFormat = "HH:mm:ss ";
+        });
+        builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
+        builder.Services.Configure<ConsoleLoggerOptions>(console =>
+            console.LogToStandardErrorThreshold = LogLevel.Trace);
+        configure?.Invoke(builder);
         var options = suppliedOptions ?? BridgeOptions.FromEnvironment();
         builder.WebHost.UseUrls($"http://127.0.0.1:{options.Port}");
         builder.WebHost.ConfigureKestrel(server => server.Limits.MaxRequestBodySize = BridgeOptions.MaxFileBytes);
@@ -38,11 +47,14 @@ public static class BridgeApplication
         builder.Services.AddHostedService<JobCleanupService>();
 
         var app = builder.Build();
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("LocalMorph.Bridge");
         app.Use(async (context, next) =>
         {
             var origin = context.Request.Headers.Origin.ToString();
             if (!BridgeOptions.AllowedOrigins.Contains(origin))
             {
+                logger.LogWarning("Rejected {Method} {Path} from disallowed origin {Origin}",
+                    context.Request.Method, context.Request.Path, origin);
                 await Error(context, StatusCodes.Status403Forbidden, "origin is not allowed");
                 return;
             }
@@ -56,22 +68,33 @@ public static class BridgeApplication
 
             if (!IsAuthorized(context.Request.Headers.Authorization.ToString(), options.Token))
             {
+                logger.LogWarning("Rejected unauthorized {Method} {Path} from {Origin}",
+                    context.Request.Method, context.Request.Path, origin);
                 await Error(context, StatusCodes.Status401Unauthorized, "missing or invalid bearer token");
                 return;
             }
             await next();
         });
 
-        app.MapGet("/v1/health", (FfmpegState ffmpegState) => Results.Json(new
+        app.MapGet("/v1/health", (FfmpegState ffmpegState, HttpRequest request) =>
         {
-            version = Version,
-            ffmpeg = new { available = ffmpegState.Info is not null, version = ffmpegState.Info?.Version },
-            supportedTargets = SupportedTargets
-        }));
+            logger.LogInformation("Bridge health checked from {Origin}; FFmpeg available: {FfmpegAvailable}",
+                request.Headers.Origin.ToString(), ffmpegState.Info is not null);
+            return Results.Json(new
+            {
+                version = Version,
+                ffmpeg = new { available = ffmpegState.Info is not null, version = ffmpegState.Info?.Version },
+                supportedTargets = SupportedTargets
+            });
+        });
 
         app.MapPost("/v1/jobs", async (HttpRequest request, JobStore store, JobRunner runner, FfmpegState ffmpegState, BridgeOptions bridgeOptions, CancellationToken token) =>
         {
-            if (ffmpegState.Info is null) return ErrorResult(StatusCodes.Status503ServiceUnavailable, "ffmpeg was not found on PATH");
+            if (ffmpegState.Info is null)
+            {
+                logger.LogWarning("Rejected conversion because FFmpeg was not found on PATH");
+                return ErrorResult(StatusCodes.Status503ServiceUnavailable, "ffmpeg was not found on PATH");
+            }
             if (!request.HasFormContentType) return ErrorResult(StatusCodes.Status400BadRequest, "invalid multipart body");
             IFormCollection form;
             try { form = await request.ReadFormAsync(token); }
@@ -111,6 +134,8 @@ public static class BridgeApplication
             }
 
             var job = store.Create(directory, Path.Combine(directory, $"output.{conversion.Extension}"), conversion.OutputName);
+            logger.LogInformation("Queued job {JobId}: {TargetMime}, {InputBytes} input bytes",
+                job.Id, conversion.TargetMime, file.Length);
             runner.Enqueue(job, conversion, input);
             return Results.Accepted(value: new { id = job.Id });
         });
@@ -119,7 +144,11 @@ public static class BridgeApplication
             store.TryGet(id, out var job) ? Results.Json(job!.Snapshot()) : ErrorResult(StatusCodes.Status404NotFound, "job not found"));
 
         app.MapDelete("/v1/jobs/{id:guid}", (Guid id, JobStore store) =>
-            store.Cancel(id) ? Results.StatusCode(StatusCodes.Status202Accepted) : ErrorResult(StatusCodes.Status404NotFound, "job not found"));
+        {
+            if (!store.Cancel(id)) return ErrorResult(StatusCodes.Status404NotFound, "job not found");
+            logger.LogInformation("Cancellation requested for job {JobId}", id);
+            return Results.StatusCode(StatusCodes.Status202Accepted);
+        });
 
         app.MapGet("/v1/jobs/{id:guid}/events", async (HttpContext context, Guid id, JobStore store) =>
         {
@@ -129,6 +158,7 @@ public static class BridgeApplication
                 return;
             }
             var (current, events) = job!.SubscribeWithCurrent();
+            logger.LogInformation("Progress stream connected for job {JobId}", id);
             context.Response.ContentType = "text/event-stream";
             context.Response.Headers.CacheControl = "no-cache";
             await WriteSse(context, current, context.RequestAborted);
@@ -142,6 +172,7 @@ public static class BridgeApplication
                 return ErrorResult(StatusCodes.Status404NotFound, "completed output not found");
             if (new FileInfo(job.OutputPath).Length > BridgeOptions.MaxFileBytes)
                 return ErrorResult(StatusCodes.Status413PayloadTooLarge, "completed output exceeds size limit");
+            logger.LogInformation("Downloading output for job {JobId}", id);
             return Results.File(job.OutputPath, "application/octet-stream", job.OutputName, enableRangeProcessing: false);
         });
 

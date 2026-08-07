@@ -167,7 +167,11 @@ public sealed class JobRecord
     };
 }
 
-public sealed class JobRunner(JobStore jobs, FfmpegState ffmpegState, BridgeOptions options) : BackgroundService
+public sealed class JobRunner(
+    JobStore jobs,
+    FfmpegState ffmpegState,
+    BridgeOptions options,
+    ILogger<JobRunner> logger) : BackgroundService
 {
     private readonly ConcurrentQueue<(JobRecord Job, ConversionRequest Request, string Input)> pending = new();
     private readonly SemaphoreSlim signal = new(0);
@@ -189,6 +193,7 @@ public sealed class JobRunner(JobStore jobs, FfmpegState ffmpegState, BridgeOpti
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
+        logger.LogInformation("Stopping bridge and canceling active jobs");
         await jobs.ShutdownAsync(cancellationToken);
         if (Directory.Exists(options.JobRoot)) Directory.Delete(options.JobRoot, true);
         await base.StopAsync(cancellationToken);
@@ -199,11 +204,14 @@ public sealed class JobRunner(JobStore jobs, FfmpegState ffmpegState, BridgeOpti
         var ffmpeg = ffmpegState.Info;
         if (ffmpeg is null || job.Snapshot().Status == JobStatus.Canceled) return;
         job.Transition(JobStatus.Running, 0);
+        logger.LogInformation("Job {JobId} is running", job.Id);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, job.Cancellation.Token);
         try
         {
             var duration = await ProbeDurationAsync(ffmpeg.Path, input, request, linked.Token);
             using var process = new Process { StartInfo = Ffmpeg.BuildCommand(ffmpeg.Path, input, job.OutputPath, request) };
+            logger.LogInformation("Job {JobId} starting structured FFmpeg command: {Command}",
+                job.Id, Ffmpeg.DescribeCommand(process.StartInfo));
             if (!process.Start()) throw new InvalidOperationException("FFmpeg could not be started");
             var progress = ReadProgressAsync(process.StandardOutput, duration, job, linked.Token);
             var stderr = ReadBoundedAsync(process.StandardError, linked.Token);
@@ -213,6 +221,7 @@ public sealed class JobRunner(JobStore jobs, FfmpegState ffmpegState, BridgeOpti
                 if (!process.HasExited) process.Kill(true);
                 await process.WaitForExitAsync(CancellationToken.None);
                 job.Transition(JobStatus.Canceled);
+                logger.LogInformation("Job {JobId} was canceled", job.Id);
                 return;
             }
             await progress;
@@ -220,18 +229,27 @@ public sealed class JobRunner(JobStore jobs, FfmpegState ffmpegState, BridgeOpti
             if (process.ExitCode == 0 && new FileInfo(job.OutputPath) is { Exists: true, Length: <= BridgeOptions.MaxFileBytes })
             {
                 job.Transition(JobStatus.Completed, 100);
+                logger.LogInformation("Job {JobId} completed: {OutputBytes} output bytes",
+                    job.Id, new FileInfo(job.OutputPath).Length);
                 return;
             }
             if (File.Exists(job.OutputPath)) File.Delete(job.OutputPath);
-            job.Transition(JobStatus.Failed, error: error.Length == 0 ? "FFmpeg conversion failed or exceeded the output size limit" : $"FFmpeg conversion failed: {error.Split('\n').LastOrDefault(line => !string.IsNullOrWhiteSpace(line))}");
+            var detail = error.Length == 0
+                ? "FFmpeg conversion failed or exceeded the output size limit"
+                : $"FFmpeg conversion failed: {error.Split('\n').LastOrDefault(line => !string.IsNullOrWhiteSpace(line))}";
+            job.Transition(JobStatus.Failed, error: detail);
+            logger.LogWarning("Job {JobId} failed with FFmpeg exit code {ExitCode}: {Detail}",
+                job.Id, process.ExitCode, detail);
         }
         catch (OperationCanceledException) when (job.Cancellation.IsCancellationRequested)
         {
             job.Transition(JobStatus.Canceled);
+            logger.LogInformation("Job {JobId} was canceled", job.Id);
         }
-        catch
+        catch (Exception exception)
         {
             job.Transition(JobStatus.Failed, error: "FFmpeg could not be started");
+            logger.LogError(exception, "Job {JobId} could not start FFmpeg", job.Id);
         }
     }
 

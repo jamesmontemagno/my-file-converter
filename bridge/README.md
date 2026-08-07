@@ -6,7 +6,14 @@ server. It runs on Windows, macOS, and Linux, including Windows ARM64.
 
 ## Install and run
 
-Install .NET 10 and FFmpeg, make sure `ffmpeg` is available on `PATH`, then run:
+Install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+and FFmpeg, make sure `ffmpeg` is available on `PATH`, and verify the SDK:
+
+```shell
+dotnet --version
+```
+
+The version must begin with `10.` for `dnx` support. Then run:
 
 ```shell
 dnx LocalMorph.Bridge
@@ -34,17 +41,27 @@ prints one JSON line:
 LOCALMORPH_BRIDGE={"baseUrl":"http://127.0.0.1:53421","token":"...","version":"0.1.0"}
 ```
 
-Copy the `baseUrl` and token into the converter's Local FFmpeg Bridge settings.
-Each launch creates a new token. Keep it private and pair again after restarting
-the tool.
+Copy the complete `LOCALMORPH_BRIDGE={...}` line and paste it into the
+converter's Bridge startup line field. LocalMorph fills in both connection
+values. Each launch creates a new token. Keep it private and pair again after
+restarting the tool.
+
+The terminal also shows timestamped operational logs for health checks, job
+creation, progress-stream connections, cancellation, downloads, completion,
+failures, and the structured FFmpeg command being executed. Logs are written to
+standard error so the machine-readable startup line remains clean. Pairing
+tokens and original upload filenames are never included in operational logs.
 
 ## FFmpeg prerequisite
 
 The NuGet package does not bundle or download FFmpeg. Install it separately:
 
-- **Windows:** install a trusted FFmpeg package, such as with Winget.
-- **macOS:** `brew install ffmpeg`
-- **Linux:** install your distribution's `ffmpeg` package.
+- **Windows:** `winget install --id Microsoft.DotNet.SDK.10 -e`, then install a
+  trusted FFmpeg package such as `winget install --id Gyan.FFmpeg.Shared -e`.
+- **macOS:** `brew install --cask dotnet-sdk`, then `brew install ffmpeg`.
+- **Linux:** follow the
+  [official .NET installation guide](https://learn.microsoft.com/dotnet/core/install/linux)
+  for your distribution and install its `ffmpeg` package.
 
 If `/v1/health` reports `ffmpeg.available: false`, fix `PATH` and restart the
 bridge.

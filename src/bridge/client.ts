@@ -210,6 +210,32 @@ export function normalizeBridgeConnection(baseUrl: string, token: string): Bridg
   };
 }
 
+export function parseBridgeStartupLine(value: string): BridgeConnection {
+  const prefix = 'LOCALMORPH_BRIDGE=';
+  const trimmed = value.trim();
+  const json = trimmed.startsWith(prefix) ? trimmed.slice(prefix.length) : trimmed;
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(json);
+  } catch {
+    throw new BridgeError('Paste the complete LOCALMORPH_BRIDGE startup line.', 'connection');
+  }
+
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    !('baseUrl' in payload) ||
+    !('token' in payload) ||
+    typeof payload.baseUrl !== 'string' ||
+    typeof payload.token !== 'string'
+  ) {
+    throw new BridgeError('The bridge startup line is missing its URL or pairing token.', 'connection');
+  }
+
+  return normalizeBridgeConnection(payload.baseUrl, payload.token);
+}
+
 function headers(connection: BridgeConnection, headersInit?: HeadersInit) {
   return {
     ...headersInit,
