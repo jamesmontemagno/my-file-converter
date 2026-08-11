@@ -13,10 +13,11 @@ export default defineConfig({
         name: 'LocalMorph',
         short_name: 'LocalMorph',
         description:
-          'Convert video, audio, and images locally without uploading your files. Browser-native, private, and fast.',
-        theme_color: '#081120',
-        background_color: '#081120',
+          'Convert images, audio, and video on your device in three clear steps with no managed-server uploads.',
+        theme_color: '#0B172A',
+        background_color: '#F3F6FA',
         display: 'standalone',
+        categories: ['utilities', 'productivity'],
         scope: './',
         start_url: './#/app',
         icons: [

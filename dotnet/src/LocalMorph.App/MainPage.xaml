@@ -1,0 +1,419 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             xmlns:viewModels="clr-namespace:LocalMorph.App.ViewModels"
+             x:Class="LocalMorph.App.MainPage"
+             x:DataType="viewModels:MainPageViewModel"
+             Title="LocalMorph"
+             Background="{AppThemeBinding Light=#F3F6FA, Dark=#09111D}">
+
+    <ContentPage.Resources>
+        <Style x:Key="PanelStyle" TargetType="Border">
+            <Setter Property="Padding" Value="20" />
+            <Setter Property="Stroke" Value="{AppThemeBinding Light=#CBD5E1, Dark=#334155}" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="StrokeShape" Value="RoundRectangle 8" />
+            <Setter Property="Background" Value="{AppThemeBinding Light=#FFFFFF, Dark=#111B2A}" />
+        </Style>
+        <Style x:Key="EyebrowStyle" TargetType="Label">
+            <Setter Property="FontFamily" Value="OpenSansSemibold" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="CharacterSpacing" Value="0" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light=#475569, Dark=#AFC0D4}" />
+        </Style>
+        <Style x:Key="SectionTitleStyle" TargetType="Label">
+            <Setter Property="FontFamily" Value="OpenSansSemibold" />
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="CharacterSpacing" Value="0" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light=#0B172A, Dark=#F8FAFC}" />
+        </Style>
+        <Style x:Key="FieldLabelStyle" TargetType="Label">
+            <Setter Property="FontFamily" Value="OpenSansSemibold" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="CharacterSpacing" Value="0" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light=#243247, Dark=#E2E8F0}" />
+        </Style>
+        <Style x:Key="InputStyle" TargetType="Entry">
+            <Setter Property="HeightRequest" Value="44" />
+            <Setter Property="Background" Value="{AppThemeBinding Light=#F8FAFC, Dark=#172334}" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light=#0B172A, Dark=#F8FAFC}" />
+            <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light=#64748B, Dark=#94A3B8}" />
+        </Style>
+        <Style x:Key="PickerStyle" TargetType="Picker">
+            <Setter Property="HeightRequest" Value="64" />
+            <Setter Property="MinimumHeightRequest" Value="64" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="VerticalOptions" Value="Center" />
+            <Setter Property="VerticalTextAlignment" Value="Center" />
+            <Setter Property="Background" Value="{AppThemeBinding Light=#F8FAFC, Dark=#172334}" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light=#0B172A, Dark=#F8FAFC}" />
+            <Setter Property="TitleColor" Value="{AppThemeBinding Light=#64748B, Dark=#94A3B8}" />
+        </Style>
+    </ContentPage.Resources>
+
+    <Grid x:Name="PageLayout">
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="WindowStates">
+                <VisualState x:Name="Narrow">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter TargetName="SourceStepGrid" Property="Grid.ColumnDefinitions" Value="*" />
+                        <Setter TargetName="SourceStepGrid" Property="Grid.RowDefinitions" Value="Auto,Auto" />
+                        <Setter TargetName="DestinationStepPanel" Property="Grid.Row" Value="1" />
+                        <Setter TargetName="DestinationStepPanel" Property="Grid.Column" Value="0" />
+                        <Setter TargetName="MetricsGrid" Property="Grid.ColumnDefinitions" Value="*,*" />
+                        <Setter TargetName="MetricsGrid" Property="Grid.RowDefinitions" Value="Auto,Auto" />
+                        <Setter TargetName="MetricThree" Property="Grid.Row" Value="1" />
+                        <Setter TargetName="MetricThree" Property="Grid.Column" Value="0" />
+                        <Setter TargetName="MetricFour" Property="Grid.Row" Value="1" />
+                        <Setter TargetName="MetricFour" Property="Grid.Column" Value="1" />
+                        <Setter TargetName="WorkspaceGrid" Property="Grid.ColumnDefinitions" Value="*" />
+                        <Setter TargetName="WorkspaceGrid" Property="Grid.RowDefinitions" Value="Auto,Auto" />
+                        <Setter TargetName="SettingsPanel" Property="Grid.Row" Value="1" />
+                        <Setter TargetName="SettingsPanel" Property="Grid.Column" Value="0" />
+                        <Setter TargetName="AdvancedGrid" Property="Grid.ColumnDefinitions" Value="*" />
+                        <Setter TargetName="AdvancedGrid" Property="Grid.RowDefinitions" Value="Auto,Auto" />
+                        <Setter TargetName="ReviewStepGrid" Property="Grid.ColumnDefinitions" Value="*" />
+                        <Setter TargetName="ReviewStepGrid" Property="Grid.RowDefinitions" Value="Auto,Auto" />
+                        <Setter TargetName="ReviewActions" Property="Grid.Row" Value="1" />
+                        <Setter TargetName="ReviewActions" Property="Grid.Column" Value="0" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="Wide">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="900" />
+                    </VisualState.StateTriggers>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+
+        <ScrollView>
+            <VerticalStackLayout Padding="{OnIdiom Desktop='32,24,32,48', Phone='16,16,16,32'}"
+                                 Spacing="18"
+                                 MaximumWidthRequest="1800"
+                                 HorizontalOptions="Center">
+
+                <FlexLayout Direction="Row" Wrap="Wrap" JustifyContent="SpaceBetween" AlignItems="Center">
+                    <HorizontalStackLayout Spacing="12" Margin="0,0,24,10">
+                        <Border WidthRequest="42" HeightRequest="42" Padding="0"
+                                Background="#1356D8" Stroke="#0B172A" StrokeThickness="1"
+                                StrokeShape="RoundRectangle 6">
+                            <Label Text="LM" TextColor="White" FontFamily="OpenSansSemibold"
+                                   FontSize="14" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" />
+                        </Border>
+                        <VerticalStackLayout Spacing="0" VerticalOptions="Center">
+                            <Label Text="LocalMorph" FontFamily="OpenSansSemibold" FontSize="26"
+                                   CharacterSpacing="0" TextColor="{AppThemeBinding Light=#0B172A, Dark=#F8FAFC}" />
+                            <Label Text="MEDIA CONVERSION / DESKTOP" Style="{StaticResource EyebrowStyle}" />
+                        </VerticalStackLayout>
+                    </HorizontalStackLayout>
+
+                    <Border Padding="12,8" Margin="0,0,0,10" Stroke="#86A819" StrokeThickness="1"
+                            Background="{AppThemeBinding Light=#F4F9DF, Dark=#1D2B16}"
+                            StrokeShape="RoundRectangle 6">
+                        <HorizontalStackLayout Spacing="8">
+                            <BoxView WidthRequest="8" HeightRequest="8" CornerRadius="4" Color="#9BC53D" VerticalOptions="Center" />
+                            <Label Text="FILES STAY ON THIS DEVICE" FontFamily="OpenSansSemibold" FontSize="11"
+                                   TextColor="{AppThemeBinding Light=#33430E, Dark=#DDF59B}" />
+                        </HorizontalStackLayout>
+                    </Border>
+                </FlexLayout>
+
+                <Grid x:Name="MetricsGrid" ColumnDefinitions="*,*,*,*" RowDefinitions="Auto"
+                      ColumnSpacing="1" RowSpacing="1"
+                      Background="{AppThemeBinding Light=#CBD5E1, Dark=#334155}">
+                    <VerticalStackLayout Grid.Column="0" Padding="16,12" Spacing="2"
+                                         Background="{AppThemeBinding Light=#FFFFFF, Dark=#111B2A}">
+                        <Label Text="OUTPUT" Style="{StaticResource EyebrowStyle}" />
+                        <Label Text="{Binding OutputFormatMetric}" Style="{StaticResource SectionTitleStyle}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" Padding="16,12" Spacing="2"
+                                         Background="{AppThemeBinding Light=#FFFFFF, Dark=#111B2A}">
+                        <Label Text="QUALITY" Style="{StaticResource EyebrowStyle}" />
+                        <Label Text="{Binding QualityMetric}" Style="{StaticResource SectionTitleStyle}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout x:Name="MetricThree" Grid.Column="2" Padding="16,12" Spacing="2"
+                                         Background="{AppThemeBinding Light=#FFFFFF, Dark=#111B2A}">
+                        <Label Text="CLIP SPAN" Style="{StaticResource EyebrowStyle}" />
+                        <Label Text="{Binding ClipDurationMetric}" Style="{StaticResource SectionTitleStyle}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout x:Name="MetricFour" Grid.Column="3" Padding="16,12" Spacing="2"
+                                         Background="{AppThemeBinding Light=#FFFFFF, Dark=#111B2A}">
+                        <Label Text="PROGRESS" Style="{StaticResource EyebrowStyle}" />
+                        <Label Text="{Binding ProgressMetric}" Style="{StaticResource SectionTitleStyle}" />
+                    </VerticalStackLayout>
+                </Grid>
+
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="{Binding WizardStepLabel}" Style="{StaticResource EyebrowStyle}" TextColor="#1356D8" />
+                        <ProgressBar Progress="{Binding WizardProgress}" HeightRequest="4"
+                                     BackgroundColor="{AppThemeBinding Light=#D9E2EE, Dark=#263A52}" ProgressColor="#1356D8" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="1" Text="Choose / Shape / Convert" Style="{StaticResource FieldLabelStyle}" VerticalOptions="Center" />
+                </Grid>
+
+                <Border IsVisible="{Binding IsStepOne}" Style="{StaticResource PanelStyle}" AutomationId="SourceStepPanel">
+                    <Grid x:Name="SourceStepGrid" ColumnDefinitions="1.1*,0.9*" ColumnSpacing="24" RowSpacing="20">
+                        <VerticalStackLayout Spacing="14">
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="STEP 1 / CHOOSE" Style="{StaticResource EyebrowStyle}" TextColor="#1356D8" />
+                                <Label Text="Choose your source" Style="{StaticResource SectionTitleStyle}" />
+                                <Label Text="Select the video, audio, or image you want to convert."
+                                       FontSize="13" TextColor="{AppThemeBinding Light=#526178, Dark=#B8C7DA}" />
+                            </VerticalStackLayout>
+                            <Button AutomationId="ChooseFileButton" Text="Choose source file" Command="{Binding PickFileCommand}"
+                                    HeightRequest="48" CornerRadius="6" Background="#1356D8" TextColor="White"
+                                    FontFamily="OpenSansSemibold" />
+                            <Border Padding="14" Stroke="{AppThemeBinding Light=#CBD5E1, Dark=#334155}" StrokeThickness="1"
+                                    StrokeShape="RoundRectangle 6" Background="{AppThemeBinding Light=#F8FAFC, Dark=#172334}">
+                                <VerticalStackLayout Spacing="3">
+                                    <Label Text="SELECTED SOURCE" Style="{StaticResource EyebrowStyle}" />
+                                    <Label Text="{Binding SelectedFileDisplay}" Style="{StaticResource FieldLabelStyle}" LineBreakMode="TailTruncation" />
+                                </VerticalStackLayout>
+                            </Border>
+                        </VerticalStackLayout>
+
+                        <VerticalStackLayout x:Name="DestinationStepPanel" Grid.Column="1" Spacing="14">
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="SAVE LOCATION" Style="{StaticResource EyebrowStyle}" />
+                                <Label Text="Choose where it lands" Style="{StaticResource SectionTitleStyle}" />
+                                <Label Text="Your choice is remembered for the next conversion."
+                                       FontSize="13" TextColor="{AppThemeBinding Light=#526178, Dark=#B8C7DA}" />
+                            </VerticalStackLayout>
+                            <Button AutomationId="ChooseOutputFolderButton" Text="Choose output folder" Command="{Binding PickOutputDirectoryCommand}"
+                                    HeightRequest="48" CornerRadius="6" Background="{AppThemeBinding Light=#EAF1FA, Dark=#172334}"
+                                    TextColor="{AppThemeBinding Light=#0B172A, Dark=#F8FAFC}" FontFamily="OpenSansSemibold" />
+                            <Label Text="{Binding OutputLocationDisplay}" FontSize="12" LineBreakMode="MiddleTruncation"
+                                   TextColor="{AppThemeBinding Light=#526178, Dark=#B8C7DA}" />
+                                <Border IsVisible="{Binding HasWizardValidation}" Padding="12"
+                                    Stroke="#DC2626" StrokeThickness="1" StrokeShape="RoundRectangle 6"
+                                    Background="{AppThemeBinding Light=#FEF2F2, Dark=#3B1118}">
+                                <Label Text="{Binding WizardValidationText}" FontSize="12" LineBreakMode="WordWrap"
+                                       TextColor="{AppThemeBinding Light=#991B1B, Dark=#FECACA}" />
+                                </Border>
+                            <Button AutomationId="StepOneContinueButton" Text="Continue to settings" Command="{Binding NextStepCommand}"
+                                    HeightRequest="48" CornerRadius="6"
+                                    Background="#0B172A" TextColor="White" FontFamily="OpenSansSemibold" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </Border>
+
+                <Grid x:Name="WorkspaceGrid" IsVisible="{Binding IsStepTwo}"
+                      ColumnDefinitions="1.35*,0.65*" RowDefinitions="Auto" ColumnSpacing="18" RowSpacing="18">
+                    <Border Grid.Column="0" Style="{StaticResource PanelStyle}" AutomationId="PreviewPanel">
+                        <VerticalStackLayout Spacing="14">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <VerticalStackLayout Spacing="2">
+                                    <Label Text="PREVIEW" Style="{StaticResource EyebrowStyle}" />
+                                    <Label Text="Inspect before you convert" Style="{StaticResource SectionTitleStyle}" />
+                                </VerticalStackLayout>
+                                <Label Grid.Column="1" Text="{Binding SelectedFileDisplay}" MaxLines="1" LineBreakMode="TailTruncation"
+                                       FontSize="12" TextColor="{AppThemeBinding Light=#526178, Dark=#B8C7DA}" VerticalOptions="End" />
+                            </Grid>
+
+                            <Border Padding="0" Stroke="#243247" StrokeThickness="1" StrokeShape="RoundRectangle 6" Background="#07101C">
+                                <Grid HeightRequest="340">
+                                    <toolkit:MediaElement x:Name="PreviewMediaElement" AutomationId="PreviewMediaElement"
+                                                          IsVisible="{Binding ShowMediaPreview}"
+                                                          ShouldAutoPlay="False" ShouldShowPlaybackControls="True"
+                                                          Aspect="AspectFit" Background="#07101C" />
+                                    <Image x:Name="PreviewImage" AutomationId="PreviewImage" IsVisible="{Binding IsImageSource}"
+                                           Aspect="AspectFit" Background="#07101C" />
+                                    <Label IsVisible="{Binding ShowPreviewPlaceholder}" Text="Choose a media file to preview it here."
+                                           HorizontalTextAlignment="Center" VerticalTextAlignment="Center"
+                                           TextColor="#CBD5E1" FontSize="13" />
+                                </Grid>
+                            </Border>
+                            <Label AutomationId="SourceDetailsLabel" Text="{Binding SourceDetails}" Style="{StaticResource FieldLabelStyle}"
+                                   TextColor="#1356D8" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border x:Name="SettingsPanel" Grid.Column="1" Style="{StaticResource PanelStyle}" AutomationId="SettingsPanel">
+                        <VerticalStackLayout Spacing="14">
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="SETUP" Style="{StaticResource EyebrowStyle}" />
+                                <Label Text="Source and output" Style="{StaticResource SectionTitleStyle}" />
+                            </VerticalStackLayout>
+
+                            <Label Text="OUTPUT NAME" Style="{StaticResource FieldLabelStyle}" />
+                            <Entry AutomationId="OutputNameEntry" Style="{StaticResource InputStyle}"
+                                   Text="{Binding OutputFileName}" Placeholder="converted-output" />
+
+                            <Label Text="OUTPUT FORMAT" Style="{StaticResource FieldLabelStyle}" />
+                            <Picker AutomationId="OutputFormatPicker" Style="{StaticResource PickerStyle}"
+                                    ItemsSource="{Binding OutputFormats}" SelectedItem="{Binding SelectedFormat}" Title="Choose format" />
+
+                            <VerticalStackLayout IsVisible="{Binding ShowQualitySettings}" Spacing="6">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <Label Text="QUALITY" Style="{StaticResource FieldLabelStyle}" />
+                                    <Label Grid.Column="1" Text="{Binding QualityMetric}" Style="{StaticResource FieldLabelStyle}" TextColor="#1356D8" />
+                                </Grid>
+                                <Slider AutomationId="QualitySlider" Minimum="1" Maximum="100" Value="{Binding Quality}"
+                                        MinimumTrackColor="#1356D8" MaximumTrackColor="{AppThemeBinding Light=#CBD5E1, Dark=#334155}"
+                                        ThumbColor="#1356D8" />
+                            </VerticalStackLayout>
+
+                            <Grid IsVisible="{Binding ShowVideoSettings}" ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Spacing="6">
+                                    <Label Text="SPEED" Style="{StaticResource FieldLabelStyle}" />
+                                    <Picker AutomationId="SpeedPicker" Style="{StaticResource PickerStyle}"
+                                            ItemsSource="{Binding EncodingSpeeds}" SelectedItem="{Binding SelectedEncodingSpeed}" Title="Speed" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1" Spacing="6">
+                                    <Label Text="FRAME RATE" Style="{StaticResource FieldLabelStyle}" />
+                                    <Picker AutomationId="FrameRatePicker" Style="{StaticResource PickerStyle}"
+                                            ItemsSource="{Binding FrameRates}" SelectedItem="{Binding SelectedFrameRate}" Title="Frame rate" />
+                                </VerticalStackLayout>
+                            </Grid>
+
+                            <VerticalStackLayout IsVisible="{Binding ShowResolutionSettings}" Spacing="6">
+                                <Label Text="OUTPUT RESOLUTION" Style="{StaticResource FieldLabelStyle}" />
+                                <Picker AutomationId="ResolutionPicker" Style="{StaticResource PickerStyle}"
+                                        ItemsSource="{Binding ResolutionOptions}" SelectedItem="{Binding SelectedResolution}"
+                                        Title="Resolution" />
+                            </VerticalStackLayout>
+
+                                <Border IsVisible="{Binding HasWizardValidation}" Padding="12"
+                                        Stroke="#DC2626" StrokeThickness="1" StrokeShape="RoundRectangle 6"
+                                        Background="{AppThemeBinding Light=#FEF2F2, Dark=#3B1118}">
+                                    <Label Text="{Binding WizardValidationText}" FontSize="12" LineBreakMode="WordWrap"
+                                           TextColor="{AppThemeBinding Light=#991B1B, Dark=#FECACA}" />
+                                </Border>
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <Button Text="Back" Command="{Binding PreviousStepCommand}" HeightRequest="46" CornerRadius="6"
+                                    Background="{AppThemeBinding Light=#EAF1FA, Dark=#172334}"
+                                    TextColor="{AppThemeBinding Light=#0B172A, Dark=#F8FAFC}" />
+                                <Button Grid.Column="1" AutomationId="StepTwoContinueButton" Text="Review conversion"
+                                    Command="{Binding NextStepCommand}" HeightRequest="46" CornerRadius="6"
+                                    Background="#0B172A" TextColor="White" FontFamily="OpenSansSemibold" />
+                                </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+                </Grid>
+
+                        <Grid x:Name="AdvancedGrid" IsVisible="{Binding IsStepTwo}"
+                              ColumnDefinitions="*" RowDefinitions="Auto" ColumnSpacing="18" RowSpacing="18">
+                    <Border Grid.Column="0" IsVisible="{Binding ShowAdvancedSettings}" Style="{StaticResource PanelStyle}">
+                        <VerticalStackLayout Spacing="14">
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="ADVANCED" Style="{StaticResource EyebrowStyle}" />
+                                <Label Text="Timing and audio" Style="{StaticResource SectionTitleStyle}" />
+                            </VerticalStackLayout>
+                            <Grid IsVisible="{Binding ShowTimingSettings}" ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Spacing="6">
+                                    <Label Text="TRIM START / SECONDS" Style="{StaticResource FieldLabelStyle}" />
+                                    <Entry AutomationId="TrimStartEntry" Style="{StaticResource InputStyle}"
+                                           Text="{Binding TrimStartSeconds, Mode=TwoWay}" Keyboard="Numeric" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1" Spacing="6">
+                                    <Label Text="TRIM END / SECONDS" Style="{StaticResource FieldLabelStyle}" />
+                                    <Entry AutomationId="TrimEndEntry" Style="{StaticResource InputStyle}"
+                                           Text="{Binding TrimEndSeconds, Mode=TwoWay}" Keyboard="Numeric" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Grid IsVisible="{Binding ShowAudioSettings}" ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Spacing="6">
+                                    <Label Text="AUDIO BITRATE" Style="{StaticResource FieldLabelStyle}" />
+                                    <Picker AutomationId="AudioBitratePicker" Style="{StaticResource PickerStyle}"
+                                            ItemsSource="{Binding AudioBitrates}" SelectedItem="{Binding SelectedAudioBitrate}" Title="Bitrate" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1" Spacing="6">
+                                    <Label Text="SAMPLE RATE" Style="{StaticResource FieldLabelStyle}" />
+                                    <Picker AutomationId="SampleRatePicker" Style="{StaticResource PickerStyle}"
+                                            ItemsSource="{Binding SampleRates}" SelectedItem="{Binding SelectedSampleRate}" Title="Sample rate" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Grid IsVisible="{Binding ShowAudioSettings}" ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <VerticalStackLayout Spacing="6">
+                                    <Label Text="CHANNELS" Style="{StaticResource FieldLabelStyle}" />
+                                    <Picker AutomationId="ChannelPicker" Style="{StaticResource PickerStyle}"
+                                            ItemsSource="{Binding ChannelModes}" SelectedItem="{Binding SelectedChannelMode}" Title="Channels" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1" IsVisible="{Binding ShowWavBitDepth}" Spacing="6">
+                                    <Label Text="WAV BIT DEPTH" Style="{StaticResource FieldLabelStyle}" />
+                                    <Picker AutomationId="WavDepthPicker" Style="{StaticResource PickerStyle}"
+                                            ItemsSource="{Binding WavBitDepths}" SelectedItem="{Binding SelectedWavBitDepth}" Title="Bit depth" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                </Grid>
+
+                <Border IsVisible="{Binding IsStepThree}" Style="{StaticResource PanelStyle}" AutomationId="ReviewStepPanel">
+                    <Grid x:Name="ReviewStepGrid" ColumnDefinitions="1.15*,0.85*" ColumnSpacing="24" RowSpacing="20">
+                        <VerticalStackLayout Spacing="16">
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="STEP 3 / CONVERT" Style="{StaticResource EyebrowStyle}" TextColor="#1356D8" />
+                                <Label Text="Review your local route" Style="{StaticResource SectionTitleStyle}" />
+                                <Label Text="Everything is ready. Confirm the details, then start the conversion."
+                                       FontSize="13" TextColor="{AppThemeBinding Light=#526178, Dark=#B8C7DA}" />
+                            </VerticalStackLayout>
+                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
+                                <Label Text="SOURCE" Style="{StaticResource EyebrowStyle}" />
+                                <Label Grid.Column="1" Text="{Binding SelectedFileDisplay}" Style="{StaticResource FieldLabelStyle}" />
+                                <Label Grid.Row="1" Text="OUTPUT" Style="{StaticResource EyebrowStyle}" />
+                                <Label Grid.Row="1" Grid.Column="1" Text="{Binding OutputSummary}" Style="{StaticResource FieldLabelStyle}" />
+                                <Label Grid.Row="2" Text="SAVE TO" Style="{StaticResource EyebrowStyle}" />
+                                <Label Grid.Row="2" Grid.Column="1" Text="{Binding OutputLocationDisplay}" Style="{StaticResource FieldLabelStyle}"
+                                       LineBreakMode="MiddleTruncation" HorizontalTextAlignment="End" />
+                            </Grid>
+                        </VerticalStackLayout>
+
+                        <VerticalStackLayout x:Name="ReviewActions" Grid.Column="1" Spacing="14">
+                            <Border AutomationId="ConversionStatus" Padding="16" Stroke="{AppThemeBinding Light=#CBD5E1, Dark=#334155}"
+                                    StrokeThickness="1" StrokeShape="RoundRectangle 6"
+                                    Background="{AppThemeBinding Light=#F8FAFC, Dark=#172334}">
+                                <Border.Triggers>
+                                    <DataTrigger TargetType="Border" Binding="{Binding IsConverting}" Value="True">
+                                        <Setter Property="Stroke" Value="#1356D8" />
+                                        <Setter Property="Background" Value="{AppThemeBinding Light=#EAF1FA, Dark=#102A52}" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Border" Binding="{Binding HasConversionError}" Value="True">
+                                        <Setter Property="Stroke" Value="#DC2626" />
+                                        <Setter Property="Background" Value="{AppThemeBinding Light=#FEF2F2, Dark=#3B1118}" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Border" Binding="{Binding IsConversionComplete}" Value="True">
+                                        <Setter Property="Stroke" Value="#63820F" />
+                                        <Setter Property="Background" Value="{AppThemeBinding Light=#F4F9DF, Dark=#1D2B16}" />
+                                    </DataTrigger>
+                                </Border.Triggers>
+                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                                    <ActivityIndicator AutomationId="ConversionActivityIndicator"
+                                                       IsRunning="{Binding IsConverting}"
+                                                       IsVisible="{Binding IsConverting}"
+                                                       Color="#1356D8" WidthRequest="24" HeightRequest="24" />
+                                    <Label Grid.Column="1" Text="{Binding StatusText}" FontSize="13" LineBreakMode="WordWrap"
+                                           VerticalTextAlignment="Center"
+                                           TextColor="{AppThemeBinding Light=#243247, Dark=#E2E8F0}" />
+                                    <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" IsVisible="{Binding IsConverting}"
+                                                 Progress="{Binding ProgressRatio}" HeightRequest="5"
+                                                 BackgroundColor="{AppThemeBinding Light=#CBD5E1, Dark=#334155}"
+                                                 ProgressColor="#1356D8" />
+                                </Grid>
+                            </Border>
+                            <Button AutomationId="ConvertButton" Text="{Binding ConvertButtonText}" Command="{Binding ConvertCommand}"
+                                    HeightRequest="50" CornerRadius="6"
+                                    Background="#1356D8" TextColor="White" FontFamily="OpenSansSemibold" />
+                                <Button AutomationId="StartOverButton" Text="Start over" Command="{Binding StartOverCommand}"
+                                    IsVisible="{Binding IsConversionComplete}" HeightRequest="46" CornerRadius="6"
+                                    Background="#63820F" TextColor="White" FontFamily="OpenSansSemibold" />
+                            <Button Text="Back to settings" Command="{Binding PreviousStepCommand}" HeightRequest="46" CornerRadius="6"
+                                    Background="{AppThemeBinding Light=#EAF1FA, Dark=#172334}"
+                                    TextColor="{AppThemeBinding Light=#0B172A, Dark=#F8FAFC}" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </Border>
+
+                <Label Text="LocalMorph converts on this device. You choose where the output is saved."
+                       HorizontalTextAlignment="Center" FontSize="11" Margin="0,8,0,0"
+                       TextColor="{AppThemeBinding Light=#64748B, Dark=#94A3B8}" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentPage>
