@@ -102,6 +102,44 @@ public sealed class BridgeTests : IAsyncLifetime
     }
 
     [Fact]
+    public void Command_applies_validated_format_specific_tuning()
+    {
+        var request = new ConversionRequest
+        {
+            TargetMime = "video/webm",
+            MediaType = "video",
+            OutputName = "output.webm",
+            Quality = 90,
+            Media = new MediaOptions
+            {
+                VideoEncodingSpeed = "quality",
+                VideoFrameRate = 60,
+                AudioBitrate = 192,
+                AudioSampleRate = 48000
+            }
+        };
+
+        Assert.True(request.IsValid());
+        var command = Ffmpeg.BuildCommand("ffmpeg", "input.bin", "output.webm", request);
+
+        Assert.Contains(["-deadline", "best", "-cpu-used", "1", "-b:a", "192k", "-ar", "48000", "-r", "60"], command.ArgumentList);
+    }
+
+    [Fact]
+    public void Request_validation_rejects_unrecognized_tuning_values()
+    {
+        var request = new ConversionRequest
+        {
+            TargetMime = "audio/wav",
+            MediaType = "audio",
+            OutputName = "output.wav",
+            Media = new MediaOptions { AudioBitrate = 111, WavBitDepth = 12 }
+        };
+
+        Assert.False(request.IsValid());
+    }
+
+    [Fact]
     public void Progress_parser_reports_bounded_progress_and_completion()
     {
         Assert.Equal(50, Ffmpeg.ParseProgress("out_time_us=5000000", 10_000_000)!.Percent);

@@ -933,6 +933,138 @@ input[type='range'] {
   gap: 0.75rem;
 }
 
+.media-trim-scrubber,
+.ffmpeg-tuning {
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.9rem;
+  border: 1px solid var(--lm-line-strong);
+  background: #f8fbff;
+}
+
+.media-trim-header,
+.media-trim-actions,
+.media-trim-labels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.media-trim-header > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.media-trim-duration,
+.media-trim-actions > span {
+  color: var(--lm-text-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.trim-preview {
+  width: 100%;
+  max-height: 280px;
+  background: var(--lm-ink);
+}
+
+audio.trim-preview {
+  min-height: 52px;
+}
+
+.trim-range {
+  position: relative;
+  height: 2rem;
+  margin-top: 0.15rem;
+  border: 1px solid var(--lm-ink);
+  background: var(--lm-surface-muted);
+}
+
+.trim-range-selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  background: var(--lm-blue);
+  pointer-events: none;
+}
+
+.trim-range-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+}
+
+.trim-range-input::-webkit-slider-thumb {
+  width: 1rem;
+  height: 2rem;
+  appearance: none;
+  border: 1px solid var(--lm-ink);
+  border-radius: 0;
+  background: var(--lm-lime);
+  box-shadow: 2px 0 0 var(--lm-ink);
+  cursor: ew-resize;
+  pointer-events: auto;
+}
+
+.trim-range-input::-moz-range-thumb {
+  width: 0.8rem;
+  height: 1.8rem;
+  border: 1px solid var(--lm-ink);
+  border-radius: 0;
+  background: var(--lm-lime);
+  box-shadow: 2px 0 0 var(--lm-ink);
+  cursor: ew-resize;
+  pointer-events: auto;
+}
+
+.trim-range-input:focus-visible {
+  outline: none;
+}
+
+.trim-range-input:focus-visible::-webkit-slider-thumb {
+  outline: 3px solid var(--lm-blue-deep);
+  outline-offset: 2px;
+}
+
+.trim-range-input:focus-visible::-moz-range-thumb {
+  outline: 3px solid var(--lm-blue-deep);
+  outline-offset: 2px;
+}
+
+.media-trim-labels {
+  color: var(--lm-text-muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.media-trim-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.text-button {
+  min-height: 40px;
+  padding: 0.45rem 0.1rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--lm-blue-deep);
+  text-decoration: underline;
+}
+
+.text-button:hover:not(:disabled) {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
 .selection-summary {
   display: grid;
   gap: 0.45rem;

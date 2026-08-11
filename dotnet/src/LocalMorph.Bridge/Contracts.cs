@@ -22,7 +22,12 @@ public sealed class ConversionRequest
             Image.Width is < 1 or > 16_384 || Image.Height is < 1 or > 16_384 ||
             !double.IsFinite(Media.TrimStart ?? 0) || (Media.TrimStart ?? 0) < 0 ||
             (Media.TrimEnd is { } trimEnd && (!double.IsFinite(trimEnd) || trimEnd <= (Media.TrimStart ?? 0))) ||
-            Media.ChannelMode is not ("source" or "mono" or "stereo"))
+            Media.ChannelMode is not ("source" or "mono" or "stereo") ||
+            Media.VideoEncodingSpeed is not ("fast" or "balanced" or "quality") ||
+            (Media.VideoFrameRate is { } frameRate && frameRate is not (24 or 30 or 60)) ||
+            (Media.AudioBitrate is { } audioBitrate && audioBitrate is not (64 or 96 or 128 or 192 or 256 or 320)) ||
+            (Media.AudioSampleRate is { } audioSampleRate && audioSampleRate is not (22050 or 44100 or 48000)) ||
+            Media.WavBitDepth is not (16 or 24 or 32))
         {
             return false;
         }
@@ -62,6 +67,11 @@ public sealed class MediaOptions
     public double? TrimStart { get; init; }
     public double? TrimEnd { get; init; }
     public string ChannelMode { get; init; } = "source";
+    public string VideoEncodingSpeed { get; init; } = "balanced";
+    public int? VideoFrameRate { get; init; }
+    public int? AudioBitrate { get; init; }
+    public int? AudioSampleRate { get; init; }
+    public int WavBitDepth { get; init; } = 16;
 }
 
 public enum JobStatus { Queued, Running, Completed, Failed, Canceled }

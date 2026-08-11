@@ -12,6 +12,11 @@ export type MediaConversionOptions = {
   trimStart: number;
   trimEnd: number;
   channelMode: AudioChannelMode;
+  videoEncodingSpeed: 'fast' | 'balanced' | 'quality';
+  videoFrameRate: number | null;
+  audioBitrate: number | null;
+  audioSampleRate: number | null;
+  wavBitDepth: 16 | 24 | 32;
 };
 
 export type ConversionOptions = {
@@ -49,11 +54,11 @@ export function hasImageResize(options: ImageConversionOptions) {
   return Boolean(options.width || options.height);
 }
 
-export function hasMediaTrim(options: MediaConversionOptions) {
+export function hasMediaTrim(options: Pick<MediaConversionOptions, 'trimStart' | 'trimEnd'>) {
   return options.trimStart > 0 || options.trimEnd > 0;
 }
 
-export function describeSelectedOptions(mediaType: MediaKind, options: ConversionOptions) {
+export function describeSelectedOptions(mediaType: MediaKind, options: ConversionOptions, targetMime?: string) {
   const entries: string[] = [];
 
   if (mediaType === 'image' && hasImageResize(options.image)) {
@@ -76,6 +81,33 @@ export function describeSelectedOptions(mediaType: MediaKind, options: Conversio
 
   if ((mediaType === 'audio' || mediaType === 'video') && options.media.channelMode !== 'auto') {
     entries.push(`Output channels: ${options.media.channelMode}`);
+  }
+
+  if (targetMime?.startsWith('video/')) {
+    if (options.media.videoEncodingSpeed !== 'balanced') {
+      entries.push(`Video encoding speed: ${options.media.videoEncodingSpeed}`);
+    }
+    if (options.media.videoFrameRate) {
+      entries.push(`Video frame rate: ${options.media.videoFrameRate} fps`);
+    }
+  }
+
+  if (targetMime === 'audio/mpeg' || targetMime?.startsWith('video/')) {
+    if (options.media.audioBitrate) {
+      entries.push(`Audio bitrate: ${options.media.audioBitrate} kbps`);
+    }
+    if (options.media.audioSampleRate) {
+      entries.push(`Audio sample rate: ${options.media.audioSampleRate} Hz`);
+    }
+  }
+
+  if (targetMime === 'audio/wav') {
+    if (options.media.audioSampleRate) {
+      entries.push(`Audio sample rate: ${options.media.audioSampleRate} Hz`);
+    }
+    if (options.media.wavBitDepth !== 16) {
+      entries.push(`WAV bit depth: ${options.media.wavBitDepth}-bit`);
+    }
   }
 
   if (options.outputBaseName.trim()) {

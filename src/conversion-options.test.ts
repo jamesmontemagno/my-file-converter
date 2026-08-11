@@ -83,15 +83,15 @@ describe('conversion-options', () => {
 
   describe('hasMediaTrim', () => {
     it('returns true when trim start is set', () => {
-      expect(hasMediaTrim({ trimStart: 2.5, trimEnd: 0, channelMode: 'auto' })).toBe(true);
+      expect(hasMediaTrim({ trimStart: 2.5, trimEnd: 0 })).toBe(true);
     });
 
     it('returns true when trim end is set', () => {
-      expect(hasMediaTrim({ trimStart: 0, trimEnd: 42, channelMode: 'auto' })).toBe(true);
+      expect(hasMediaTrim({ trimStart: 0, trimEnd: 42 })).toBe(true);
     });
 
     it('returns false when neither trim boundary is set', () => {
-      expect(hasMediaTrim({ trimStart: 0, trimEnd: 0, channelMode: 'auto' })).toBe(false);
+      expect(hasMediaTrim({ trimStart: 0, trimEnd: 0 })).toBe(false);
     });
   });
 
@@ -107,6 +107,11 @@ describe('conversion-options', () => {
         trimStart: 0,
         trimEnd: 0,
         channelMode: 'auto',
+        videoEncodingSpeed: 'balanced',
+        videoFrameRate: null,
+        audioBitrate: null,
+        audioSampleRate: null,
+        wavBitDepth: 16,
       },
     };
 
@@ -139,15 +144,39 @@ describe('conversion-options', () => {
     it('returns media trim text for audio and video', () => {
       const audioEntries = describeSelectedOptions('audio', {
         ...baseOptions,
-        media: { trimStart: 1, trimEnd: 3.5, channelMode: 'auto' },
+        media: { ...baseOptions.media, trimStart: 1, trimEnd: 3.5 },
       });
       const videoEntries = describeSelectedOptions('video', {
         ...baseOptions,
-        media: { trimStart: 0.5, trimEnd: 0, channelMode: 'auto' },
+        media: { ...baseOptions.media, trimStart: 0.5, trimEnd: 0 },
       });
 
       expect(audioEntries).toEqual(['Trim from 1.0s to 3.5s']);
       expect(videoEntries).toEqual(['Trim from 0.5s to the end']);
+    });
+
+    it('describes format-specific FFmpeg tuning only for the applicable target', () => {
+      const entries = describeSelectedOptions(
+        'video',
+        {
+          ...baseOptions,
+          media: {
+            ...baseOptions.media,
+            videoEncodingSpeed: 'quality',
+            videoFrameRate: 60,
+            audioBitrate: 192,
+            audioSampleRate: 48000,
+          },
+        },
+        'video/webm',
+      );
+
+      expect(entries).toEqual([
+        'Video encoding speed: quality',
+        'Video frame rate: 60 fps',
+        'Audio bitrate: 192 kbps',
+        'Audio sample rate: 48000 Hz',
+      ]);
     });
 
     it('appends output file naming text when provided', () => {

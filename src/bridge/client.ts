@@ -129,6 +129,11 @@ export type BridgeConversionRequest = {
     trimStart?: number;
     trimEnd?: number;
     channelMode: 'source' | 'mono' | 'stereo';
+    videoEncodingSpeed?: 'fast' | 'balanced' | 'quality';
+    videoFrameRate?: number;
+    audioBitrate?: number;
+    audioSampleRate?: number;
+    wavBitDepth?: 16 | 24 | 32;
   };
 };
 
@@ -161,6 +166,24 @@ export function normalizeBridgeRequest(args: {
       : undefined;
   const imageWidth = bridgeDimension(args.options.image.width);
   const imageHeight = bridgeDimension(args.options.image.height);
+  const videoFrameRate =
+    targetMime.startsWith('video/') && [24, 30, 60].includes(args.options.media.videoFrameRate ?? 0)
+      ? args.options.media.videoFrameRate ?? undefined
+      : undefined;
+  const audioBitrate =
+    (targetMime.startsWith('video/') || targetMime === 'audio/mpeg') &&
+    [64, 96, 128, 192, 256, 320].includes(args.options.media.audioBitrate ?? 0)
+      ? args.options.media.audioBitrate ?? undefined
+      : undefined;
+  const audioSampleRate =
+    (targetMime.startsWith('video/') || targetMime === 'audio/mpeg' || targetMime === 'audio/wav') &&
+    [22050, 44100, 48000].includes(args.options.media.audioSampleRate ?? 0)
+      ? args.options.media.audioSampleRate ?? undefined
+      : undefined;
+  const wavBitDepth =
+    targetMime === 'audio/wav' && [16, 24, 32].includes(args.options.media.wavBitDepth)
+      ? args.options.media.wavBitDepth
+      : undefined;
 
   return {
     targetMime,
@@ -176,6 +199,11 @@ export function normalizeBridgeRequest(args: {
       ...(trimStart === undefined ? {} : { trimStart }),
       ...(trimEnd === undefined ? {} : { trimEnd }),
       channelMode: args.options.media.channelMode === 'auto' ? 'source' : args.options.media.channelMode,
+      ...(targetMime.startsWith('video/') ? { videoEncodingSpeed: args.options.media.videoEncodingSpeed } : {}),
+      ...(videoFrameRate === undefined ? {} : { videoFrameRate }),
+      ...(audioBitrate === undefined ? {} : { audioBitrate }),
+      ...(audioSampleRate === undefined ? {} : { audioSampleRate }),
+      ...(wavBitDepth === undefined ? {} : { wavBitDepth }),
     },
   };
 }

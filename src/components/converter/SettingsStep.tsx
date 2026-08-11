@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BridgeError, parseBridgeStartupLine } from '../../bridge/client';
 import { BridgeLaunchActions } from '../BridgeLaunchActions';
+import { MediaTrimScrubber } from './MediaTrimScrubber';
 
 type FormatOption = {
   value: string;
@@ -145,6 +146,7 @@ function guidanceForFormat(targetMime: string, mediaType: string) {
 type SettingsStepProps = {
   busy: boolean;
   mediaType: string;
+  file: File | null;
   selectedFileSummary: string;
   targetMime: string;
   targetOptions: FormatOption[];
@@ -157,6 +159,11 @@ type SettingsStepProps = {
   trimStart: string;
   trimEnd: string;
   channelMode: string;
+  videoEncodingSpeed: string;
+  videoFrameRate: string;
+  audioBitrate: string;
+  audioSampleRate: string;
+  wavBitDepth: string;
   outputFileName: string;
   selectedAdjustments: string[];
   routeDisplayLabel: string;
@@ -166,6 +173,7 @@ type SettingsStepProps = {
   bridgeUrl: string;
   bridgeToken: string;
   bridgeDetail: string;
+  bridgeTuningAvailable: boolean;
   canConvert: boolean;
   onTargetMimeChange: (value: string) => void;
   onOutputBaseNameChange: (value: string) => void;
@@ -176,6 +184,11 @@ type SettingsStepProps = {
   onTrimStartChange: (value: string) => void;
   onTrimEndChange: (value: string) => void;
   onChannelModeChange: (value: string) => void;
+  onVideoEncodingSpeedChange: (value: string) => void;
+  onVideoFrameRateChange: (value: string) => void;
+  onAudioBitrateChange: (value: string) => void;
+  onAudioSampleRateChange: (value: string) => void;
+  onWavBitDepthChange: (value: string) => void;
   onRoutePreferenceChange: (value: 'auto' | 'browser') => void;
   onBridgeUrlChange: (value: string) => void;
   onBridgeTokenChange: (value: string) => void;
@@ -187,6 +200,7 @@ type SettingsStepProps = {
 export function SettingsStep({
   busy,
   mediaType,
+  file,
   selectedFileSummary,
   targetMime,
   targetOptions,
@@ -199,6 +213,11 @@ export function SettingsStep({
   trimStart,
   trimEnd,
   channelMode,
+  videoEncodingSpeed,
+  videoFrameRate,
+  audioBitrate,
+  audioSampleRate,
+  wavBitDepth,
   outputFileName,
   selectedAdjustments,
   routeDisplayLabel,
@@ -208,6 +227,7 @@ export function SettingsStep({
   bridgeUrl,
   bridgeToken,
   bridgeDetail,
+  bridgeTuningAvailable,
   canConvert,
   onTargetMimeChange,
   onOutputBaseNameChange,
@@ -218,6 +238,11 @@ export function SettingsStep({
   onTrimStartChange,
   onTrimEndChange,
   onChannelModeChange,
+  onVideoEncodingSpeedChange,
+  onVideoFrameRateChange,
+  onAudioBitrateChange,
+  onAudioSampleRateChange,
+  onWavBitDepthChange,
   onRoutePreferenceChange,
   onBridgeUrlChange,
   onBridgeTokenChange,
@@ -354,9 +379,20 @@ export function SettingsStep({
       {(mediaType === 'audio' || mediaType === 'video') ? (
         <div className="option-section">
           <h3>Media options</h3>
+          {file ? (
+            <MediaTrimScrubber
+              file={file}
+              mediaType={mediaType}
+              trimStart={trimStart}
+              trimEnd={trimEnd}
+              disabled={busy}
+              onTrimStartChange={onTrimStartChange}
+              onTrimEndChange={onTrimEndChange}
+            />
+          ) : null}
           <div className="option-grid">
             <label className="field">
-              <span>Trim start (seconds)</span>
+              <span>Fine-tune start (seconds)</span>
               <input
                 type="number"
                 min="0"
@@ -369,7 +405,7 @@ export function SettingsStep({
               />
             </label>
             <label className="field">
-              <span>Trim end (seconds)</span>
+              <span>Fine-tune end (seconds)</span>
               <input
                 type="number"
                 min="0"
@@ -382,7 +418,7 @@ export function SettingsStep({
               />
             </label>
           </div>
-          <small>Leave blank to use the full duration. Set trim end to stop at a specific time.</small>
+          <small>Drag either handle to set the export range. Leave trim end blank to include the rest of the file.</small>
 
           {(targetMime === 'audio/mpeg' || targetMime === 'audio/wav' || targetMime.startsWith('audio/')) ? (
             <label className="field">
@@ -398,6 +434,126 @@ export function SettingsStep({
               </select>
             </label>
           ) : null}
+
+          {bridgeTuningAvailable ? (
+            <div className="ffmpeg-tuning">
+              <div>
+                <span className="meta-label">Local FFmpeg tuning</span>
+                <strong>Applied to this {targetMime.startsWith('video/') ? 'video' : 'audio'} export</strong>
+              </div>
+
+              {targetMime.startsWith('video/') ? (
+                <>
+                  <label className="field">
+                    <span>Video quality</span>
+                    <input
+                      type="range"
+                      min="1"
+                      max="100"
+                      step="1"
+                      value={Math.round(quality * 100)}
+                      disabled={busy}
+                      onChange={(event) => onQualityChange(Number(event.target.value) / 100)}
+                    />
+                    <output>{Math.round(quality * 100)} / 100</output>
+                  </label>
+                  <div className="option-grid">
+                    <label className="field">
+                      <span>Encoding speed</span>
+                      <select
+                        value={videoEncodingSpeed}
+                        disabled={busy}
+                        onChange={(event) => onVideoEncodingSpeedChange(event.target.value)}
+                      >
+                        <option value="fast">Fast (larger files)</option>
+                        <option value="balanced">Balanced</option>
+                        <option value="quality">Quality (slower)</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Frame rate</span>
+                      <select
+                        value={videoFrameRate}
+                        disabled={busy}
+                        onChange={(event) => onVideoFrameRateChange(event.target.value)}
+                      >
+                        <option value="">Keep source</option>
+                        <option value="24">24 fps</option>
+                        <option value="30">30 fps</option>
+                        <option value="60">60 fps</option>
+                      </select>
+                    </label>
+                  </div>
+                </>
+              ) : null}
+
+              {targetMime === 'audio/mpeg' || targetMime.startsWith('video/') ? (
+                <div className="option-grid">
+                  <label className="field">
+                    <span>Audio bitrate</span>
+                    <select
+                      value={audioBitrate}
+                      disabled={busy}
+                      onChange={(event) => onAudioBitrateChange(event.target.value)}
+                    >
+                      <option value="">Encoder default</option>
+                      <option value="64">64 kbps</option>
+                      <option value="96">96 kbps</option>
+                      <option value="128">128 kbps</option>
+                      <option value="192">192 kbps</option>
+                      <option value="256">256 kbps</option>
+                      <option value="320">320 kbps</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Audio sample rate</span>
+                    <select
+                      value={audioSampleRate}
+                      disabled={busy}
+                      onChange={(event) => onAudioSampleRateChange(event.target.value)}
+                    >
+                      <option value="">Keep source</option>
+                      <option value="22050">22,050 Hz</option>
+                      <option value="44100">44,100 Hz</option>
+                      <option value="48000">48,000 Hz</option>
+                    </select>
+                  </label>
+                </div>
+              ) : null}
+
+              {targetMime === 'audio/wav' ? (
+                <div className="option-grid">
+                  <label className="field">
+                    <span>Audio sample rate</span>
+                    <select
+                      value={audioSampleRate}
+                      disabled={busy}
+                      onChange={(event) => onAudioSampleRateChange(event.target.value)}
+                    >
+                      <option value="">Keep source</option>
+                      <option value="22050">22,050 Hz</option>
+                      <option value="44100">44,100 Hz</option>
+                      <option value="48000">48,000 Hz</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>WAV bit depth</span>
+                    <select
+                      value={wavBitDepth}
+                      disabled={busy}
+                      onChange={(event) => onWavBitDepthChange(event.target.value)}
+                    >
+                      <option value="16">16-bit PCM</option>
+                      <option value="24">24-bit PCM</option>
+                      <option value="32">32-bit PCM</option>
+                    </select>
+                  </label>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <p className="muted">Connect and select Local FFmpeg Bridge to tune codec, bitrate, sample-rate, and frame-rate settings.</p>
+          )}
         </div>
       ) : null}
 
