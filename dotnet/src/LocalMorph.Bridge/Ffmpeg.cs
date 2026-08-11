@@ -52,27 +52,35 @@ public static class Ffmpeg
             case "video/mp4":
             case "video/quicktime":
                 Add(startInfo, "-c:v", "libx264");
-                Add(startInfo, "-preset", "medium");
+                Add(startInfo, "-preset", H264Preset(request.Media.VideoEncodingSpeed));
                 if (request.Quality is { } mp4Quality) Add(startInfo, "-crf", QualityToCrf(mp4Quality).ToString(CultureInfo.InvariantCulture));
                 Add(startInfo, "-c:a", "aac");
+                AddAudioTuning(startInfo, request.Media);
+                if (request.Media.VideoFrameRate is { } mp4FrameRate) Add(startInfo, "-r", mp4FrameRate.ToString(CultureInfo.InvariantCulture));
                 break;
             case "video/webm":
                 Add(startInfo, "-c:v", "libvpx-vp9");
+                Add(startInfo, "-deadline", Vp9Deadline(request.Media.VideoEncodingSpeed));
+                Add(startInfo, "-cpu-used", Vp9CpuUsed(request.Media.VideoEncodingSpeed).ToString(CultureInfo.InvariantCulture));
                 if (request.Quality is { } webmQuality)
                 {
                     Add(startInfo, "-crf", QualityToCrf(webmQuality).ToString(CultureInfo.InvariantCulture));
                     Add(startInfo, "-b:v", "0");
                 }
                 Add(startInfo, "-c:a", "libopus");
+                AddAudioTuning(startInfo, request.Media);
+                if (request.Media.VideoFrameRate is { } webmFrameRate) Add(startInfo, "-r", webmFrameRate.ToString(CultureInfo.InvariantCulture));
                 break;
             case "image/gif":
                 Add(startInfo, "-vf", GifFilter(request.Image));
                 break;
             case "audio/mpeg":
                 Add(startInfo, "-vn", "-c:a", "libmp3lame");
+                AddAudioTuning(startInfo, request.Media);
                 break;
             case "audio/wav":
-                Add(startInfo, "-vn", "-c:a", "pcm_s16le");
+                Add(startInfo, "-vn", "-c:a", WavCodec(request.Media.WavBitDepth));
+                AddAudioTuning(startInfo, request.Media);
                 break;
         }
 
@@ -109,6 +117,40 @@ public static class Ffmpeg
     }
 
     private static int QualityToCrf(int quality) => 51 - quality * 33 / 100;
+
+    private static void AddAudioTuning(ProcessStartInfo startInfo, MediaOptions media)
+    {
+        if (media.AudioBitrate is { } audioBitrate) Add(startInfo, "-b:a", $"{audioBitrate}k");
+        if (media.AudioSampleRate is { } audioSampleRate) Add(startInfo, "-ar", audioSampleRate.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static string H264Preset(string speed) => speed switch
+    {
+        "fast" => "fast",
+        "quality" => "slow",
+        _ => "medium"
+    };
+
+    private static string Vp9Deadline(string speed) => speed switch
+    {
+        "fast" => "realtime",
+        "quality" => "best",
+        _ => "good"
+    };
+
+    private static int Vp9CpuUsed(string speed) => speed switch
+    {
+        "fast" => 8,
+        "quality" => 1,
+        _ => 4
+    };
+
+    private static string WavCodec(int bitDepth) => bitDepth switch
+    {
+        24 => "pcm_s24le",
+        32 => "pcm_s32le",
+        _ => "pcm_s16le"
+    };
 
     private static string QuoteForDisplay(string value) =>
         value.Any(char.IsWhiteSpace) || value.Contains('"')

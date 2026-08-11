@@ -1425,6 +1425,11 @@ export default function App() {
   const [trimStart, setTrimStart] = useState('');
   const [trimEnd, setTrimEnd] = useState('');
   const [channelMode, setChannelMode] = useState('auto');
+  const [videoEncodingSpeed, setVideoEncodingSpeed] = useState<'fast' | 'balanced' | 'quality'>('balanced');
+  const [videoFrameRate, setVideoFrameRate] = useState('');
+  const [audioBitrate, setAudioBitrate] = useState('');
+  const [audioSampleRate, setAudioSampleRate] = useState('');
+  const [wavBitDepth, setWavBitDepth] = useState<16 | 24 | 32>(16);
 
   useEffect(() => {
     const onHashChange = () => setPage(getPageFromHash());
@@ -1501,9 +1506,27 @@ export default function App() {
         trimStart: parseFloat(trimStart) || 0,
         trimEnd: parseFloat(trimEnd) || 0,
         channelMode: channelMode as 'auto' | 'mono' | 'stereo',
+        videoEncodingSpeed,
+        videoFrameRate: parsePositiveInteger(videoFrameRate),
+        audioBitrate: parsePositiveInteger(audioBitrate),
+        audioSampleRate: parsePositiveInteger(audioSampleRate),
+        wavBitDepth,
       },
     }),
-    [imageHeight, imageWidth, keepAspectRatio, outputBaseName, trimStart, trimEnd, channelMode],
+    [
+      audioBitrate,
+      audioSampleRate,
+      channelMode,
+      imageHeight,
+      imageWidth,
+      keepAspectRatio,
+      outputBaseName,
+      trimStart,
+      trimEnd,
+      videoEncodingSpeed,
+      videoFrameRate,
+      wavBitDepth,
+    ],
   );
   const selectedTargetOption = useMemo(
     () => targetOptionsWithSupport.find((option) => option.value === targetMime),
@@ -1512,8 +1535,8 @@ export default function App() {
   const browserTargetSupported = selectedTargetOption?.browserSupported ?? false;
   const bridgeTargetSupported = selectedTargetOption?.bridgeSupported ?? false;
   const selectedOptions = useMemo(
-    () => describeSelectedOptions(mediaType, requestedOptions),
-    [mediaType, requestedOptions],
+    () => describeSelectedOptions(mediaType, requestedOptions, targetMime),
+    [mediaType, requestedOptions, targetMime],
   );
   const selectedAdjustments = useMemo(
     () => selectedOptions.filter((entry) => !entry.startsWith('Save as ')),
@@ -1651,6 +1674,14 @@ export default function App() {
     setImageWidth('');
     setImageHeight('');
     setKeepAspectRatio(true);
+    setTrimStart('');
+    setTrimEnd('');
+    setChannelMode('auto');
+    setVideoEncodingSpeed('balanced');
+    setVideoFrameRate('');
+    setAudioBitrate('');
+    setAudioSampleRate('');
+    setWavBitDepth(16);
     setStatus(nextFile ? 'File loaded. Configure your output format.' : 'Select a file to begin.');
     setStatusDetail(
       nextFile
@@ -1806,7 +1837,28 @@ export default function App() {
   function handleQualityChange(nextQuality: number) {
     setQuality(nextQuality);
     if (file) {
-      markConfigurationChanged('Image quality updated. Ready to convert.');
+      markConfigurationChanged('Output quality updated. Ready to convert.');
+    }
+  }
+
+  function handleTrimStartChange(nextTrimStart: string) {
+    setTrimStart(nextTrimStart);
+    if (file) {
+      markConfigurationChanged('Trim start updated. Ready to convert.');
+    }
+  }
+
+  function handleTrimEndChange(nextTrimEnd: string) {
+    setTrimEnd(nextTrimEnd);
+    if (file) {
+      markConfigurationChanged('Trim end updated. Ready to convert.');
+    }
+  }
+
+  function handleChannelModeChange(nextChannelMode: string) {
+    setChannelMode(nextChannelMode);
+    if (file) {
+      markConfigurationChanged('Output channel mode updated. Ready to convert.');
     }
   }
 
@@ -2178,6 +2230,7 @@ export default function App() {
           <SettingsStep
             busy={busy}
             mediaType={mediaType}
+            file={file}
             selectedFileSummary={file ? `${file.name} (${formatBytes(file.size)})` : 'No file selected'}
             targetMime={targetMime}
             targetOptions={targetOptionsWithSupport}
@@ -2190,6 +2243,11 @@ export default function App() {
             trimStart={trimStart}
             trimEnd={trimEnd}
             channelMode={channelMode}
+            videoEncodingSpeed={videoEncodingSpeed}
+            videoFrameRate={videoFrameRate}
+            audioBitrate={audioBitrate}
+            audioSampleRate={audioSampleRate}
+            wavBitDepth={String(wavBitDepth)}
             outputFileName={outputFileName}
             selectedAdjustments={selectedAdjustments}
             routeDisplayLabel={routeDisplayLabel}
@@ -2199,6 +2257,7 @@ export default function App() {
             bridgeUrl={bridgeUrl}
             bridgeToken={bridgeToken}
             bridgeDetail={bridgeDetail}
+            bridgeTuningAvailable={routeDecision === 'bridge'}
             canConvert={canConvert}
             onTargetMimeChange={handleTargetMimeChange}
             onOutputBaseNameChange={handleOutputBaseNameChange}
@@ -2206,9 +2265,32 @@ export default function App() {
             onImageHeightChange={handleImageHeightChange}
             onKeepAspectRatioChange={handleKeepAspectRatioChange}
             onQualityChange={handleQualityChange}
-            onTrimStartChange={setTrimStart}
-            onTrimEndChange={setTrimEnd}
-            onChannelModeChange={setChannelMode}
+            onTrimStartChange={handleTrimStartChange}
+            onTrimEndChange={handleTrimEndChange}
+            onChannelModeChange={handleChannelModeChange}
+            onVideoEncodingSpeedChange={(value) => {
+              if (value !== 'fast' && value !== 'balanced' && value !== 'quality') return;
+              setVideoEncodingSpeed(value);
+              markConfigurationChanged('FFmpeg encoding speed updated. Ready to convert.');
+            }}
+            onVideoFrameRateChange={(value) => {
+              setVideoFrameRate(value);
+              markConfigurationChanged('FFmpeg frame rate updated. Ready to convert.');
+            }}
+            onAudioBitrateChange={(value) => {
+              setAudioBitrate(value);
+              markConfigurationChanged('FFmpeg audio bitrate updated. Ready to convert.');
+            }}
+            onAudioSampleRateChange={(value) => {
+              setAudioSampleRate(value);
+              markConfigurationChanged('FFmpeg audio sample rate updated. Ready to convert.');
+            }}
+            onWavBitDepthChange={(value) => {
+              const bitDepth = Number(value);
+              if (bitDepth !== 16 && bitDepth !== 24 && bitDepth !== 32) return;
+              setWavBitDepth(bitDepth);
+              markConfigurationChanged('FFmpeg WAV bit depth updated. Ready to convert.');
+            }}
             onRoutePreferenceChange={setRoutePreference}
             onBridgeUrlChange={handleBridgeUrlChange}
             onBridgeTokenChange={handleBridgeTokenChange}

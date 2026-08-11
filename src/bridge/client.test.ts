@@ -30,6 +30,11 @@ const defaultOptions = {
     trimStart: 0,
     trimEnd: 0,
     channelMode: 'auto' as const,
+    videoEncodingSpeed: 'balanced' as const,
+    videoFrameRate: null,
+    audioBitrate: null,
+    audioSampleRate: null,
+    wavBitDepth: 16 as const,
   },
 };
 
@@ -106,7 +111,14 @@ describe('normalizeBridgeRequest', () => {
           ...defaultOptions,
           outputBaseName: '../My final export',
           image: { width: null, height: 20_000, keepAspectRatio: false },
-          media: { trimStart: 2.5, trimEnd: 0, channelMode: 'auto' },
+          media: {
+            ...defaultOptions.media,
+            trimStart: 2.5,
+            videoEncodingSpeed: 'quality',
+            videoFrameRate: 60,
+            audioBitrate: 192,
+            audioSampleRate: 48000,
+          },
         },
       }),
     ).toEqual({
@@ -115,7 +127,38 @@ describe('normalizeBridgeRequest', () => {
       mediaType: 'video',
       quality: 90,
       image: { height: 16_384, keepAspectRatio: false },
-      media: { trimStart: 2.5, channelMode: 'source' },
+      media: {
+        trimStart: 2.5,
+        channelMode: 'source',
+        videoEncodingSpeed: 'quality',
+        videoFrameRate: 60,
+        audioBitrate: 192,
+        audioSampleRate: 48000,
+      },
+    });
+
+  });
+
+  it('only forwards recognized FFmpeg tuning values for the target format', () => {
+    const request = normalizeBridgeRequest({
+      fileName: 'source.wav',
+      targetMime: 'audio/wav',
+      mediaType: 'audio',
+      quality: 0.9,
+      options: {
+        ...defaultOptions,
+        media: {
+          ...defaultOptions.media,
+          audioSampleRate: 44100,
+          wavBitDepth: 24,
+        },
+      },
+    });
+
+    expect(request.media).toEqual({
+      channelMode: 'source',
+      audioSampleRate: 44100,
+      wavBitDepth: 24,
     });
   });
 
