@@ -61,4 +61,7 @@ public static class Icons
     public const string Board = "\uF35C";
     public const string Reset = "\uF1A0";
     public const string Save = "\uF680";
+    public const string Sun = "\uF8A2";
+    public const string Moon = "\uF87E";
+    public const string ThemeAuto = "\uF33C";
 }

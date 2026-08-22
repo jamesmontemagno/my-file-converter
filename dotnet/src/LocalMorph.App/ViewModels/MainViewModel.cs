@@ -60,6 +60,7 @@ public partial class MainViewModel : ObservableObject
         UseHardwareEncoder = settings.UseHardwareEncoder;
         OpenFolderWhenDone = settings.OpenFolderWhenDone;
         StripMetadata = !settings.KeepMetadata;
+        Theme = settings.Theme;
 
         Files.CollectionChanged += (_, _) => OnFilesChanged();
         History.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasHistory));
@@ -1007,6 +1008,26 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand] private void ToggleAdvanced() => IsAdvancedOpen = !IsAdvancedOpen;
     [RelayCommand] private void ToggleOutput() => IsOutputOpen = !IsOutputOpen;
     [RelayCommand] private void ToggleCommandPreview() => IsCommandPreviewOpen = !IsCommandPreviewOpen;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ThemeIcon))]
+    [NotifyPropertyChangedFor(nameof(ThemeLabel))]
+    public partial AppTheme Theme { get; set; }
+
+    public string ThemeIcon => Theme switch { AppTheme.Light => Icons.Sun, AppTheme.Dark => Icons.Moon, _ => Icons.ThemeAuto };
+    public string ThemeLabel => Theme switch { AppTheme.Light => "Light theme", AppTheme.Dark => "Dark theme", _ => "Follow system theme" };
+
+    [RelayCommand]
+    private void CycleTheme()
+    {
+        Theme = Theme switch { AppTheme.Unspecified => AppTheme.Light, AppTheme.Light => AppTheme.Dark, _ => AppTheme.Unspecified };
+    }
+
+    partial void OnThemeChanged(AppTheme value)
+    {
+        settings.Theme = value;
+        if (Application.Current is { } app) app.UserAppTheme = value;
+    }
 
     [RelayCommand]
     private async Task RefreshToolsAsync()

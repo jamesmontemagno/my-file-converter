@@ -216,7 +216,7 @@
         </Grid.GestureRecognizers>
 
         <!-- ===================== Header ===================== -->
-        <Grid Grid.Row="0" Padding="24,16,24,12" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="16">
+        <Grid Grid.Row="0" Padding="24,16,24,12" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
             <HorizontalStackLayout Spacing="12">
                 <Border WidthRequest="38" HeightRequest="38" Padding="0" StrokeThickness="0" StrokeShape="RoundRectangle 9" Background="{StaticResource Accent}">
                     <Label Text="LM" TextColor="White" FontFamily="OpenSansSemibold" FontSize="13" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" />
@@ -254,6 +254,8 @@
                     </Button>
                 </HorizontalStackLayout>
             </Border>
+
+            <Button Grid.Column="2" Style="{StaticResource IconButton}" WidthRequest="40" HeightRequest="40" FontSize="20" Text="{Binding ThemeIcon}" ToolTipProperties.Text="{Binding ThemeLabel}" Command="{Binding CycleThemeCommand}" VerticalOptions="Center" AutomationId="ThemeButton" />
 
             <Border Grid.Column="3" Padding="12,7" StrokeThickness="1" StrokeShape="RoundRectangle 999" VerticalOptions="Center"
                     Stroke="{AppThemeBinding Light=#CBE5D2, Dark=#24503A}"

@@ -53,4 +53,10 @@ public sealed class AppSettings
 
     public string? LastFormatFor(string category) => preferences.Get($"last-format-{category}", string.Empty) is { Length: > 0 } id ? id : null;
     public void SetLastFormatFor(string category, string formatId) => preferences.Set($"last-format-{category}", formatId);
+
+    public AppTheme Theme
+    {
+        get => Enum.TryParse<AppTheme>(preferences.Get("theme", nameof(AppTheme.Unspecified)), out var theme) ? theme : AppTheme.Unspecified;
+        set => preferences.Set("theme", value.ToString());
+    }
 }

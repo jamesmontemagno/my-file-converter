@@ -305,6 +305,28 @@ public sealed class FfmpegIntegrationTests
     }
 
     [FfmpegFact]
+    public async Task Hardware_encoder_is_used_when_available_and_produces_playable_output()
+    {
+        var ffmpeg = Fixture.Inventory.Value.PathFor(ToolKind.Ffmpeg)!;
+        var caps = await FfmpegCapabilities.DiscoverAsync(ffmpeg, verifyHardware: true);
+        var tools = new ToolInventory(Fixture.Inventory.Value.Tools, caps);
+        var root = Fixture.Root;
+        var video = await Fixture.MakeVideoAsync(root, seconds: 2);
+        var source = await SourceInspector.InspectAsync(video, tools);
+        var job = new ConversionJob(source, FormatCatalog.Find("mp4-h264")!, new ConversionOptions { UseHardwareEncoder = true, TargetHeight = 360 }, Path.Combine(root, "hw.mp4"), EngineKind.Ffmpeg);
+
+        await ConversionRunner.RunAsync(job, tools, Path.Combine(root, "work"));
+
+        Assert.Equal(JobState.Completed, job.State);
+        var hardware = caps.HardwareEncoderFor("h264");
+        if (hardware is not null) Assert.Contains(hardware.Encoder, job.CommandLine);
+        else Assert.Contains("libx264", job.CommandLine);
+        var info = await SourceInspector.InspectAsync(job.OutputPath, tools);
+        Assert.Equal("h264", info.Media!.VideoCodec);
+        Assert.Equal(360, info.Media.Height);
+    }
+
+    [FfmpegFact]
     public async Task Capabilities_detect_encoders_from_real_ffmpeg()
     {
         var caps = await FfmpegCapabilities.DiscoverAsync(Fixture.Inventory.Value.PathFor(ToolKind.Ffmpeg)!, verifyHardware: true);
