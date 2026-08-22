@@ -48,4 +48,14 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet workload install maui-windows
-      - run: dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-windows10.0.19041.0 --configuration Release
+      - run: dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-windows10.0.19041.0 --configuration Release -p:WindowsOnly=true
+
+  desktop-app-mac:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet workload install maui
+      - run: dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-maccatalyst --configuration Release -p:MacOnly=true -p:EnableCodeSigning=false

@@ -71,9 +71,10 @@ redistribute FFmpeg.
 `dotnet/src/LocalMorph.App` is a native desktop app for Windows and macOS that converts
 **any number of files at once** with the tools already on your device — no browser limits.
 
-- **Batch queue** — add files or whole folders, drag & drop, or pass paths on the command line
-  (`LocalMorph.App.exe video.mov photo.heic`). Files convert in parallel with live progress,
-  speed, and ETA; cancel any job or all of them.
+- **Batch queue** — add files or whole folders, drag & drop, "Open with" from Explorer/Finder, or pass
+  paths on the command line (`LocalMorph.App.exe video.mov photo.heic`). The app is single-instance:
+  opening more files while it's running adds them to the existing queue. Files convert in parallel
+  with live progress, speed, and ETA; cancel any job or all of them.
 - **50+ output formats** — MP4 (H.264/H.265/AV1), MKV, MOV/ProRes, WebM, GIF, animated WebP/APNG,
   MP3, AAC, FLAC, ALAC, Opus, OGG, WAV/AIFF, PNG, JPEG, WebP, AVIF, JPEG XL, TIFF, BMP, ICO, HEIC,
   plus PDF/DOCX/XLSX/PPTX/ODT/EPUB/Markdown/HTML document conversion.

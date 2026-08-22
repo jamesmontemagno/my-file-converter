@@ -14,3 +14,4 @@ the git tag (`## v1.2.3-windows` / `## v1.2.3-mac`) into the GitHub Release note
 - History of finished conversions with reopen, reveal, and reconvert.
 - Light/dark/system theme with a themed title bar.
 - In-app update check against the LocalMorph appcast (winget / Homebrew upgrade hints).
+- "Open with" support: LocalMorph registers as a handler for video, audio, image, and document files on Windows (MSIX file type associations) and macOS (`CFBundleDocumentTypes`). Opening files from Explorer/Finder, or launching a second time, adds them to the running app's queue and brings it to the front.

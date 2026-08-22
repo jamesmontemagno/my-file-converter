@@ -7,7 +7,7 @@
 - A `winapp ui` UI-automation script exercised the Windows app end-to-end (44 checks: presets, format chooser, trim, convert, skip rules, history, tools, theme).
 
 ## What is working
-- Multi-file queue: file picker, folder picker, drag & drop (Windows + Mac Catalyst code path), command-line arguments.
+- Multi-file queue: file picker, folder picker, drag & drop (Windows + Mac Catalyst code path), command-line arguments, and OS "Open with" (Windows `fileTypeAssociation` + `AppInstance` single-instance redirection; macOS `CFBundleDocumentTypes` + scene URL contexts). Verified on Windows both unpackaged and as a registered MSIX.
 - Per-file inspection via ffprobe (codec, dimensions, duration, audio) with extension fallback.
 - Format catalog with 50+ targets across video, audio, image, and documents; availability reflects installed tools and compiled-in encoders; mixed batches skip files a format does not apply to.
 - Engines: FFmpeg (all media), ImageMagick (HEIC/RAW/SVG/PSD/ICO/HEIC/PDF), LibreOffice (office documents), Pandoc (Markdown/HTML/EPUB), Ghostscript (PDF compress/rasterize).

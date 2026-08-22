@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using CommunityToolkit.Maui.Core;
 using CommunityToolkit.Maui.Views;
+using LocalMorph.App.Services;
 using LocalMorph.App.ViewModels;
 using LocalMorph.Core.Jobs;
 
@@ -27,9 +28,14 @@ public partial class MainPage : ContentPage
         initialized = true;
         await viewModel.InitializeAsync();
 
-        // Files passed on the command line ("Open with LocalMorph", drag onto the exe, scripts).
-        var arguments = Environment.GetCommandLineArgs().Skip(1).Where(argument => File.Exists(argument) || Directory.Exists(argument)).ToList();
-        if (arguments.Count > 0) await viewModel.AddPathsAsync(arguments);
+        // Files passed on the command line ("Open with LocalMorph", drag onto the exe, scripts) plus
+        // anything the OS hands us later through file activation / a redirected second instance.
+        FileActivationService.Open(Environment.GetCommandLineArgs().Skip(1));
+        FileActivationService.Subscribe(async paths =>
+        {
+            await viewModel.AddPathsAsync(paths);
+            viewModel.View = WorkspaceView.Convert;
+        });
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -156,10 +162,10 @@ public partial class MainPage : ContentPage
 #elif MACCATALYST
             if (e.PlatformArgs?.DropSession is { } session && session.CanLoadObjects(new ObjCRuntime.Class(typeof(Foundation.NSUrl))))
             {
-                var completion = new TaskCompletionSource<Foundation.NSUrl[]>();
-                session.LoadObjects<Foundation.NSUrl>(urls => completion.TrySetResult(urls));
-                var urls = await completion.Task.WaitAsync(TimeSpan.FromSeconds(10));
-                paths.AddRange(urls.Select(url => url.Path).Where(path => !string.IsNullOrWhiteSpace(path))!);
+                var completion = new TaskCompletionSource<Foundation.INSItemProviderReading[]>();
+                session.LoadObjects(new ObjCRuntime.Class(typeof(Foundation.NSUrl)), items => completion.TrySetResult(items));
+                var items = await completion.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                paths.AddRange(items.OfType<Foundation.NSUrl>().Select(url => url.Path).Where(path => !string.IsNullOrWhiteSpace(path))!);
             }
 #endif
             if (paths.Count == 0 && e.Data.Properties.TryGetValue("FileNames", out var fileNames) && fileNames is IEnumerable<string> names)
