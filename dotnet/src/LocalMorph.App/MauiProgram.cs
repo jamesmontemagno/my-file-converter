@@ -26,6 +26,7 @@ public static class MauiProgram
 
 		builder.Services.AddSingleton(Preferences.Default);
 		builder.Services.AddSingleton<AppSettings>();
+		builder.Services.AddSingleton<UpdateService>();
 		builder.Services.AddSingleton<ConversionService>();
 		builder.Services.AddSingleton<MainViewModel>();
 		builder.Services.AddSingleton<MainPage>();

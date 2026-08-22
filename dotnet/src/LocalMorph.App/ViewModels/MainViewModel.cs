@@ -8,6 +8,7 @@ using LocalMorph.Core.Engines;
 using LocalMorph.Core.Formats;
 using LocalMorph.Core.Jobs;
 using LocalMorph.Core.Tools;
+using LocalMorph.Core.Updates;
 
 namespace LocalMorph.App.ViewModels;
 
@@ -28,13 +29,16 @@ public partial class MainViewModel : ObservableObject
     private const int MaxFilesPerDrop = 500;
     private readonly ConversionService service;
     private readonly AppSettings settings;
+    private readonly UpdateService updates;
     private readonly SemaphoreSlim inspectionGate = new(4);
     private bool applyingPreset;
 
-    public MainViewModel(ConversionService service, AppSettings settings)
+    public MainViewModel(ConversionService service, AppSettings settings, UpdateService updates)
     {
         this.service = service;
         this.settings = settings;
+        this.updates = updates;
+        AutomaticUpdateChecks = updates.AutomaticChecks;
 
         SelectedResolution = ResolutionOptions[0];
         SelectedFrameRate = FrameRateOptions[0];
@@ -335,6 +339,85 @@ public partial class MainViewModel : ObservableObject
         {
             IsRefreshingTools = false;
         }
+
+        _ = CheckForUpdatesAsync(force: false);
+    }
+
+    // ---------------------------------------------------------------- updates
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUpdate))]
+    [NotifyPropertyChangedFor(nameof(UpdateLabel))]
+    public partial UpdateInfo? AvailableUpdate { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsCheckingForUpdates { get; set; }
+
+    [ObservableProperty]
+    public partial string UpdateStatus { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool AutomaticUpdateChecks { get; set; }
+
+    public bool HasUpdate => AvailableUpdate is not null;
+    public string UpdateLabel => AvailableUpdate is null ? string.Empty : $"Update available · {AvailableUpdate.DisplayVersion}";
+    public string CurrentVersionLabel => $"LocalMorph {UpdateService.CurrentVersionDisplay}";
+    public string UpdateInstallHint => UpdateService.InstallHint;
+
+    partial void OnAutomaticUpdateChecksChanged(bool value) => updates.AutomaticChecks = value;
+
+    [RelayCommand]
+    private async Task CheckForUpdatesAsync(bool force)
+    {
+        if (IsCheckingForUpdates) return;
+        IsCheckingForUpdates = true;
+        try
+        {
+            var update = await updates.CheckAsync(force);
+            AvailableUpdate = update;
+            if (force)
+            {
+                UpdateStatus = update is null ? $"You're up to date ({UpdateService.CurrentVersionDisplay})." : $"Version {update.DisplayVersion} is available.";
+                if (update is null) ShowToast("You're up to date.");
+            }
+            else if (update is not null)
+            {
+                ShowToast($"LocalMorph {update.DisplayVersion} is available.");
+            }
+        }
+        finally
+        {
+            IsCheckingForUpdates = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task OpenUpdateAsync()
+    {
+        if (AvailableUpdate is not { } update) return;
+        await Launcher.Default.OpenAsync(update.ReleaseNotesUrl ?? update.DownloadUrl);
+    }
+
+    [RelayCommand]
+    private async Task DownloadUpdateAsync()
+    {
+        if (AvailableUpdate is { } update) await Launcher.Default.OpenAsync(update.DownloadUrl);
+    }
+
+    [RelayCommand]
+    private async Task CopyUpdateCommandAsync()
+    {
+        await Clipboard.Default.SetTextAsync(UpdateService.InstallHint);
+        ShowToast("Upgrade command copied.");
+    }
+
+    [RelayCommand]
+    private void SkipUpdate()
+    {
+        if (AvailableUpdate is not { } update) return;
+        updates.SkippedVersion = update.DisplayVersion;
+        AvailableUpdate = null;
+        UpdateStatus = $"Skipped {update.DisplayVersion}.";
     }
 
     private void ApplyTools(ToolInventory inventory)

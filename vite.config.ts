@@ -42,7 +42,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         runtimeCaching: [],
-        navigateFallbackDenylist: [/sitemap\.xml$/, /robots\.txt$/],
+        navigateFallbackDenylist: [/sitemap\.xml$/, /robots\.txt$/, /appcast(-windows)?\.xml$/],
       },
     }),
   ],

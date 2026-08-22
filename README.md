@@ -100,6 +100,17 @@ dotnet test dotnet/tests/LocalMorph.Core.Tests   # unit + real-FFmpeg integratio
 FFmpeg is required for media conversion (`winget install Gyan.FFmpeg` / `brew install ffmpeg`), or
 drop platform binaries under `dotnet/src/LocalMorph.App/Resources/ffmpeg/<rid>/` to bundle them.
 
+### Install the desktop app
+
+```text
+winget install Refractored.LocalMorph                                # Windows 10 2004+ (x64 / ARM64)
+brew install --cask jamesmontemagno/my-file-converter/localmorph     # macOS 13+ (universal)
+```
+
+Releases are tag-driven (`vX.Y.Z-windows`, `vX.Y.Z-mac`): signed MSIX + winget manifest on Windows,
+notarized universal `.app` + Sparkle appcast + Homebrew cask on macOS, and the app checks
+`localmorph.com/appcast*.xml` for updates. See [docs/release-setup.md](docs/release-setup.md).
+
 ## Deployment
 
 Push to `main` and GitHub Actions will build and publish `dist/` to GitHub Pages.

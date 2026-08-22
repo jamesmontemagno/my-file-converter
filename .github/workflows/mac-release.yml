@@ -1,0 +1,239 @@
+name: macOS Release
+
+# Tag-driven desktop release: publishes a universal Mac Catalyst .app, signs with Developer ID
+# (hardened runtime), notarizes and staples, zips it, generates the Sparkle-compatible appcast,
+# publishes a GitHub Release, and opens a PR that updates public/appcast.xml + Casks/localmorph.rb.
+
+on:
+  push:
+    tags:
+      - 'v*-mac'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'macOS release tag (for example, v1.0.1-mac)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  APP_PROJECT: dotnet/src/LocalMorph.App/LocalMorph.App.csproj
+  TARGET_FRAMEWORK: net10.0-maccatalyst
+  PRODUCT_NAME: LocalMorph
+  SPARKLE_VERSION: "2.8.1"
+
+jobs:
+  build-and-release:
+    name: Build, notarize, and release .app
+    runs-on: macos-15
+    environment: macos-release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui
+
+      - name: Set release version
+        run: |
+          TAG="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          if [[ ! "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(\.([0-9]+))?-mac$ ]]; then
+            echo "macOS release tags must look like v1.2.3-mac or v1.2.3.4-mac. Got '$TAG'."; exit 1
+          fi
+          VERSION="${BASH_REMATCH[1]}"
+          BUILD_NUMBER="${{ github.run_number }}"
+          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
+          echo "MARKETING_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+
+      - name: Install Apple Developer ID certificate
+        env:
+          DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          echo -n "$DEVELOPER_ID_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security import $CERTIFICATE_PATH -P "$DEVELOPER_ID_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH login.keychain
+          IDENTITY=$(security find-identity -v -p codesigning $KEYCHAIN_PATH | grep "Developer ID Application" | head -n1 | sed -E 's/.*"(.*)".*/\1/')
+          if [ -z "$IDENTITY" ]; then echo "No Developer ID Application identity found."; exit 1; fi
+          echo "CODESIGN_IDENTITY=$IDENTITY" >> $GITHUB_ENV
+
+      - name: Publish universal .app
+        run: |
+          # MAUI signs the bundle itself (EnableCodeSigning) using the Developer ID identity; the
+          # hardened runtime is required for notarization. No provisioning profile is needed when the
+          # app declares no restricted entitlements (Entitlements.plist disables the sandbox only).
+          dotnet publish $APP_PROJECT \
+            -f $TARGET_FRAMEWORK \
+            -c Release \
+            -p:MacOnly=true \
+            -p:RuntimeIdentifiers="maccatalyst-x64;maccatalyst-arm64" \
+            -p:CreatePackage=false \
+            -p:EnableCodeSigning=true \
+            -p:UseHardenedRuntime=true \
+            -p:CodesignKey="$CODESIGN_IDENTITY" \
+            -p:CodesignEntitlements="Platforms/MacCatalyst/Entitlements.plist" \
+            -p:ApplicationDisplayVersion=$MARKETING_VERSION \
+            -p:ApplicationVersion=$BUILD_NUMBER \
+            -o $RUNNER_TEMP/publish \
+            -v:minimal
+
+          APP=$(find $RUNNER_TEMP/publish -maxdepth 2 -name "*.app" -type d | head -n1)
+          if [ -z "$APP" ]; then echo "No .app bundle produced."; exit 1; fi
+          mv "$APP" "$RUNNER_TEMP/$PRODUCT_NAME.app"
+          echo "APP_PATH=$RUNNER_TEMP/$PRODUCT_NAME.app" >> $GITHUB_ENV
+          lipo -info "$RUNNER_TEMP/$PRODUCT_NAME.app/Contents/MacOS/"* | head -n 3
+
+      - name: Re-sign with timestamp and verify
+        run: |
+          # Ensure every nested binary carries a secure timestamp + hardened runtime before notarizing.
+          codesign --force --deep --timestamp --options runtime \
+            --entitlements dotnet/src/LocalMorph.App/Platforms/MacCatalyst/Entitlements.plist \
+            --sign "$CODESIGN_IDENTITY" "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+      - name: Notarize and staple
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$RUNNER_TEMP/$PRODUCT_NAME-notarize.zip"
+          OUTPUT=$(xcrun notarytool submit "$RUNNER_TEMP/$PRODUCT_NAME-notarize.zip" \
+            --apple-id "$APPLE_ID" --password "$APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait --output-format json)
+          echo "$OUTPUT"
+          STATUS=$(echo "$OUTPUT" | jq -r '.status')
+          if [ "$STATUS" != "Accepted" ]; then
+            xcrun notarytool log "$(echo "$OUTPUT" | jq -r '.id')" --apple-id "$APPLE_ID" --password "$APP_PASSWORD" --team-id "$APPLE_TEAM_ID"
+            exit 1
+          fi
+          xcrun stapler staple "$APP_PATH"
+          spctl -a -vv "$APP_PATH"
+
+      - name: Create distribution ZIP
+        run: |
+          mkdir -p $RUNNER_TEMP/release-files
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$RUNNER_TEMP/release-files/$PRODUCT_NAME-$RELEASE_TAG.zip"
+          shasum -a 256 "$RUNNER_TEMP/release-files/$PRODUCT_NAME-$RELEASE_TAG.zip"
+
+      - name: Download Sparkle tools
+        run: |
+          curl -L -o $RUNNER_TEMP/Sparkle.tar.xz "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          mkdir -p $RUNNER_TEMP/Sparkle && tar -xf $RUNNER_TEMP/Sparkle.tar.xz -C $RUNNER_TEMP/Sparkle
+
+      - name: Generate appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          # generate_appcast signs the enclosure with EdDSA so a future Sparkle-based updater can verify
+          # it; the current in-app checker reads version + enclosure URL only.
+          echo "$SPARKLE_PRIVATE_KEY" > $RUNNER_TEMP/sparkle_private_key
+          $RUNNER_TEMP/Sparkle/bin/generate_appcast \
+            --ed-key-file $RUNNER_TEMP/sparkle_private_key \
+            --download-url-prefix "https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/" \
+            --link "https://localmorph.com" \
+            $RUNNER_TEMP/release-files
+          rm -f $RUNNER_TEMP/sparkle_private_key
+          mv $RUNNER_TEMP/release-files/appcast.xml $RUNNER_TEMP/appcast.xml
+          python3 - <<'PY'
+          import os, pathlib, xml.dom.minidom as minidom
+          ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
+          path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "appcast.xml"
+          doc = minidom.parse(str(path))
+          notes = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/tag/{os.environ['RELEASE_TAG']}"
+          for item in doc.getElementsByTagName("item"):
+              link = doc.createElementNS(ns, "sparkle:releaseNotesLink")
+              link.appendChild(doc.createTextNode(notes))
+              item.insertBefore(link, item.getElementsByTagName("enclosure")[0])
+          path.write_bytes(doc.toprettyxml(indent="  ", encoding="utf-8"))
+          PY
+          cat $RUNNER_TEMP/appcast.xml
+
+      - name: Generate release notes
+        run: |
+          NOTES=$RUNNER_TEMP/release-notes.md
+          if [ -f dotnet/CHANGELOG.md ] && grep -q "^## \[\?$RELEASE_TAG" dotnet/CHANGELOG.md; then
+            awk -v tag="$RELEASE_TAG" 'BEGIN{p=0} /^## /{ if (p) exit; if (index($0, tag)) { p=1; next } } p' dotnet/CHANGELOG.md > $NOTES
+          else
+            echo "LocalMorph for macOS $MARKETING_VERSION." > $NOTES
+          fi
+          cat >> $NOTES <<EOF
+
+          ## Install
+          \`\`\`text
+          brew tap jamesmontemagno/my-file-converter https://github.com/jamesmontemagno/my-file-converter
+          brew install --cask localmorph
+          \`\`\`
+          Already installed? Update with \`brew upgrade --cask localmorph\`. FFmpeg is installed automatically as a dependency.
+
+          Or download \`$PRODUCT_NAME-$RELEASE_TAG.zip\` from this release (FFmpeg: \`brew install ffmpeg\`).
+
+          ## Release validation
+          - Signed with Developer ID (hardened runtime) and notarized by Apple; ticket stapled.
+          - Gatekeeper assessment (\`spctl\`) passed.
+          - Sparkle appcast generated and published to \`public/appcast.xml\`.
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: LocalMorph for macOS ${{ env.RELEASE_TAG }}
+          body_path: ${{ runner.temp }}/release-notes.md
+          files: |
+            ${{ runner.temp }}/release-files/*.zip
+            ${{ runner.temp }}/release-files/*.delta
+            ${{ runner.temp }}/appcast.xml
+          draft: false
+          prerelease: ${{ contains(env.RELEASE_TAG, 'beta') || contains(env.RELEASE_TAG, 'alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update appcast and Homebrew cask
+        run: |
+          cp $RUNNER_TEMP/appcast.xml public/appcast.xml
+          SHA=$(shasum -a 256 "$RUNNER_TEMP/release-files/$PRODUCT_NAME-$RELEASE_TAG.zip" | awk '{print $1}')
+          sed -i '' "s/version \".*\"/version \"$MARKETING_VERSION\"/" Casks/localmorph.rb
+          sed -i '' "s/sha256 \".*\"/sha256 \"$SHA\"/" Casks/localmorph.rb
+          cat Casks/localmorph.rb
+
+      - name: Create release metadata pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          base: main
+          commit-message: "Update release metadata for ${{ env.RELEASE_TAG }}"
+          branch: release-metadata/${{ env.RELEASE_TAG }}
+          delete-branch: true
+          title: "Update release metadata for ${{ env.RELEASE_TAG }}"
+          body: |
+            Updates the Sparkle appcast (`public/appcast.xml`) and Homebrew cask (`Casks/localmorph.rb`) generated by the `${{ env.RELEASE_TAG }}` release workflow.
+          add-paths: |
+            public/appcast.xml
+            Casks/localmorph.rb
+
+      - name: Cleanup keychain
+        if: always()
+        run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true

@@ -216,7 +216,7 @@
         </Grid.GestureRecognizers>
 
         <!-- ===================== Header ===================== -->
-        <Grid Grid.Row="0" Padding="24,16,24,12" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+        <Grid Grid.Row="0" Padding="24,16,24,12" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="12">
             <HorizontalStackLayout Spacing="12">
                 <Border WidthRequest="38" HeightRequest="38" Padding="0" StrokeThickness="0" StrokeShape="RoundRectangle 9" Background="{StaticResource Accent}">
                     <Label Text="LM" TextColor="White" FontFamily="OpenSansSemibold" FontSize="13" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" />
@@ -255,9 +255,19 @@
                 </HorizontalStackLayout>
             </Border>
 
-            <Button Grid.Column="2" Style="{StaticResource IconButton}" WidthRequest="40" HeightRequest="40" FontSize="20" Text="{Binding ThemeIcon}" ToolTipProperties.Text="{Binding ThemeLabel}" Command="{Binding CycleThemeCommand}" VerticalOptions="Center" AutomationId="ThemeButton" />
+            <Border Grid.Column="2" Padding="12,7" StrokeThickness="0" StrokeShape="RoundRectangle 999" VerticalOptions="Center" Background="{StaticResource Accent}" IsVisible="{Binding HasUpdate}" AutomationId="UpdatePill">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ShowToolsCommand}" />
+                </Border.GestureRecognizers>
+                <HorizontalStackLayout Spacing="8">
+                    <Label Style="{StaticResource Icon}" Text="{x:Static local:Icons.Download}" FontSize="15" TextColor="White" />
+                    <Label Text="{Binding UpdateLabel}" FontFamily="OpenSansSemibold" FontSize="11.5" VerticalOptions="Center" TextColor="White" />
+                </HorizontalStackLayout>
+            </Border>
 
-            <Border Grid.Column="3" Padding="12,7" StrokeThickness="1" StrokeShape="RoundRectangle 999" VerticalOptions="Center"
+            <Button Grid.Column="3" Style="{StaticResource IconButton}" WidthRequest="40" HeightRequest="40" FontSize="20" Text="{Binding ThemeIcon}" ToolTipProperties.Text="{Binding ThemeLabel}" Command="{Binding CycleThemeCommand}" VerticalOptions="Center" AutomationId="ThemeButton" />
+
+            <Border Grid.Column="4" Padding="12,7" StrokeThickness="1" StrokeShape="RoundRectangle 999" VerticalOptions="Center"
                     Stroke="{AppThemeBinding Light=#CBE5D2, Dark=#24503A}"
                     Background="{AppThemeBinding Light={StaticResource SuccessSoftLight}, Dark={StaticResource SuccessSoftDark}}">
                 <HorizontalStackLayout Spacing="8">
@@ -745,6 +755,52 @@
                     </HorizontalStackLayout>
                 </Border>
                 <CollectionView ItemsSource="{Binding Tools}" ItemTemplate="{StaticResource ToolTemplate}" SelectionMode="None" AutomationId="ToolList" />
+
+                <!-- About & updates -->
+                <Border Style="{StaticResource Card}" Padding="16,14" AutomationId="AboutPanel">
+                    <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="ABOUT &amp; UPDATES" Style="{StaticResource Eyebrow}" />
+                                <Label Text="{Binding CurrentVersionLabel}" Style="{StaticResource SectionTitle}" AutomationId="VersionLabel" />
+                                <Label Text="{Binding UpdateStatus}" Style="{StaticResource Muted}" IsVisible="{Binding UpdateStatus, Converter={StaticResource HasText}}" AutomationId="UpdateStatus" />
+                            </VerticalStackLayout>
+                            <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Start">
+                                <ActivityIndicator IsRunning="{Binding IsCheckingForUpdates}" IsVisible="{Binding IsCheckingForUpdates}" WidthRequest="16" HeightRequest="16" Color="{StaticResource Accent}" />
+                                <Button Style="{StaticResource SecondaryButton}" Text="Check for updates" Command="{Binding CheckForUpdatesCommand}" IsEnabled="{Binding IsCheckingForUpdates, Converter={StaticResource Not}}" AutomationId="CheckUpdatesButton">
+                                    <Button.CommandParameter>
+                                        <x:Boolean>True</x:Boolean>
+                                    </Button.CommandParameter>
+                                </Button>
+                            </HorizontalStackLayout>
+                        </Grid>
+
+                        <Border Style="{StaticResource CardAlt}" Padding="14" IsVisible="{Binding HasUpdate}" Stroke="{StaticResource Accent}" AutomationId="UpdateCard">
+                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+                                <Label Grid.RowSpan="3" Style="{StaticResource IconAccent}" Text="{x:Static local:Icons.Rocket}" FontSize="28" VerticalOptions="Start" />
+                                <Label Grid.Column="1" Text="{Binding UpdateLabel}" Style="{StaticResource BodyStrong}" />
+                                <VerticalStackLayout Grid.Column="1" Grid.Row="1" Spacing="4">
+                                    <Label Text="Upgrade from your terminal:" Style="{StaticResource Muted}" />
+                                    <Label Text="{Binding UpdateInstallHint}" Style="{StaticResource Mono}" />
+                                </VerticalStackLayout>
+                                <FlexLayout Grid.Column="1" Grid.Row="2" Wrap="Wrap" JustifyContent="Start">
+                                    <Button Style="{StaticResource PrimaryButton}" HeightRequest="36" FontSize="12" Text="Copy upgrade command" Command="{Binding CopyUpdateCommandCommand}" Margin="0,0,8,6" />
+                                    <Button Style="{StaticResource SecondaryButton}" HeightRequest="36" FontSize="12" Text="Download" Command="{Binding DownloadUpdateCommand}" Margin="0,0,8,6" />
+                                    <Button Style="{StaticResource SecondaryButton}" HeightRequest="36" FontSize="12" Text="Release notes" Command="{Binding OpenUpdateCommand}" Margin="0,0,8,6" />
+                                    <Button Style="{StaticResource GhostButton}" HeightRequest="36" FontSize="12" Text="Skip this version" Command="{Binding SkipUpdateCommand}" Margin="0,0,0,6" />
+                                </FlexLayout>
+                            </Grid>
+                        </Border>
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Spacing="0">
+                                <Label Text="Check for updates automatically" Style="{StaticResource FieldLabel}" />
+                                <Label Text="Looks at localmorph.com about once a day. Nothing about you or your files is sent." Style="{StaticResource Muted}" />
+                            </VerticalStackLayout>
+                            <Switch Grid.Column="1" Style="{StaticResource AccentSwitch}" IsToggled="{Binding AutomaticUpdateChecks}" AutomationId="AutoUpdateSwitch" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
             </VerticalStackLayout>
         </ScrollView>
 

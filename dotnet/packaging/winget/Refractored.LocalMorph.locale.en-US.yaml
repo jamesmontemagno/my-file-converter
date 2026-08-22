@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+PackageIdentifier: Refractored.LocalMorph
+PackageVersion: 0.0.0.0
+PackageLocale: en-US
+Publisher: Refractored LLC
+PublisherUrl: https://github.com/jamesmontemagno
+PublisherSupportUrl: https://github.com/jamesmontemagno/my-file-converter/issues
+Author: James Montemagno
+PackageName: LocalMorph
+PackageUrl: https://localmorph.com
+License: MIT
+LicenseUrl: https://github.com/jamesmontemagno/my-file-converter/blob/main/LICENSE
+Copyright: Copyright (c) Refractored LLC
+ShortDescription: Convert video, audio, images, and documents locally with FFmpeg and other tools on your device.
+Description: |-
+  LocalMorph converts any number of files at once without uploading them anywhere. It drives
+  FFmpeg (and optionally ImageMagick, LibreOffice, Pandoc, and Ghostscript) already installed on
+  your PC to produce MP4, MKV, WebM, GIF, MP3, FLAC, Opus, WAV, PNG, JPEG, WebP, AVIF, PDF, DOCX,
+  and more. Quick presets, trim and frame grab from a live preview, two-pass target file sizes,
+  hardware encoding (NVENC, Quick Sync, AMF), and a history of everything you've made.
+Moniker: localmorph
+Tags:
+  - audio
+  - converter
+  - ffmpeg
+  - gif
+  - image
+  - media
+  - mp3
+  - mp4
+  - transcode
+  - video
+ReleaseNotesUrl: https://github.com/jamesmontemagno/my-file-converter/releases
+ManifestType: defaultLocale
+ManifestVersion: 1.12.0

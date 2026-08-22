@@ -16,9 +16,11 @@
 - Live progress/ETA/speed, per-job cancel, cancel all, friendly failure messages with the tool log, open/reveal results, history with reconvert.
 - Tools view lists detected engines and offers one-click `winget`/`brew` installs.
 - Light/dark/system theme with a themed title bar.
+- Distribution pipeline mirroring tiny-clips: `windows-release.yml` (signed framework-dependent MSIX, WACK, winget manifest, Windows appcast), `winget-submit.yml`, `mac-release.yml` (notarized universal .app, Sparkle appcast, Homebrew cask PR), `Casks/localmorph.rb`, and an in-app update check reading the appcasts on localmorph.com.
 
 ## Remaining work
-- Bundle FFmpeg per RID for Windows and macOS release builds (layout documented in `Resources/ffmpeg/README.txt`).
-- Run and polish the Mac Catalyst build on hardware (drag & drop, VideoToolbox, Finder reveal).
-- Packaging: MSIX / notarized macOS bundle and a direct-download updater.
+- Bundle FFmpeg per RID for Windows and macOS release builds if a zero-dependency install is wanted (today winget/Homebrew install FFmpeg as a dependency; layout documented in `Resources/ffmpeg/README.txt`).
+- Run and polish the Mac Catalyst build on hardware (drag & drop, VideoToolbox, Finder reveal) and do the first notarized release.
+- Configure the `windows-release` / `macos-release` environment secrets (see `docs/release-setup.md`) and cut `v1.0.0-windows` / `v1.0.0-mac`.
+- Submit the cask to `homebrew/cask` after the first notarized release.
 - Optional: image sequence → video, subtitle burn-in, watermark overlay, per-file format overrides.
