@@ -66,6 +66,40 @@ paste it once into the converter settings. LocalMorph validates the loopback
 URL and fills in both connection values. The bridge package does not
 redistribute FFmpeg.
 
+## LocalMorph Desktop (.NET MAUI)
+
+`dotnet/src/LocalMorph.App` is a native desktop app for Windows and macOS that converts
+**any number of files at once** with the tools already on your device — no browser limits.
+
+- **Batch queue** — add files or whole folders, drag & drop, or pass paths on the command line
+  (`LocalMorph.App.exe video.mov photo.heic`). Files convert in parallel with live progress,
+  speed, and ETA; cancel any job or all of them.
+- **50+ output formats** — MP4 (H.264/H.265/AV1), MKV, MOV/ProRes, WebM, GIF, animated WebP/APNG,
+  MP3, AAC, FLAC, ALAC, Opus, OGG, WAV/AIFF, PNG, JPEG, WebP, AVIF, JPEG XL, TIFF, BMP, ICO, HEIC,
+  plus PDF/DOCX/XLSX/PPTX/ODT/EPUB/Markdown/HTML document conversion.
+- **Quick presets** — Share anywhere, Fit in 25 MB (two-pass), Shrink with HEVC, GIF loop,
+  Extract audio, Remux, Grab a frame, Podcast, Favicon, Save as PDF, and more.
+- **Fine control** — quality, resolution (never upscales), frame rate, encoding speed, audio
+  bitrate/sample rate/channels/bit depth, loudness normalization, trim from the media preview,
+  frame grab at the current position, rotate, playback speed, strip metadata, lossless toggles.
+- **Hardware encoding** — NVIDIA NVENC, Intel Quick Sync, AMD AMF, and Apple VideoToolbox are
+  detected with a real test encode and used automatically when they work.
+- **Tools view** — finds FFmpeg, ImageMagick, LibreOffice, Pandoc, and Ghostscript on PATH, in
+  winget/Homebrew/Program Files locations, or bundled with the app; one-click install via
+  `winget`/`brew` for anything missing.
+- **History** — every finished conversion with size savings; reopen, reveal, or reconvert.
+- **Command preview** — see (and copy) the exact command that will run.
+
+Build and run on Windows:
+
+```powershell
+dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-windows10.0.19041.0
+dotnet test dotnet/tests/LocalMorph.Core.Tests   # unit + real-FFmpeg integration tests
+```
+
+FFmpeg is required for media conversion (`winget install Gyan.FFmpeg` / `brew install ffmpeg`), or
+drop platform binaries under `dotnet/src/LocalMorph.App/Resources/ffmpeg/<rid>/` to bundle them.
+
 ## Deployment
 
 Push to `main` and GitHub Actions will build and publish `dist/` to GitHub Pages.

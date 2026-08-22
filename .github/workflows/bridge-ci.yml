@@ -27,5 +27,25 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-      - run: dotnet test dotnet/LocalMorph.Bridge.sln --configuration Release
-      - run: dotnet pack dotnet/src/LocalMorph.Bridge/LocalMorph.Bridge.csproj --configuration Release --no-build
+      - name: Install FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+      - run: dotnet test dotnet/tests/LocalMorph.Bridge.Tests/LocalMorph.Bridge.Tests.csproj --configuration Release
+      - run: dotnet test dotnet/tests/LocalMorph.Core.Tests/LocalMorph.Core.Tests.csproj --configuration Release
+      - run: dotnet pack dotnet/src/LocalMorph.Bridge/LocalMorph.Bridge.csproj --configuration Release
+
+  desktop-app:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet workload install maui-windows
+      - run: dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-windows10.0.19041.0 --configuration Release
