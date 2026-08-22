@@ -14,6 +14,11 @@ public sealed class FfmpegEngine : IConversionEngine
     public ConversionPlan Plan(ConversionJob job, ToolInventory tools, string workDirectory)
     {
         var ffmpeg = tools.PathFor(ToolKind.Ffmpeg) ?? throw new InvalidOperationException("FFmpeg is not installed.");
+        if (job.Format.Id == "audio-copy")
+        {
+            // The copied stream dictates the container; .m4a only holds AAC/ALAC.
+            job.OutputPath = Path.ChangeExtension(job.OutputPath, AudioCopyExtension(job.Source.Media?.AudioCodec));
+        }
         var context = new BuildContext(job.Source, job.Format, job.Options, tools.Ffmpeg, job.OutputPath);
         var durationUs = EffectiveDurationMicroseconds(context);
 
@@ -31,6 +36,7 @@ public sealed class FfmpegEngine : IConversionEngine
                 ],
                 Cleanup = () =>
                 {
+                    if (!Directory.Exists(workDirectory)) return;
                     foreach (var file in Directory.EnumerateFiles(workDirectory, Path.GetFileName(passLog) + "*"))
                     {
                         try { File.Delete(file); } catch { }
@@ -103,8 +109,14 @@ public sealed class FfmpegEngine : IConversionEngine
         {
             args.AddRange(["-frames:v", "1", "-update", "1"]);
         }
-        else if (isImageTarget && !source.IsAnimatedImage && format.VideoCodec is not ("libwebp_anim" or "apng"))
+        else if (isImageTarget)
         {
+            // Still-image targets always take exactly one frame (animated sources use FrameTimeSeconds via -ss below).
+            if (source.IsAnimatedImage && options.FrameTimeSeconds is { } animatedFrame && animatedFrame > 0)
+            {
+                var inputIndex = args.IndexOf("-i");
+                args.InsertRange(inputIndex, ["-ss", Num(animatedFrame)]);
+            }
             args.AddRange(["-frames:v", "1", "-update", "1"]);
         }
         else if (options.TrimEndSeconds is { } trimEnd && format.Supports(FormatFeatures.Trim))
@@ -551,6 +563,18 @@ public sealed class FfmpegEngine : IConversionEngine
                 return null;
         }
     }
+
+    public static string AudioCopyExtension(string? codec) => codec?.ToLowerInvariant() switch
+    {
+        "aac" or "alac" => "m4a",
+        "mp3" => "mp3",
+        "opus" => "opus",
+        "vorbis" => "ogg",
+        "flac" => "flac",
+        "ac3" or "eac3" => "ac3",
+        var pcm when pcm is not null && pcm.StartsWith("pcm_", StringComparison.Ordinal) => "wav",
+        _ => "mka"
+    };
 
     private static string Num(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
     private static string Num(int value) => value.ToString(CultureInfo.InvariantCulture);

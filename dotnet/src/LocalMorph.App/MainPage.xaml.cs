@@ -97,6 +97,32 @@ public partial class MainPage : ContentPage
 
     private void OnUseCurrentFrame(object? sender, EventArgs e) => viewModel.SetFrameTime(CurrentPositionSeconds);
 
+    // Sliders bind Value one-way: with a two-way binding, re-targeting Maximum during a BindingContext
+    // switch clamps the old value and writes it back into the *previous* file's trim points.
+    private void OnTrimStartSliderChanged(object? sender, ValueChangedEventArgs e)
+    {
+        if (sender is Slider { BindingContext: FileItemViewModel file } && ReferenceEquals(file, viewModel.SelectedFile) && Math.Abs(file.TrimStartSeconds - e.NewValue) > 0.01)
+        {
+            file.TrimStartSeconds = Math.Min(e.NewValue, Math.Max(0, file.TrimEndSeconds - 0.1));
+        }
+    }
+
+    private void OnTrimEndSliderChanged(object? sender, ValueChangedEventArgs e)
+    {
+        if (sender is Slider { BindingContext: FileItemViewModel file } && ReferenceEquals(file, viewModel.SelectedFile) && Math.Abs(file.TrimEndSeconds - e.NewValue) > 0.01)
+        {
+            file.TrimEndSeconds = Math.Max(e.NewValue, file.TrimStartSeconds + 0.1);
+        }
+    }
+
+    private void OnFrameSliderChanged(object? sender, ValueChangedEventArgs e)
+    {
+        if (sender is Slider { BindingContext: FileItemViewModel file } && ReferenceEquals(file, viewModel.SelectedFile) && Math.Abs(file.FrameTimeSeconds - e.NewValue) > 0.01)
+        {
+            file.FrameTimeSeconds = e.NewValue;
+        }
+    }
+
     // ------------------------------------------------------------ drag & drop
 
     private void OnDragOver(object? sender, DragEventArgs e)

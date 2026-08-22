@@ -851,7 +851,7 @@ public partial class MainViewModel : ObservableObject
             var job = new ConversionJob(source, format.Format, options, outputPath, engine.Value);
             var plan = EngineRegistry.Get(engine.Value).Plan(job, Inventory, Path.Combine(FileSystem.Current.CacheDirectory, "work"));
             CommandPreview = plan.Describe();
-            plan.Cleanup?.Invoke();
+            try { plan.Cleanup?.Invoke(); } catch { }
         }
         catch (Exception ex)
         {
@@ -919,11 +919,13 @@ public partial class MainViewModel : ObservableObject
         }
 
         ValidationMessage = null;
-        var reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pendingItems = Files.Where(file => file.IsPending && file.Source is not null).ToList();
+        // Protect every source in the batch so an Overwrite policy can never clobber another job's input.
+        var reserved = new HashSet<string>(pendingItems.Select(file => Path.GetFullPath(file.Path)), StringComparer.OrdinalIgnoreCase);
         var policy = SelectedOverwritePolicy.Value;
         var queued = 0;
 
-        foreach (var item in Files.Where(file => file.IsPending && file.Source is not null).ToList())
+        foreach (var item in pendingItems)
         {
             var source = item.Source!;
             if (!Applies(format.Format, item))

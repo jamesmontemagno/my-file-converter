@@ -378,12 +378,12 @@
                                 </Grid>
                                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                                     <Entry Style="{StaticResource Input}" WidthRequest="92" Text="{Binding TrimStartSeconds, Converter={StaticResource Clock}, Mode=TwoWay}" AutomationId="TrimStartEntry" ToolTipProperties.Text="Start (m:ss.t)" />
-                                    <Slider Grid.Column="1" Style="{StaticResource AccentSlider}" Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding TrimStartSeconds, Mode=TwoWay}" AutomationId="TrimStartSlider" />
+                                    <Slider Grid.Column="1" Style="{StaticResource AccentSlider}" Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding TrimStartSeconds, Mode=OneWay}" ValueChanged="OnTrimStartSliderChanged" AutomationId="TrimStartSlider" />
                                     <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" HeightRequest="36" FontSize="12" Text="Set start here" Clicked="OnSetTrimStart" AutomationId="SetTrimStartButton" />
                                 </Grid>
                                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                                     <Entry Style="{StaticResource Input}" WidthRequest="92" Text="{Binding TrimEndSeconds, Converter={StaticResource Clock}, Mode=TwoWay}" AutomationId="TrimEndEntry" ToolTipProperties.Text="End (m:ss.t)" />
-                                    <Slider Grid.Column="1" Style="{StaticResource AccentSlider}" Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding TrimEndSeconds, Mode=TwoWay}" AutomationId="TrimEndSlider" />
+                                    <Slider Grid.Column="1" Style="{StaticResource AccentSlider}" Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding TrimEndSeconds, Mode=OneWay}" ValueChanged="OnTrimEndSliderChanged" AutomationId="TrimEndSlider" />
                                     <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" HeightRequest="36" FontSize="12" Text="Set end here" Clicked="OnSetTrimEnd" AutomationId="SetTrimEndButton" />
                                 </Grid>
                             </VerticalStackLayout>
@@ -399,7 +399,7 @@
                                     </HorizontalStackLayout>
                                     <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" HeightRequest="36" FontSize="12" Text="Use current frame" Clicked="OnUseCurrentFrame" AutomationId="UseFrameButton" />
                                 </Grid>
-                                <Slider Style="{StaticResource AccentSlider}" Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding FrameTimeSeconds, Mode=TwoWay}" />
+                                <Slider Style="{StaticResource AccentSlider}" Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding FrameTimeSeconds, Mode=OneWay}" ValueChanged="OnFrameSliderChanged" />
                             </VerticalStackLayout>
 
                             <!-- Failure details -->

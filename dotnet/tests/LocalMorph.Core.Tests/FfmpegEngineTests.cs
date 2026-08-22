@@ -240,6 +240,46 @@ public sealed class FfmpegEngineTests
         Assert.Contains("-c:v libaom-av1", Joined(Build(TestData.Video(), "mp4-av1", caps: aomOnly)));
     }
 
+    [Fact]
+    public void Animated_gif_to_png_still_takes_one_frame()
+    {
+        var gif = new SourceFile(@"C:\media\anim.gif", 1, MediaCategory.Image, DocumentFlavor.None,
+            new LocalMorph.Bridge.SourceMediaInfo(LocalMorph.Bridge.SourceMediaKind.Image, 2.5, 320, 240, 10, null, null, "gif", null, null, "gif"));
+        var args = Build(gif, "png", new ConversionOptions { FrameTimeSeconds = 1.2 });
+        var text = Joined(args);
+        Assert.Contains("-frames:v 1 -update 1", text);
+        Assert.True(args.IndexOf("-ss") < args.IndexOf("-i"));
+        Assert.Equal("1.2", args[args.IndexOf("-ss") + 1]);
+    }
+
+    [Theory]
+    [InlineData("aac", "m4a")]
+    [InlineData("vorbis", "ogg")]
+    [InlineData("opus", "opus")]
+    [InlineData("pcm_s16le", "wav")]
+    [InlineData("dts", "mka")]
+    [InlineData(null, "mka")]
+    public void Audio_copy_picks_container_matching_codec(string? codec, string expected) =>
+        Assert.Equal(expected, FfmpegEngine.AudioCopyExtension(codec));
+
+    [Fact]
+    public void Audio_copy_plan_rewrites_output_extension()
+    {
+        var source = new SourceFile(@"C:\media\clip.webm", 1, MediaCategory.Video, DocumentFlavor.None,
+            new LocalMorph.Bridge.SourceMediaInfo(LocalMorph.Bridge.SourceMediaKind.Video, 10, 640, 360, 30, 48000, 2, "vp9", "opus", null, "webm"));
+        var job = new ConversionJob(source, TestData.Format("audio-copy"), new ConversionOptions(), @"C:\out\clip.m4a", EngineKind.Ffmpeg);
+        new FfmpegEngine().Plan(job, TestData.Tools(), Path.GetTempPath());
+        Assert.Equal(@"C:\out\clip.opus", job.OutputPath);
+    }
+
+    [Fact]
+    public void Two_pass_cleanup_tolerates_missing_work_directory()
+    {
+        var job = new ConversionJob(TestData.Video(duration: 100), TestData.Format("mp4-h264"), new ConversionOptions { TargetSizeMegabytes = 25 }, @"C:\out\small.mp4", EngineKind.Ffmpeg);
+        var plan = new FfmpegEngine().Plan(job, TestData.Tools(), Path.Combine(Path.GetTempPath(), "does-not-exist-" + Guid.NewGuid().ToString("N")));
+        plan.Cleanup!.Invoke();
+    }
+
     [Theory]
     [InlineData("out_time_us=30000000", 0.5)]
     [InlineData("out_time_ms=30000000", 0.5)]

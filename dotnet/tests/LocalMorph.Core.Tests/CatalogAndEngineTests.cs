@@ -266,6 +266,18 @@ public sealed class OutputNamingTests : IDisposable
     }
 
     [Fact]
+    public void Reserved_sources_are_never_used_as_outputs_even_when_overwriting()
+    {
+        var mp4 = Path.Combine(root, "clip.mp4");
+        var mkv = Path.Combine(root, "clip.mkv");
+        File.WriteAllText(mp4, "x");
+        File.WriteAllText(mkv, "x");
+        var reserved = new HashSet<string>([Path.GetFullPath(mp4), Path.GetFullPath(mkv)], StringComparer.OrdinalIgnoreCase);
+        var output = OutputNaming.BuildOutputPath(mp4, TestData.Format("mkv-copy"), null, string.Empty, OverwritePolicy.Overwrite, reserved);
+        Assert.Equal(Path.Combine(root, "clip (2).mkv"), output);
+    }
+
+    [Fact]
     public void Suffix_and_sanitization_apply()
     {
         var output = OutputNaming.BuildOutputPath(Path.Combine(root, "we:ird<name>.mov"), TestData.Format("mp3"), root, "-audio", OverwritePolicy.Rename);
