@@ -19,7 +19,7 @@ public sealed record HistoryEntry(
     [JsonIgnore] public bool OutputExists => File.Exists(OutputPath);
     [JsonIgnore] public double SizeRatio => SourceBytes > 0 ? (double)OutputBytes / SourceBytes : 1;
     [JsonIgnore] public string SizeChange => SourceBytes <= 0 ? SourceFile.FormatBytes(OutputBytes)
-        : SizeRatio < 0.995 ? $"{(1 - SizeRatio) * 100:0}% smaller"
+        : SizeRatio < 0.995 ? $"{Math.Min(99, (1 - SizeRatio) * 100):0}% smaller"
         : SizeRatio > 1.005 ? $"{(SizeRatio - 1) * 100:0}% larger"
         : "same size";
 }

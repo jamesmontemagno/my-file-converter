@@ -13,10 +13,10 @@ public partial class App : Application
 	{
 		return new Window(new AppShell())
 		{
-			Width = 960,
-			Height = 720,
-			MinimumWidth = 960,
-			MinimumHeight = 720
+			Width = 1280,
+			Height = 860,
+			MinimumWidth = 1000,
+			MinimumHeight = 680
 		};
 	}
 }

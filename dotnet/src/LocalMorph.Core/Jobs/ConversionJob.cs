@@ -160,6 +160,14 @@ public sealed class ConversionJob
         Changed?.Invoke(this);
     }
 
+    /// <summary>Marks a job that will never run (wrong format for this file, output exists, missing tool).</summary>
+    public void Skip(string reason)
+    {
+        if (IsTerminal) return;
+        Cancellation.Cancel();
+        MarkSkipped(reason);
+    }
+
     public void Cancel()
     {
         if (IsTerminal) return;
