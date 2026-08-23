@@ -13,7 +13,7 @@ cask "localmorph" do
     strategy :sparkle
   end
 
-  depends_on macos: ">= :ventura"
+  depends_on macos: ">= :sequoia"
   depends_on formula: "ffmpeg"
 
   app "LocalMorph.app"

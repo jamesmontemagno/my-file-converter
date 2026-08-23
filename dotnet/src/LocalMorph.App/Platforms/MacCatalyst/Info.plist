@@ -132,8 +132,6 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>LSMinimumSystemVersion</key>
-	<string>13.0</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © Refractored LLC. MIT License.</string>
 	<key>SUFeedURL</key>
