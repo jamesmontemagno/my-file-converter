@@ -6,6 +6,9 @@ export type BridgeTargetMime =
   | 'video/quicktime'
   | 'video/webm'
   | 'image/gif'
+  | 'image/png'
+  | 'image/jpeg'
+  | 'image/webp'
   | 'audio/mpeg'
   | 'audio/wav';
 
@@ -50,6 +53,9 @@ const bridgeExtensions: Record<BridgeTargetMime, string> = {
   'video/quicktime': 'mov',
   'video/webm': 'webm',
   'image/gif': 'gif',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
   'audio/mpeg': 'mp3',
   'audio/wav': 'wav',
 };
@@ -138,7 +144,7 @@ export type BridgeConversionRequest = {
 };
 
 function bridgeMediaType(targetMime: BridgeTargetMime): Exclude<MediaKind, 'unknown'> {
-  if (targetMime === 'image/gif') return 'image';
+  if (targetMime.startsWith('image/')) return 'image';
   if (targetMime === 'audio/mpeg' || targetMime === 'audio/wav') return 'audio';
   return 'video';
 }

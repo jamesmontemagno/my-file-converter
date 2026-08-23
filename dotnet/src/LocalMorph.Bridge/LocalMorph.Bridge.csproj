@@ -21,4 +21,25 @@
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Core is bundled into the tool package rather than published as its own NuGet dependency. -->
+    <ProjectReference Include="..\LocalMorph.Core\LocalMorph.Core.csproj" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Copy referenced project assemblies into the tool's lib folder so `dotnet tool install` has everything it needs. -->
+  <PropertyGroup>
+    <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeReferencedProjectsInPackage</TargetsForTfmSpecificBuildOutput>
+  </PropertyGroup>
+  <Target Name="IncludeReferencedProjectsInPackage">
+    <ItemGroup>
+      <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths)" Condition="'%(ReferenceCopyLocalPaths.ReferenceSourceTarget)' == 'ProjectReference' And '%(ReferenceCopyLocalPaths.Extension)' == '.dll'" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <Compile Remove="BridgeOptions.cs" />
+    <Compile Remove="Contracts.cs" />
+    <Compile Remove="Ffmpeg.cs" />
+  </ItemGroup>
 </Project>

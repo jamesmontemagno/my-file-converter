@@ -14,7 +14,7 @@ public static class BridgeApplication
         typeof(BridgeApplication).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion.Split('+')[0] ?? "unknown";
-    private static readonly string[] SupportedTargets = ["video/mp4", "video/quicktime", "video/webm", "image/gif", "audio/mpeg", "audio/wav"];
+    private static readonly string[] SupportedTargets = ["video/mp4", "video/quicktime", "video/webm", "image/gif", "image/png", "image/jpeg", "image/webp", "audio/mpeg", "audio/wav"];
 
     public static WebApplication Create(string[] args, BridgeOptions? suppliedOptions = null, FfmpegInfo? suppliedFfmpeg = null, Action<WebApplicationBuilder>? configure = null, bool discoverFfmpeg = true)
     {

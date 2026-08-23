@@ -1,0 +1,373 @@
+name: Windows Release
+
+# Tag-driven desktop release: builds framework-dependent x64 + ARM64 MSIX packages, signs them with
+# Azure Artifact Signing, runs WACK, publishes a GitHub Release, and emits a ready-to-submit winget
+# manifest plus a Windows appcast used by the in-app update check. Submit to winget-pkgs afterwards
+# with the manual "WinGet Submission" workflow.
+
+on:
+  push:
+    tags:
+      - 'v*-windows'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Windows release tag (for example, v1.0.1-windows)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  pull-requests: write
+
+env:
+  APP_PROJECT: dotnet/src/LocalMorph.App/LocalMorph.App.csproj
+  APP_MANIFEST: dotnet/src/LocalMorph.App/Platforms/Windows/Package.appxmanifest
+  TARGET_FRAMEWORK: net10.0-windows10.0.19041.0
+  PACKAGE_FAMILY_NAME: Refractored.LocalMorph_vmshqmcyy894t
+  SIGNTOOL_TIMESTAMP_URL: http://timestamp.acs.microsoft.com
+
+jobs:
+  build-sign-release:
+    name: Build, sign, and release MSIX
+    runs-on: windows-latest
+    environment: windows-release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui-windows
+
+      - name: Set release version
+        shell: pwsh
+        run: |
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
+          if ($tag -notmatch '^v(?<base>\d+\.\d+\.\d+)(?:\.(?<revision>\d+))?-windows$') {
+            throw "Windows release tags must look like v1.2.3-windows or v1.2.3.4-windows. Got '$tag'."
+          }
+          $revision = if ($Matches.revision) { $Matches.revision } else { "0" }
+          $packageVersion = "$($Matches.base).$revision"
+          $assetVersion = if ($Matches.revision) { "$($Matches.base).$revision" } else { $Matches.base }
+
+          "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
+          "PACKAGE_VERSION=$packageVersion" >> $env:GITHUB_ENV
+          "ASSET_VERSION=$assetVersion" >> $env:GITHUB_ENV
+          "DISPLAY_VERSION=$($Matches.base)" >> $env:GITHUB_ENV
+
+      - name: Build and package MSIX
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/windows | Out-Null
+
+          # Framework-dependent MSIX: .NET Desktop Runtime and Windows App Runtime are winget
+          # PackageDependencies in the installer manifest, not bundled. FFmpeg is also a winget
+          # dependency (Gyan.FFmpeg) so a fresh install can convert immediately.
+          $platforms = @(
+            @{ Platform = "x64";   Rid = "win-x64";   Asset = "x64" }
+            @{ Platform = "ARM64"; Rid = "win-arm64"; Asset = "arm64" }
+          )
+
+          foreach ($p in $platforms) {
+            $packageDir = "artifacts/windows/package/$($p.Asset)"
+            New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
+            $packageDirFull = (Resolve-Path $packageDir).Path + [IO.Path]::DirectorySeparatorChar
+
+            dotnet publish $env:APP_PROJECT `
+              -f $env:TARGET_FRAMEWORK `
+              -c Release `
+              -p:WindowsOnly=true `
+              -p:Platform=$($p.Platform) `
+              -p:RuntimeIdentifier=$($p.Rid) `
+              -p:SelfContained=false `
+              -p:WindowsAppSDKSelfContained=false `
+              -p:WindowsPackageType=MSIX `
+              -p:GenerateAppxPackageOnBuild=true `
+              -p:AppxPackageDir=$packageDirFull `
+              -p:AppxBundle=Never `
+              -p:UapAppxPackageBuildMode=SideloadOnly `
+              -p:AppxPackageSigningEnabled=false `
+              -p:ApplicationDisplayVersion=$env:DISPLAY_VERSION `
+              -p:ApplicationVersion=$env:PACKAGE_VERSION.Split('.')[3] `
+              -v:minimal
+            if ($LASTEXITCODE -ne 0) { throw "MSIX build failed for $($p.Platform)." }
+
+            $produced = Get-ChildItem $packageDir -Recurse -Filter *.msix |
+              Where-Object { $_.Name -notmatch 'symbols' -and $_.DirectoryName -notmatch 'Dependencies' } |
+              Select-Object -First 1
+            if (-not $produced) { throw "No MSIX produced for $($p.Platform)." }
+
+            # Assert the package is genuinely framework-dependent and carries the expected identity.
+            $verifyDir = Join-Path $packageDir "verify"
+            Remove-Item $verifyDir -Recurse -Force -ErrorAction SilentlyContinue
+            $zipCopy = "$($produced.FullName).zip"
+            Copy-Item $produced.FullName $zipCopy -Force
+            Expand-Archive $zipCopy -DestinationPath $verifyDir -Force
+            [xml]$appx = Get-Content (Join-Path $verifyDir "AppxManifest.xml")
+            if ($appx.Package.Identity.Name -ne "Refractored.LocalMorph") { throw "Unexpected package identity '$($appx.Package.Identity.Name)'." }
+            if ($appx.Package.Identity.Version -ne $env:PACKAGE_VERSION) { throw "Package version '$($appx.Package.Identity.Version)' does not match '$env:PACKAGE_VERSION'." }
+            if (-not ($appx.Package.Dependencies.PackageDependency | Where-Object { $_.Name -like 'Microsoft.WindowsAppRuntime*' })) {
+              throw "MSIX for $($p.Platform) is missing the WindowsAppRuntime framework dependency."
+            }
+            if (Get-ChildItem $verifyDir -Recurse -Filter "coreclr.dll" -ErrorAction SilentlyContinue) {
+              throw "MSIX for $($p.Platform) bundles the .NET runtime - expected SelfContained=false."
+            }
+            Remove-Item $zipCopy -Force -ErrorAction SilentlyContinue
+            Remove-Item $verifyDir -Recurse -Force -ErrorAction SilentlyContinue
+
+            Copy-Item $produced.FullName "artifacts/windows/LocalMorph-$env:ASSET_VERSION-$($p.Asset).msix" -Force
+          }
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Download Artifact Signing client
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/tools | Out-Null
+          $nuget = Join-Path (Resolve-Path artifacts/tools) "nuget.exe"
+          Invoke-WebRequest -Uri https://dist.nuget.org/win-x86-commandline/latest/nuget.exe -OutFile $nuget
+          & $nuget install Microsoft.ArtifactSigning.Client -OutputDirectory artifacts/tools -ExcludeVersion -NonInteractive
+
+      - name: Sign MSIX packages
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } | Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (!$signtool) { throw "SignTool x64 was not found." }
+
+          $dlib = Get-ChildItem artifacts/tools/Microsoft.ArtifactSigning.Client -Recurse -Filter Azure.CodeSigning.Dlib.dll |
+            Where-Object { $_.FullName -match '\\bin\\x64\\' } | Select-Object -First 1 -ExpandProperty FullName
+          if (!$dlib) { throw "Azure.CodeSigning.Dlib.dll x64 was not found." }
+
+          $metadataPath = Join-Path (Resolve-Path artifacts/windows) "artifact-signing-metadata.json"
+          @{
+            Endpoint = "${{ secrets.AZURE_ARTIFACT_SIGNING_ENDPOINT }}"
+            CodeSigningAccountName = "${{ secrets.AZURE_ARTIFACT_SIGNING_ACCOUNT_NAME }}"
+            CertificateProfileName = "${{ secrets.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME }}"
+            CorrelationId = "${{ github.repository }}-${{ github.run_id }}"
+            ExcludeCredentials = @("ManagedIdentityCredential","WorkloadIdentityCredential","SharedTokenCacheCredential","VisualStudioCredential","VisualStudioCodeCredential","AzurePowerShellCredential","AzureDeveloperCliCredential","InteractiveBrowserCredential")
+          } | ConvertTo-Json | Set-Content -Path $metadataPath -Encoding UTF8
+
+          foreach ($arch in "x64","arm64") {
+            & $signtool sign /v /fd SHA256 /tr $env:SIGNTOOL_TIMESTAMP_URL /td SHA256 /dlib "$dlib" /dmdf "$metadataPath" "artifacts/windows/LocalMorph-$env:ASSET_VERSION-$arch.msix"
+            if ($LASTEXITCODE -ne 0) { throw "Signing failed for $arch." }
+          }
+
+      - name: Verify signatures
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } | Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          foreach ($arch in "x64","arm64") {
+            & $signtool verify /pa /v "artifacts/windows/LocalMorph-$env:ASSET_VERSION-$arch.msix"
+            if ($LASTEXITCODE -ne 0) { throw "Signature verification failed for $arch." }
+          }
+
+      - name: Run WACK
+        shell: pwsh
+        run: |
+          $appcert = "${env:ProgramFiles(x86)}\Windows Kits\10\App Certification Kit\appcert.exe"
+          if (!(Test-Path $appcert)) { throw "appcert.exe was not found at '$appcert'." }
+          New-Item -ItemType Directory -Force -Path artifacts/windows/wack | Out-Null
+          $wackDir = Resolve-Path artifacts/windows/wack
+          foreach ($arch in "x64","arm64") {
+            & $appcert test -appxpackagepath (Resolve-Path "artifacts/windows/LocalMorph-$env:ASSET_VERSION-$arch.msix") -reportoutputpath (Join-Path $wackDir "LocalMorph-$env:ASSET_VERSION-$arch-wack.xml")
+          }
+          foreach ($report in Get-ChildItem artifacts/windows/wack/*.xml) {
+            [xml]$xml = Get-Content $report.FullName
+            if ($xml.REPORT.OVERALL_RESULT -ne "PASS") { throw "WACK failed for $($report.Name): $($xml.REPORT.OVERALL_RESULT)" }
+          }
+
+      - name: Compute winget hashes
+        shell: pwsh
+        run: |
+          function Hash($path, $kind) {
+            $args = if ($kind -eq 'sig') { @('hash', '--msix', $path) } else { @('hash', $path) }
+            $key = if ($kind -eq 'sig') { 'SignatureSha256:' } else { 'InstallerSha256:' }
+            (& winget @args | Select-String $key | Select-Object -Last 1).ToString().Split(':')[1].Trim()
+          }
+          $x64 = "artifacts/windows/LocalMorph-$env:ASSET_VERSION-x64.msix"
+          $arm64 = "artifacts/windows/LocalMorph-$env:ASSET_VERSION-arm64.msix"
+          "X64_INSTALLER_SHA256=$(Hash $x64 inst)" >> $env:GITHUB_ENV
+          "X64_SIGNATURE_SHA256=$(Hash $x64 sig)" >> $env:GITHUB_ENV
+          "ARM64_INSTALLER_SHA256=$(Hash $arm64 inst)" >> $env:GITHUB_ENV
+          "ARM64_SIGNATURE_SHA256=$(Hash $arm64 sig)" >> $env:GITHUB_ENV
+          @"
+          PackageVersion: $env:PACKAGE_VERSION
+          PackageFamilyName: $env:PACKAGE_FAMILY_NAME
+          x64 InstallerSha256: $(Hash $x64 inst)
+          x64 SignatureSha256: $(Hash $x64 sig)
+          arm64 InstallerSha256: $(Hash $arm64 inst)
+          arm64 SignatureSha256: $(Hash $arm64 sig)
+          "@ | ForEach-Object { $_ -replace '^          ', '' } | Set-Content -Path artifacts/windows/winget-hashes.txt -Encoding UTF8
+
+      - name: Generate winget manifest
+        shell: pwsh
+        run: |
+          $wingetDir = "artifacts/windows/winget"
+          New-Item -ItemType Directory -Force -Path $wingetDir | Out-Null
+          Copy-Item dotnet/packaging/winget/Refractored.LocalMorph.yaml $wingetDir
+          Copy-Item dotnet/packaging/winget/Refractored.LocalMorph.locale.en-US.yaml $wingetDir
+          foreach ($manifest in Get-ChildItem $wingetDir/*.yaml) {
+            $content = Get-Content $manifest.FullName -Raw
+            $content = $content -replace 'PackageVersion: .*', "PackageVersion: $env:PACKAGE_VERSION"
+            $content = $content -replace 'ReleaseNotesUrl: .*', "ReleaseNotesUrl: https://github.com/${{ github.repository }}/releases/tag/$env:RELEASE_TAG"
+            Set-Content -Path $manifest.FullName -Value $content -Encoding UTF8
+          }
+
+          @"
+          # yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+          PackageIdentifier: Refractored.LocalMorph
+          PackageVersion: $env:PACKAGE_VERSION
+          MinimumOSVersion: 10.0.19041.0
+          InstallerType: msix
+          InstallModes:
+            - silent
+            - silentWithProgress
+          PackageFamilyName: $env:PACKAGE_FAMILY_NAME
+          Dependencies:
+            PackageDependencies:
+              - PackageIdentifier: Microsoft.DotNet.DesktopRuntime.10
+              - PackageIdentifier: Microsoft.WindowsAppRuntime.2
+              - PackageIdentifier: Gyan.FFmpeg
+          Installers:
+            - Architecture: x64
+              InstallerUrl: https://github.com/${{ github.repository }}/releases/download/$env:RELEASE_TAG/LocalMorph-$env:ASSET_VERSION-x64.msix
+              InstallerSha256: $env:X64_INSTALLER_SHA256
+              SignatureSha256: $env:X64_SIGNATURE_SHA256
+            - Architecture: arm64
+              InstallerUrl: https://github.com/${{ github.repository }}/releases/download/$env:RELEASE_TAG/LocalMorph-$env:ASSET_VERSION-arm64.msix
+              InstallerSha256: $env:ARM64_INSTALLER_SHA256
+              SignatureSha256: $env:ARM64_SIGNATURE_SHA256
+          ManifestType: installer
+          ManifestVersion: 1.12.0
+          "@ | ForEach-Object { $_ -replace '^          ', '' } |
+            Set-Content -Path (Join-Path $wingetDir "Refractored.LocalMorph.installer.yaml") -Encoding UTF8
+
+          # winget validate exits non-zero on warnings too (e.g. an older runner winget not knowing
+          # the 1.12.0 schema), so decide on the output text.
+          $validateOutput = winget validate --manifest $wingetDir 2>&1 | Out-String
+          Write-Host $validateOutput
+          if ($validateOutput -notmatch 'Manifest validation succeeded') { throw "winget validate failed:`n$validateOutput" }
+          $global:LASTEXITCODE = 0
+
+      - name: Generate release notes
+        shell: pwsh
+        run: |
+          $lines = if (Test-Path dotnet/CHANGELOG.md) { Get-Content dotnet/CHANGELOG.md } else { @() }
+          $escapedTag = [regex]::Escape($env:RELEASE_TAG)
+          $start = $null
+          for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match "^## \[?$escapedTag\]?") { $start = $i; break } }
+          if ($null -ne $start) {
+            $end = $lines.Count
+            for ($i = $start + 1; $i -lt $lines.Count; $i++) { if ($lines[$i] -match '^## ') { $end = $i; break } }
+            $notes = @($lines[($start + 1)..($end - 1)] | Where-Object { $_ -ne "" })
+          } else {
+            $notes = @("LocalMorph for Windows $env:ASSET_VERSION.")
+          }
+          $notes += ""
+          $notes += "## Install"
+          $notes += '```text'
+          $notes += 'winget install Refractored.LocalMorph'
+          $notes += '```'
+          $notes += 'Update later with `winget upgrade Refractored.LocalMorph`. FFmpeg (Gyan.FFmpeg) is installed automatically as a dependency.'
+          $notes += ""
+          $notes += "## Release validation"
+          $notes += "- Azure Artifact Signing completed for x64 and ARM64 MSIX packages."
+          $notes += "- SignTool verification passed for x64 and ARM64 MSIX packages."
+          $notes += "- WACK overall result passed for x64 and ARM64 MSIX packages."
+          $notes += ""
+          $notes += "## winget hashes"
+          $notes += '```text'
+          $notes += (Get-Content artifacts/windows/winget-hashes.txt)
+          $notes += '```'
+          $notes | Set-Content -Path artifacts/windows/release-notes.md -Encoding UTF8
+
+      - name: Generate Windows appcast
+        shell: pwsh
+        run: |
+          # Consumed by the in-app update check (Services/UpdateService.cs) and published to localmorph.com.
+          $x64 = Get-Item "artifacts/windows/LocalMorph-$env:ASSET_VERSION-x64.msix"
+          $arm64 = Get-Item "artifacts/windows/LocalMorph-$env:ASSET_VERSION-arm64.msix"
+          $notesUrl = "https://github.com/${{ github.repository }}/releases/tag/$env:RELEASE_TAG"
+          $pub = [DateTime]::UtcNow.ToString("R")
+          @"
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>LocalMorph for Windows</title>
+              <link>https://localmorph.com/appcast-windows.xml</link>
+              <description>Most recent LocalMorph for Windows release.</description>
+              <language>en</language>
+              <item>
+                <title>$env:ASSET_VERSION</title>
+                <pubDate>$pub</pubDate>
+                <sparkle:version>$env:PACKAGE_VERSION</sparkle:version>
+                <sparkle:shortVersionString>$env:ASSET_VERSION</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>10.0.19041.0</sparkle:minimumSystemVersion>
+                <sparkle:releaseNotesLink>$notesUrl</sparkle:releaseNotesLink>
+                <enclosure url="https://github.com/${{ github.repository }}/releases/download/$env:RELEASE_TAG/$($x64.Name)" length="$($x64.Length)" type="application/msix" sparkle:os="windows" sparkle:arch="x64" />
+                <enclosure url="https://github.com/${{ github.repository }}/releases/download/$env:RELEASE_TAG/$($arm64.Name)" length="$($arm64.Length)" type="application/msix" sparkle:os="windows" sparkle:arch="arm64" />
+              </item>
+            </channel>
+          </rss>
+          "@ | ForEach-Object { $_ -replace '^          ', '' } | Set-Content -Path artifacts/windows/appcast-windows.xml -Encoding UTF8
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: |
+            artifacts/windows/*.msix
+            artifacts/windows/*.txt
+            artifacts/windows/*.xml
+            artifacts/windows/winget/*.yaml
+            artifacts/windows/wack/*.xml
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: LocalMorph for Windows ${{ env.RELEASE_TAG }}
+          body_path: artifacts/windows/release-notes.md
+          files: |
+            artifacts/windows/*.msix
+            artifacts/windows/winget-hashes.txt
+            artifacts/windows/appcast-windows.xml
+            artifacts/windows/wack/*.xml
+          draft: false
+          prerelease: ${{ contains(env.RELEASE_TAG, 'beta') || contains(env.RELEASE_TAG, 'alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Stage appcast for the website
+        shell: pwsh
+        run: Copy-Item artifacts/windows/appcast-windows.xml public/appcast-windows.xml -Force
+
+      - name: Create release metadata pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          base: main
+          commit-message: "Update Windows appcast for ${{ env.RELEASE_TAG }}"
+          branch: release-metadata/${{ env.RELEASE_TAG }}
+          delete-branch: true
+          title: "Update Windows appcast for ${{ env.RELEASE_TAG }}"
+          body: |
+            Publishes `public/appcast-windows.xml` for the `${{ env.RELEASE_TAG }}` release so the desktop app's update check sees it on localmorph.com.
+          add-paths: public/appcast-windows.xml

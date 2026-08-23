@@ -114,6 +114,7 @@ public sealed class BridgeTests : IAsyncLifetime
             {
                 VideoEncodingSpeed = "quality",
                 VideoFrameRate = 60,
+                VideoHeight = 720,
                 AudioBitrate = 192,
                 AudioSampleRate = 48000
             }
@@ -122,7 +123,18 @@ public sealed class BridgeTests : IAsyncLifetime
         Assert.True(request.IsValid());
         var command = Ffmpeg.BuildCommand("ffmpeg", "input.bin", "output.webm", request);
 
-        Assert.Contains(["-deadline", "best", "-cpu-used", "1", "-b:a", "192k", "-ar", "48000", "-r", "60"], command.ArgumentList);
+        Assert.Contains("-deadline", command.ArgumentList);
+        Assert.Contains("best", command.ArgumentList);
+        Assert.Contains("-cpu-used", command.ArgumentList);
+        Assert.Contains("1", command.ArgumentList);
+        Assert.Contains("-b:a", command.ArgumentList);
+        Assert.Contains("192k", command.ArgumentList);
+        Assert.Contains("-ar", command.ArgumentList);
+        Assert.Contains("48000", command.ArgumentList);
+        Assert.Contains("-r", command.ArgumentList);
+        Assert.Contains("60", command.ArgumentList);
+        Assert.Contains("-vf", command.ArgumentList);
+        Assert.Contains("scale=-2:720", command.ArgumentList);
     }
 
     [Fact]
@@ -144,6 +156,46 @@ public sealed class BridgeTests : IAsyncLifetime
     {
         Assert.Equal(50, Ffmpeg.ParseProgress("out_time_us=5000000", 10_000_000)!.Percent);
         Assert.Equal(100, Ffmpeg.ParseProgress("progress=end", 10_000_000)!.Percent);
+    }
+
+    [Fact]
+    public void Media_probe_parses_video_metadata_and_image_extensions()
+    {
+        const string json = """
+            {"streams":[{"codec_type":"video","width":1920,"height":1080,"avg_frame_rate":"30000/1001"},{"codec_type":"audio","sample_rate":"48000","channels":2}],"format":{"duration":"12.5"}}
+            """;
+
+        var video = MediaProbe.Parse(json, "clip.mp4")!;
+        Assert.Equal(SourceMediaKind.Video, video.Kind);
+        Assert.Equal(1920, video.Width);
+        Assert.Equal(1080, video.Height);
+        Assert.Equal(12.5, video.DurationSeconds);
+        Assert.Equal(29.97, video.FrameRate!.Value, 2);
+        Assert.Equal(48000, video.SampleRate);
+        Assert.Equal(2, video.Channels);
+
+        Assert.Equal(SourceMediaKind.Image, MediaProbe.Parse(json, "photo.png")!.Kind);
+    }
+
+    [Theory]
+    [InlineData("image/png", "output.png")]
+    [InlineData("image/jpeg", "output.jpg")]
+    [InlineData("image/webp", "output.webp")]
+    public void Command_supports_still_image_targets(string targetMime, string outputName)
+    {
+        var request = new ConversionRequest
+        {
+            TargetMime = targetMime,
+            MediaType = "image",
+            OutputName = outputName,
+            Quality = 82,
+            Image = new ImageOptions { Height = 720 }
+        };
+
+        Assert.True(request.IsValid());
+        var command = Ffmpeg.BuildCommand("ffmpeg", "input.png", outputName, request);
+        Assert.Contains("-frames:v", command.ArgumentList);
+        Assert.Contains("scale=-2:720", command.ArgumentList);
     }
 
     [Fact]

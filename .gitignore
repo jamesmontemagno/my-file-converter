@@ -1,5 +1,111 @@
-node_modules
-dist
-bridge/target
+# ---------- Node / Vite (website + PWA) ----------
+node_modules/
+dist/
+dist-ssr/
+.vite/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
+
+# ---------- .NET (Core, Bridge, MAUI desktop app, tests) ----------
 **/bin/
 **/obj/
+**/[Bb]uild/
+**/TestResults/
+*.nupkg
+*.snupkg
+artifacts/
+release/
+*.binlog
+*.trx
+*.coverage
+*.coveragexml
+project.lock.json
+*.dbmdl
+
+# Visual Studio / Rider / VS Code user state
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.vsp
+*.psess
+*.vspx
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Local per-machine launch profiles (committed ones live in Properties/ only when intentional)
+dotnet/src/LocalMorph.Bridge/Properties/launchSettings.json
+
+# MAUI / Windows App SDK packaging output
+**/AppPackages/
+**/BundleArtifacts/
+*.appx
+*.appxbundle
+*.appxupload
+*.msix
+*.msixbundle
+*.msixupload
+*.pfx
+*.cer
+*.p12
+*_TemporaryKey.pfx
+Package.StoreAssociation.xml
+_pkginfo.txt
+
+# Bundled third-party binaries (downloaded per RID at release time, never committed)
+dotnet/src/LocalMorph.App/Resources/ffmpeg/**/ffmpeg*
+dotnet/src/LocalMorph.App/Resources/ffmpeg/**/ffprobe*
+dotnet/src/LocalMorph.App/Resources/ffmpeg/**/*.dll
+dotnet/src/LocalMorph.App/Resources/ffmpeg/**/*.dylib
+!dotnet/src/LocalMorph.App/Resources/ffmpeg/README.txt
+
+# ---------- Rust (legacy bridge) ----------
+bridge/target/
+
+# ---------- macOS / Xcode ----------
+.DS_Store
+.AppleDouble
+.LSOverride
+*.xcuserstate
+xcuserdata/
+*.dSYM/
+*.ipa
+DerivedData/
+# Built .app bundles only live under bin/ (already ignored); do NOT add "*.app/" -- it would match
+# the dotnet/src/LocalMorph.App source folder.
+
+# ---------- Windows ----------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# ---------- Secrets & local config ----------
+.env
+.env.*
+!.env.example
+*.secrets.json
+appsettings.*.local.json
+sparkle_private_key*
+*.ed25519
+
+# ---------- Logs / temp ----------
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+.test-job-root/

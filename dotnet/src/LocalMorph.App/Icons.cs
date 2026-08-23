@@ -1,0 +1,67 @@
+namespace LocalMorph.App;
+
+/// <summary>Glyphs from the bundled Fluent System Icons font (alias "FluentIcons").</summary>
+public static class Icons
+{
+    public const string Add = "\uF10A";
+    public const string FolderAdd = "\uF41D";
+    public const string FolderOpen = "\uF42F";
+    public const string Dismiss = "\uF36A";
+    public const string Play = "\uF606";
+    public const string Pause = "\uF5A2";
+    public const string Stop = "\uF72B";
+    public const string CheckCircle = "\uF299";
+    public const string Check = "\uE2F5";
+    public const string ErrorCircle = "\uF3F2";
+    public const string Warning = "\uF86A";
+    public const string Sync = "\uF191";
+    public const string Refresh = "\uF13E";
+    public const string Video = "\uF850";
+    public const string Audio = "\uE855";
+    public const string Image = "\uF489";
+    public const string Document = "\uF379";
+    public const string DocumentText = "\uE558";
+    public const string Pdf = "\uF3AD";
+    public const string Table = "\uF75E";
+    public const string Slides = "\uF6EA";
+    public const string Settings = "\uF6AA";
+    public const string History = "\uF47F";
+    public const string Wrench = "\uF8C1";
+    public const string Open = "\uF583";
+    public const string Copy = "\uF32C";
+    public const string Delete = "\uF34D";
+    public const string Download = "\uF151";
+    public const string Shield = "\uEAC9";
+    public const string Flash = "\uE619";
+    public const string ChevronDown = "\uF2A4";
+    public const string ChevronUp = "\uF2B7";
+    public const string Clipboard = "\uF2CA";
+    public const string Globe = "\uF45B";
+    public const string Info = "\uF4A4";
+    public const string Cut = "\uF33B";
+    public const string Camera = "\uF255";
+    public const string ArrowRight = "\uF182";
+    public const string Sparkle = "\uEB34";
+    public const string Drag = "\uF3C1";
+    public const string Clock = "\uF2DE";
+    public const string Question = "\uF63E";
+    public const string Eye = "\uE5F3";
+    public const string Speaker = "\uEB43";
+    public const string Crop = "\uF331";
+    public const string Rotate = "\uF186";
+    public const string Timer = "\uF827";
+    public const string Target = "\uF782";
+    public const string Broom = "\uF202";
+    public const string Code = "\uF2F0";
+    public const string Filmstrip = "\uEEFC";
+    public const string Resize = "\uEA13";
+    public const string Speed = "\uF831";
+    public const string Rocket = "\uF678";
+    public const string Tag = "\uF77D";
+    public const string Board = "\uF35C";
+    public const string Reset = "\uF1A0";
+    public const string Save = "\uF680";
+    public const string Sun = "\uF8A2";
+    public const string Moon = "\uF87E";
+    public const string ThemeAuto = "\uF33C";
+}

@@ -33,7 +33,7 @@ jobs:
         env:
           EXPECTED_BRIDGE_VERSION: ${{ inputs.version }}
           VERSION: ${{ inputs.version }}
-        run: dotnet test dotnet/LocalMorph.Bridge.sln --configuration Release -p:Version="$VERSION"
+        run: dotnet test dotnet/tests/LocalMorph.Bridge.Tests/LocalMorph.Bridge.Tests.csproj --configuration Release -p:Version="$VERSION"
       - name: Pack bridge
         env:
           VERSION: ${{ inputs.version }}

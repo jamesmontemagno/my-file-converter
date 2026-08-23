@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+# Reference copy. The Windows Release workflow regenerates this file with real hashes and URLs;
+# keep the dependency list here in sync with .github/workflows/windows-release.yml.
+PackageIdentifier: Refractored.LocalMorph
+PackageVersion: 0.0.0.0
+MinimumOSVersion: 10.0.19041.0
+InstallerType: msix
+InstallModes:
+  - silent
+  - silentWithProgress
+PackageFamilyName: Refractored.LocalMorph_vmshqmcyy894t
+Dependencies:
+  PackageDependencies:
+    - PackageIdentifier: Microsoft.DotNet.DesktopRuntime.10
+    - PackageIdentifier: Microsoft.WindowsAppRuntime.2
+    - PackageIdentifier: Gyan.FFmpeg
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/jamesmontemagno/my-file-converter/releases/download/v0.0.0-windows/LocalMorph-0.0.0-x64.msix
+    InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
+    SignatureSha256: 0000000000000000000000000000000000000000000000000000000000000000
+  - Architecture: arm64
+    InstallerUrl: https://github.com/jamesmontemagno/my-file-converter/releases/download/v0.0.0-windows/LocalMorph-0.0.0-arm64.msix
+    InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
+    SignatureSha256: 0000000000000000000000000000000000000000000000000000000000000000
+ManifestType: installer
+ManifestVersion: 1.12.0

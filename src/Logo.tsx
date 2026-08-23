@@ -7,60 +7,13 @@ export function LogoIcon({ size = 24 }: { size?: number }) {
       height={size}
       aria-hidden="true"
     >
-      <defs>
-        <linearGradient id="li-bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#0f172a" />
-          <stop offset="100%" stopColor="#1e293b" />
-        </linearGradient>
-        <linearGradient
-          id="li-ag"
-          x1="100"
-          y1="140"
-          x2="412"
-          y2="372"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop offset="0%" stopColor="#38bdf8" />
-          <stop offset="100%" stopColor="#818cf8" />
-        </linearGradient>
-      </defs>
-      <rect width="512" height="512" rx="96" fill="url(#li-bg)" />
-      {/* Top arrow right */}
-      <line
-        x1="128"
-        y1="190"
-        x2="332"
-        y2="190"
-        stroke="url(#li-ag)"
-        strokeWidth="42"
-        strokeLinecap="round"
-      />
-      <polyline
-        points="292,148 352,190 292,232"
-        stroke="url(#li-ag)"
-        strokeWidth="42"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Bottom arrow left */}
-      <line
-        x1="384"
-        y1="322"
-        x2="180"
-        y2="322"
-        stroke="url(#li-ag)"
-        strokeWidth="42"
-        strokeLinecap="round"
-      />
-      <polyline
-        points="220,280 160,322 220,364"
-        stroke="url(#li-ag)"
-        strokeWidth="42"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <rect width="512" height="512" rx="88" fill="#0B172A" />
+      <circle cx="118" cy="256" r="25" fill="#FFFFFF" />
+      <path d="M143 256H196" stroke="#FFFFFF" strokeWidth="30" strokeLinecap="round" />
+      <rect x="196" y="196" width="120" height="120" rx="18" fill="#1356D8" transform="rotate(45 256 256)" />
+      <rect x="228" y="228" width="56" height="56" rx="9" fill="#0B172A" transform="rotate(45 256 256)" />
+      <path d="M316 256H386" stroke="#9BC53D" strokeWidth="30" strokeLinecap="round" />
+      <path d="M368 208L428 256L368 304" fill="none" stroke="#9BC53D" strokeWidth="30" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

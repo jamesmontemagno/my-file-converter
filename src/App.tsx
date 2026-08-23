@@ -147,23 +147,23 @@ function getInitialPage(): Page {
 }
 
 function titleForPage(page: Page) {
-  if (page === 'app') return `${APP_NAME} | Browser File Converter`;
-  if (page === 'privacy') return `${APP_NAME} | Privacy Policy`;
-  if (page === 'terms') return `${APP_NAME} | Terms of Use`;
-  if (page === 'docs') return `${APP_NAME} | Documentation`;
-  return `${APP_NAME} | Convert Files Locally in Your Browser`;
+  if (page === 'app') return `Convert a File Locally | ${APP_NAME}`;
+  if (page === 'privacy') return `Privacy Policy | ${APP_NAME}`;
+  if (page === 'terms') return `Terms of Use | ${APP_NAME}`;
+  if (page === 'docs') return `File Conversion Guide | ${APP_NAME}`;
+  return `Local File Converter for Media | ${APP_NAME}`;
 }
 
 function descriptionForPage(page: Page) {
   if (page === 'app')
-    return 'Convert images, audio, and video on your device with browser tools or an optional local FFmpeg bridge. No managed-server uploads.';
+    return 'Choose, shape, and convert images, audio, and video on your device with no managed-server uploads.';
   if (page === 'privacy')
     return 'LocalMorph privacy policy. Learn how browser and optional bridge conversion keep selected files on your device.';
   if (page === 'terms')
     return 'LocalMorph terms of use. Review the conditions under which you may use this browser-based file converter.';
   if (page === 'docs')
     return 'LocalMorph documentation. Learn about supported file formats and how browser-native conversion works.';
-  return 'LocalMorph converts images, audio, and video on your device with browser tools or an optional local FFmpeg bridge — no managed-server uploads.';
+  return 'Convert images, audio, and video on your device in three clear steps using browser tools or optional local FFmpeg, with no managed-server uploads.';
 }
 
 function canonicalForPage(page: Page) {
