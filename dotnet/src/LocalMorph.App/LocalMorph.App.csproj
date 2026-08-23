@@ -44,8 +44,9 @@
 		<ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
 
-		<!-- Unpackaged for local development; release workflows pass -p:WindowsPackageType=MSIX. -->
-		<WindowsPackageType Condition="'$(WindowsPackageType)' == ''">None</WindowsPackageType>
+		<!-- Unpackaged for local development (F5 / winapp). Release workflows pass -p:WindowsPackageType=MSIX,
+		     which wins over this value. Visual Studio may rewrite this line; keep it None in source control. -->
+		<WindowsPackageType>None</WindowsPackageType>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.19041.0</SupportedOSPlatformVersion>
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.19041.0</TargetPlatformMinVersion>
 
