@@ -52,14 +52,17 @@ public sealed class ConversionHistory
         {
             entries.Insert(0, entry);
             if (entries.Count > Capacity) entries.RemoveRange(Capacity, entries.Count - Capacity);
+            Save();
         }
-        Save();
     }
 
     public void Clear()
     {
-        lock (gate) entries.Clear();
-        Save();
+        lock (gate)
+        {
+            entries.Clear();
+            Save();
+        }
     }
 
     private void Load()
@@ -76,14 +79,15 @@ public sealed class ConversionHistory
         }
     }
 
+    /// <summary>Caller must hold <see cref="gate"/>: snapshot + write happen atomically so parallel jobs cannot interleave writes.</summary>
     private void Save()
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
-            HistoryEntry[] snapshot;
-            lock (gate) snapshot = entries.ToArray();
-            File.WriteAllText(filePath, JsonSerializer.Serialize(snapshot, JsonOptions));
+            var temp = filePath + ".tmp";
+            File.WriteAllText(temp, JsonSerializer.Serialize(entries, JsonOptions));
+            File.Move(temp, filePath, overwrite: true);
         }
         catch
         {

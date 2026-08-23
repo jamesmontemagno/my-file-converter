@@ -38,6 +38,8 @@ public static class ConversionRunner
                 var exitCode = await RunStepAsync(job, step, token);
                 if (exitCode != 0)
                 {
+                    // Tools often create/truncate the destination before failing; never leave a corrupt file behind.
+                    TryDelete(job.OutputPath);
                     job.MarkFailed(DescribeFailure(job, exitCode));
                     return;
                 }

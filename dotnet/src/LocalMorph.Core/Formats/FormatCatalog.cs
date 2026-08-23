@@ -150,8 +150,9 @@ public static class FormatCatalog
             FormatFeatures.Quality | FormatFeatures.Resolution, [EngineKind.ImageMagick]),
 
         // ---- Documents ----
+        // Pandoc needs an external PDF engine (wkhtmltopdf/LaTeX) that we do not manage, so PDF is LibreOffice-only.
         new("pdf", "PDF", "pdf", "Fixed layout for sharing and printing.", MediaCategory.Document, FromDocument,
-            FormatFeatures.None, [EngineKind.LibreOffice, EngineKind.Pandoc], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Spreadsheet, DocumentFlavor.Presentation, DocumentFlavor.Markup], Badge: "Popular"),
+            FormatFeatures.None, [EngineKind.LibreOffice], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Spreadsheet, DocumentFlavor.Presentation, DocumentFlavor.Markup], Badge: "Popular"),
         new("pdf-compress", "PDF · Compressed", "pdf", "Shrink a PDF by downsampling images.", MediaCategory.Document, FromDocument,
             FormatFeatures.Quality, [EngineKind.Ghostscript], AcceptsDocumentFlavors: [DocumentFlavor.Pdf]),
         new("docx", "Word (DOCX)", "docx", "Editable Microsoft Word document.", MediaCategory.Document, FromDocument,
@@ -218,7 +219,7 @@ public static class FormatCatalog
         {
             ordered = flavor switch
             {
-                DocumentFlavor.Markup when format.Engines.Contains(EngineKind.Pandoc) && format.Id != "pdf" => format.Engines.OrderByDescending(engine => engine == EngineKind.Pandoc),
+                DocumentFlavor.Markup when format.Engines.Contains(EngineKind.Pandoc) => format.Engines.OrderByDescending(engine => engine == EngineKind.Pandoc),
                 DocumentFlavor.Pdf when format.Engines.Contains(EngineKind.Ghostscript) => format.Engines.OrderByDescending(engine => engine == EngineKind.Ghostscript).ThenByDescending(engine => engine == EngineKind.ImageMagick),
                 _ => format.Engines.OrderByDescending(engine => engine == EngineKind.LibreOffice)
             };
@@ -234,13 +235,23 @@ public static class FormatCatalog
 
     public static bool EngineAvailable(EngineKind engine, OutputFormat format, ToolInventory tools) => engine switch
     {
-        EngineKind.Ffmpeg => tools.HasFfmpeg && (format.RequiredEncoders is null || !tools.Ffmpeg.IsAvailable || tools.Ffmpeg.HasAnyEncoder(format.RequiredEncoders)),
+        EngineKind.Ffmpeg => tools.HasFfmpeg && (format.RequiredEncoders is null || !tools.Ffmpeg.IsAvailable || HasUsableEncoder(format, tools.Ffmpeg)),
         EngineKind.ImageMagick => tools.Has(ToolKind.ImageMagick),
         EngineKind.LibreOffice => tools.Has(ToolKind.LibreOffice),
         EngineKind.Pandoc => tools.Has(ToolKind.Pandoc),
         EngineKind.Ghostscript => tools.Has(ToolKind.Ghostscript),
         _ => false
     };
+
+    /// <summary>A hardware encoder only counts when its test encode succeeded; compiled-in but broken encoders do not make a format available.</summary>
+    private static bool HasUsableEncoder(OutputFormat format, FfmpegCapabilities capabilities) =>
+        format.RequiredEncoders!.Any(name => IsHardwareEncoderName(name)
+            ? capabilities.WorkingHardwareEncoders.Any(encoder => encoder.Encoder == name)
+            : capabilities.HasEncoder(name));
+
+    private static bool IsHardwareEncoderName(string name) =>
+        name.EndsWith("_nvenc", StringComparison.Ordinal) || name.EndsWith("_qsv", StringComparison.Ordinal) ||
+        name.EndsWith("_amf", StringComparison.Ordinal) || name.EndsWith("_videotoolbox", StringComparison.Ordinal);
 
     /// <summary>Tools the user could install to unlock this format.</summary>
     public static IEnumerable<ToolKind> MissingToolsFor(OutputFormat format, ToolInventory tools) =>

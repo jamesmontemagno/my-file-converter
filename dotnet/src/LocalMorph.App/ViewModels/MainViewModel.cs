@@ -26,7 +26,7 @@ public sealed record ChoiceOption<T>(string Label, T Value)
 
 public partial class MainViewModel : ObservableObject
 {
-    private const int MaxFilesPerDrop = 500;
+    private const int MaxFilesPerBatch = 2000;
     private readonly ConversionService service;
     private readonly AppSettings settings;
     private readonly UpdateService updates;
@@ -511,9 +511,8 @@ public partial class MainViewModel : ObservableObject
             {
                 try
                 {
-                    expanded.AddRange(Directory.EnumerateFiles(path, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, MaxRecursionDepth = 4 })
-                        .Where(file => SourceClassifier.Classify(file) != MediaCategory.Unknown)
-                        .Take(MaxFilesPerDrop));
+                    expanded.AddRange(Directory.EnumerateFiles(path, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, MaxRecursionDepth = 8 })
+                        .Where(file => SourceClassifier.Classify(file) != MediaCategory.Unknown));
                 }
                 catch (Exception ex)
                 {
@@ -526,11 +525,21 @@ public partial class MainViewModel : ObservableObject
             }
         }
 
+        var distinct = expanded.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var truncated = Math.Max(0, distinct.Count - MaxFilesPerBatch);
         var existing = Files.Select(file => file.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var added = new List<FileItemViewModel>();
-        foreach (var path in expanded.Distinct(StringComparer.OrdinalIgnoreCase).Take(MaxFilesPerDrop))
+        var alreadyQueued = 0;
+        foreach (var path in distinct.Take(MaxFilesPerBatch))
         {
-            if (!existing.Add(path)) continue;
+            if (!existing.Add(path))
+            {
+                // Re-adding a finished/failed file is a request to run it again.
+                var existingItem = Files.FirstOrDefault(file => string.Equals(file.Path, path, StringComparison.OrdinalIgnoreCase));
+                if (existingItem is { IsTerminal: true }) existingItem.ResetForRetry();
+                else alreadyQueued++;
+                continue;
+            }
             var item = new FileItemViewModel(path);
             item.RemoveRequested += RemoveFile;
             item.SelectRequested += file => SelectedFile = file;
@@ -539,11 +548,12 @@ public partial class MainViewModel : ObservableObject
             added.Add(item);
         }
 
-        if (added.Count == 0)
-        {
-            if (expanded.Count > 0) ShowToast("Those files are already in the queue.");
-            return;
-        }
+        if (truncated > 0) ShowToast($"Added the first {MaxFilesPerBatch:N0} files; {truncated:N0} more were left out. Convert this batch, then add the rest.");
+        else if (added.Count == 0 && alreadyQueued > 0) ShowToast(alreadyQueued == 1 ? "That file is already in the queue." : "Those files are already in the queue.");
+
+        OnPropertyChanged(nameof(CanConvert));
+        OnPropertyChanged(nameof(ConvertButtonText));
+        if (added.Count == 0) return;
 
         SelectedFile ??= added[0];
         View = WorkspaceView.Convert;
@@ -901,9 +911,11 @@ public partial class MainViewModel : ObservableObject
 
     private ConversionOptions BuildSharedOptions()
     {
-        double? targetSize = UseTargetSize && ShowTargetSize && double.TryParse(TargetSizeText, NumberStyles.Float, CultureInfo.InvariantCulture, out var megabytes) && megabytes > 0
-            ? megabytes
-            : null;
+        // An enabled-but-unparseable target size becomes a negative sentinel so Validate() rejects it
+        // instead of silently falling back to quality mode.
+        double? targetSize = !(UseTargetSize && ShowTargetSize) ? null
+            : double.TryParse(TargetSizeText, NumberStyles.Float, CultureInfo.InvariantCulture, out var megabytes) && megabytes > 0 ? megabytes
+            : -1;
 
         return new ConversionOptions
         {
@@ -1034,12 +1046,7 @@ public partial class MainViewModel : ObservableObject
             }
 
             var engine = FormatCatalog.ResolveEngine(format.Format, source.Path, Inventory);
-            var job = engine is null
-                ? null
-                : new ConversionJob(source, format.Format, item.ApplyPerFileOptions(shared, format.Format),
-                    OutputNaming.BuildOutputPath(source.Path, format.Format, HasCustomOutputDirectory ? OutputDirectory : null, OutputSuffix, policy, reserved), engine.Value);
-
-            if (job is null)
+            if (engine is null)
             {
                 var placeholder = new ConversionJob(source, format.Format, shared, source.Path, EngineKind.Ffmpeg);
                 item.AttachJob(placeholder);
@@ -1047,12 +1054,18 @@ public partial class MainViewModel : ObservableObject
                 continue;
             }
 
-            if (policy == OverwritePolicy.Skip && File.Exists(Path.Combine(Path.GetDirectoryName(job.OutputPath)!, OutputNaming.Sanitize(Path.GetFileNameWithoutExtension(source.Path) + OutputSuffix) + format.Extension)))
+            var outputDirectory = HasCustomOutputDirectory ? OutputDirectory : null;
+            var preferred = OutputNaming.PreferredOutputPath(source.Path, format.Format, outputDirectory, OutputSuffix, source);
+            if (policy == OverwritePolicy.Skip && File.Exists(preferred))
             {
-                item.AttachJob(job);
-                job.Skip("Skipped · output already exists");
+                var skipped = new ConversionJob(source, format.Format, shared, preferred, engine.Value);
+                item.AttachJob(skipped);
+                skipped.Skip($"Skipped · {Path.GetFileName(preferred)} already exists");
                 continue;
             }
+
+            var job = new ConversionJob(source, format.Format, item.ApplyPerFileOptions(shared, format.Format),
+                OutputNaming.BuildOutputPath(source.Path, format.Format, outputDirectory, OutputSuffix, policy, reserved, source), engine.Value);
 
             item.AttachJob(job);
             service.Queue.Enqueue(job);
@@ -1172,8 +1185,12 @@ public partial class MainViewModel : ObservableObject
             return;
         }
         await AddPathsAsync([entry.SourcePath]);
+        var row = Files.FirstOrDefault(file => string.Equals(file.Path, entry.SourcePath, StringComparison.OrdinalIgnoreCase));
+        if (row is not null) SelectedFile = row;
+        View = WorkspaceView.Convert;
         var format = FormatGroups.SelectMany(group => group).FirstOrDefault(option => option.Id == entry.FormatId);
         if (format is not null) SelectedFormat = format;
+        else ShowToast($"{entry.FormatName} isn't available right now; pick another format.");
     }
 
     [RelayCommand]

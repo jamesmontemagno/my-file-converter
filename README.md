@@ -105,7 +105,8 @@ drop platform binaries under `dotnet/src/LocalMorph.App/Resources/ffmpeg/<rid>/`
 
 ```text
 winget install Refractored.LocalMorph                                # Windows 10 2004+ (x64 / ARM64)
-brew install --cask jamesmontemagno/my-file-converter/localmorph     # macOS 15+ (universal)
+brew tap jamesmontemagno/my-file-converter https://github.com/jamesmontemagno/my-file-converter
+brew install --cask localmorph                                       # macOS 15+ (universal)
 ```
 
 Releases are tag-driven (`vX.Y.Z-windows`, `vX.Y.Z-mac`): signed MSIX + winget manifest on Windows,

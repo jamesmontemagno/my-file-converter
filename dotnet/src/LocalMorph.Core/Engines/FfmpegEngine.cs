@@ -14,12 +14,8 @@ public sealed class FfmpegEngine : IConversionEngine
     public ConversionPlan Plan(ConversionJob job, ToolInventory tools, string workDirectory)
     {
         var ffmpeg = tools.PathFor(ToolKind.Ffmpeg) ?? throw new InvalidOperationException("FFmpeg is not installed.");
-        if (job.Format.Id == "audio-copy")
-        {
-            // The copied stream dictates the container; .m4a only holds AAC/ALAC.
-            job.OutputPath = Path.ChangeExtension(job.OutputPath, AudioCopyExtension(job.Source.Media?.AudioCodec));
-        }
         var context = new BuildContext(job.Source, job.Format, job.Options, tools.Ffmpeg, job.OutputPath);
+        if (context.TargetSizeError is { } sizeError) throw new InvalidOperationException(sizeError);
         var durationUs = EffectiveDurationMicroseconds(context);
 
         if (context.UsesTwoPass)
@@ -343,7 +339,7 @@ public sealed class FfmpegEngine : IConversionEngine
         switch (codec)
         {
             case "aac":
-                args.AddRange(["-c:a", context.Capabilities.HasEncoder("aac_at") ? "aac_at" : "aac", "-b:a", $"{bitrate ?? defaultBitrate}k"]);
+                args.AddRange(["-c:a", context.Capabilities.HasEncoder("aac_at") ? "aac_at" : context.Capabilities.HasEncoder("aac") || !context.Capabilities.IsAvailable ? "aac" : "libfdk_aac", "-b:a", $"{bitrate ?? defaultBitrate}k"]);
                 break;
             case "libmp3lame":
                 args.AddRange(["-c:a", "libmp3lame"]);
@@ -590,23 +586,42 @@ public sealed class FfmpegEngine : IConversionEngine
             Capabilities = capabilities;
             OutputPath = outputPath;
 
-            HardwareEncoder = options.UseHardwareEncoder && format.Supports(FormatFeatures.HardwareAccel) && format.VideoCodec is { } codec
+            var wantsTargetSize = options.TargetSizeMegabytes is not null && format.Supports(FormatFeatures.TargetSize);
+
+            // Target-size encodes always use the software two-pass path: hardware rate control is too loose to hit a cap.
+            HardwareEncoder = !wantsTargetSize && options.UseHardwareEncoder && format.Supports(FormatFeatures.HardwareAccel) && format.VideoCodec is { } codec
                 ? capabilities.HardwareEncoderFor(codec)
                 : null;
 
-            if (options.TargetSizeMegabytes is { } megabytes && format.Supports(FormatFeatures.TargetSize))
+            if (wantsTargetSize)
             {
+                var megabytes = options.TargetSizeMegabytes!.Value;
                 var duration = EffectiveDurationSeconds(source, options);
-                if (duration > 0)
+                if (duration <= 0)
+                {
+                    TargetSizeError = "A target file size needs a source with a known duration.";
+                }
+                else
                 {
                     var audioKbps = options.RemoveAudio || !source.HasAudio ? 0 : options.AudioBitrateKbps ?? 128;
                     var totalKbps = megabytes * 8192.0 / duration;
-                    TargetVideoKbps = (int)Math.Max(100, totalKbps * 0.97 - audioKbps);
+                    var videoKbps = totalKbps * 0.97 - audioKbps;
+                    if (videoKbps < MinimumVideoKbps)
+                    {
+                        var minimumMb = (MinimumVideoKbps + audioKbps) / 0.97 * duration / 8192.0;
+                        TargetSizeError = $"{megabytes:0.#} MB is too small for a {SourceFile.FormatDuration(duration)} clip. Use at least {Math.Ceiling(minimumMb * 10) / 10:0.#} MB, lower the audio bitrate, or trim the clip.";
+                    }
+                    else
+                    {
+                        TargetVideoKbps = (int)videoKbps;
+                    }
                 }
             }
 
-            UsesTwoPass = TargetVideoKbps is not null && HardwareEncoder is null && format.VideoCodec == "h264";
+            UsesTwoPass = TargetVideoKbps is not null && format.VideoCodec == "h264";
         }
+
+        private const int MinimumVideoKbps = 100;
 
         public SourceFile Source { get; }
         public OutputFormat Format { get; }
@@ -616,6 +631,7 @@ public sealed class FfmpegEngine : IConversionEngine
         public HardwareEncoder? HardwareEncoder { get; }
         public int? TargetVideoKbps { get; }
         public bool UsesTwoPass { get; }
+        public string? TargetSizeError { get; }
 
         private static double EffectiveDurationSeconds(SourceFile source, ConversionOptions options)
         {

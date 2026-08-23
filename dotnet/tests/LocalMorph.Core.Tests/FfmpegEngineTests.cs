@@ -219,17 +219,34 @@ public sealed class FfmpegEngineTests
     }
 
     [Fact]
-    public void Target_size_single_pass_with_hardware_encoder()
+    public void Target_size_forces_software_two_pass_even_with_hardware_encoder()
     {
         var job = new ConversionJob(TestData.Video(duration: 100), TestData.Format("mp4-h264"),
-            new ConversionOptions { TargetSizeMegabytes = 25 }, @"C:\out\small.mp4", EngineKind.Ffmpeg);
+            new ConversionOptions { TargetSizeMegabytes = 25, UseHardwareEncoder = true }, @"C:\out\small.mp4", EngineKind.Ffmpeg);
         var plan = new FfmpegEngine().Plan(job, TestData.Tools(TestData.WithNvenc), Path.GetTempPath());
 
-        Assert.Single(plan.Steps);
-        var text = string.Join(' ', plan.Steps[0].StartInfo.ArgumentList);
-        Assert.Contains("h264_nvenc", text);
-        Assert.Contains("-rc vbr -b:v", text);
-        Assert.Contains("-maxrate", text);
+        Assert.Equal(2, plan.Steps.Count);
+        Assert.Contains("libx264", string.Join(' ', plan.Steps[1].StartInfo.ArgumentList));
+        Assert.DoesNotContain("nvenc", string.Join(' ', plan.Steps[1].StartInfo.ArgumentList));
+    }
+
+    [Fact]
+    public void Impossible_target_size_is_rejected_with_guidance()
+    {
+        // 0.5 MB for 100 s leaves ~41 kbps total: below the 100 kbps video floor once audio is counted.
+        var job = new ConversionJob(TestData.Video(duration: 100), TestData.Format("mp4-h264"),
+            new ConversionOptions { TargetSizeMegabytes = 0.5, AudioBitrateKbps = 64 }, @"C:\out\tiny.mp4", EngineKind.Ffmpeg);
+        var error = Assert.Throws<InvalidOperationException>(() => new FfmpegEngine().Plan(job, TestData.Tools(), Path.GetTempPath()));
+        Assert.Contains("too small", error.Message);
+        Assert.Contains("Use at least", error.Message);
+    }
+
+    [Fact]
+    public void Aac_falls_back_to_libfdk_when_native_encoder_is_missing()
+    {
+        var fdkOnly = new FfmpegCapabilities(new HashSet<string> { "libx264", "libfdk_aac" }, new HashSet<string>(), [], null);
+        Assert.Contains("-c:a libfdk_aac", Joined(Build(TestData.Video(), "m4a-aac", caps: fdkOnly)));
+        Assert.Contains("-c:a aac ", Joined(Build(TestData.Video(), "m4a-aac")));
     }
 
     [Fact]
@@ -267,7 +284,10 @@ public sealed class FfmpegEngineTests
     {
         var source = new SourceFile(@"C:\media\clip.webm", 1, MediaCategory.Video, DocumentFlavor.None,
             new LocalMorph.Bridge.SourceMediaInfo(LocalMorph.Bridge.SourceMediaKind.Video, 10, 640, 360, 30, 48000, 2, "vp9", "opus", null, "webm"));
-        var job = new ConversionJob(source, TestData.Format("audio-copy"), new ConversionOptions(), @"C:\out\clip.m4a", EngineKind.Ffmpeg);
+        // The extension is chosen before collision handling so reservations apply to the real name.
+        var preferred = OutputNaming.PreferredOutputPath(source.Path, TestData.Format("audio-copy"), @"C:\out", string.Empty, source);
+        Assert.Equal(@"C:\out\clip.opus", preferred);
+        var job = new ConversionJob(source, TestData.Format("audio-copy"), new ConversionOptions(), preferred, EngineKind.Ffmpeg);
         new FfmpegEngine().Plan(job, TestData.Tools(), Path.GetTempPath());
         Assert.Equal(@"C:\out\clip.opus", job.OutputPath);
     }

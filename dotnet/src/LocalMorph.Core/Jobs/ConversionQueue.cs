@@ -162,13 +162,25 @@ public static class OutputNaming
         return cleaned.Length > 180 ? cleaned[..180] : cleaned;
     }
 
-    public static string BuildOutputPath(string sourcePath, OutputFormat format, string? outputDirectory, string suffix, OverwritePolicy policy, ISet<string>? reserved = null)
+    /// <summary>Extension the output will really have: most formats are fixed, but stream-copy picks a container from the source codec.</summary>
+    public static string ExtensionFor(OutputFormat format, SourceFile? source) =>
+        format.Id == "audio-copy" ? "." + Engines.FfmpegEngine.AudioCopyExtension(source?.Media?.AudioCodec) : format.ExtensionWithDot;
+
+    /// <summary>The collision-free name the default policy would use, i.e. "&lt;stem&gt;.&lt;ext&gt;" before any "(2)" suffixing.</summary>
+    public static string PreferredOutputPath(string sourcePath, OutputFormat format, string? outputDirectory, string suffix, SourceFile? source = null)
     {
         var directory = string.IsNullOrWhiteSpace(outputDirectory)
             ? Path.GetDirectoryName(sourcePath) ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
             : outputDirectory;
-        var stem = Sanitize(Path.GetFileNameWithoutExtension(sourcePath) + suffix);
-        var candidate = Path.Combine(directory, stem + format.ExtensionWithDot);
+        return Path.Combine(directory, Sanitize(Path.GetFileNameWithoutExtension(sourcePath) + suffix) + ExtensionFor(format, source));
+    }
+
+    public static string BuildOutputPath(string sourcePath, OutputFormat format, string? outputDirectory, string suffix, OverwritePolicy policy, ISet<string>? reserved = null, SourceFile? source = null)
+    {
+        var candidate = PreferredOutputPath(sourcePath, format, outputDirectory, suffix, source);
+        var directory = Path.GetDirectoryName(candidate)!;
+        var stem = Path.GetFileNameWithoutExtension(candidate);
+        var extension = Path.GetExtension(candidate);
 
         // Never clobber the source even when overwriting.
         var collidesWithSource = string.Equals(Path.GetFullPath(candidate), Path.GetFullPath(sourcePath), StringComparison.OrdinalIgnoreCase);
@@ -181,7 +193,7 @@ public static class OutputNaming
         var index = 2;
         while (File.Exists(candidate) || collidesWithSource || reserved?.Contains(candidate) == true)
         {
-            candidate = Path.Combine(directory, $"{stem} ({index++}){format.ExtensionWithDot}");
+            candidate = Path.Combine(directory, $"{stem} ({index++}){extension}");
             collidesWithSource = false;
         }
 

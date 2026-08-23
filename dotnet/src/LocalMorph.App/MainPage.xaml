@@ -39,10 +39,12 @@
                     <TapGestureRecognizer Command="{Binding SelectCommand}" />
                 </Border.GestureRecognizers>
                 <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="6">
-                    <Border Grid.RowSpan="2" WidthRequest="40" HeightRequest="40" StrokeThickness="0" StrokeShape="RoundRectangle 8" VerticalOptions="Start"
-                            Background="{AppThemeBinding Light={StaticResource AccentSoftLight}, Dark={StaticResource AccentSoftDark}}">
-                        <Label Style="{StaticResource IconAccent}" Text="{Binding Icon}" FontSize="20" />
-                    </Border>
+                    <!-- Keyboard/switch-access path to selection: the icon tile is a real button with an accessible name. -->
+                    <Button Grid.RowSpan="2" WidthRequest="40" HeightRequest="40" Padding="0" CornerRadius="8" VerticalOptions="Start"
+                            FontFamily="FluentIcons" FontSize="20" Text="{Binding Icon}" TextColor="{StaticResource Accent}"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource AccentSoftLight}, Dark={StaticResource AccentSoftDark}}"
+                            Command="{Binding SelectCommand}" SemanticProperties.Description="{Binding FileName, StringFormat='Select {0}'}"
+                            ToolTipProperties.Text="Select this file" AutomationId="SelectFileButton" />
 
                     <Label Grid.Column="1" Text="{Binding FileName}" Style="{StaticResource BodyStrong}" LineBreakMode="MiddleTruncation" MaxLines="1" />
                     <HorizontalStackLayout Grid.Column="1" Grid.Row="1" Spacing="8">
@@ -102,16 +104,19 @@
                         <Setter Property="Opacity" Value="0.55" />
                     </DataTrigger>
                 </Border.Triggers>
-                <Border.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ApplyPresetCommand}" CommandParameter="{Binding .}" />
-                </Border.GestureRecognizers>
-                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="4">
+                <Grid>
+                    <!-- Full-card, focusable button carries the action for keyboard, switch access, and UIA. -->
+                    <Button BackgroundColor="Transparent" BorderWidth="0" CornerRadius="8" Padding="0" Margin="-12,-10"
+                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ApplyPresetCommand}" CommandParameter="{Binding .}"
+                            SemanticProperties.Description="{Binding Name, StringFormat='Apply preset {0}'}" SemanticProperties.Hint="{Binding Description}" AutomationId="PresetButton" />
+                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="4" InputTransparent="True" CascadeInputTransparent="True">
                     <HorizontalStackLayout Spacing="8">
                         <Label Style="{StaticResource IconAccent}" Text="{Binding Icon}" FontSize="18" />
                         <Label Text="{Binding Name}" Style="{StaticResource BodyStrong}" LineBreakMode="TailTruncation" VerticalOptions="Center" />
                     </HorizontalStackLayout>
                     <Label Grid.Row="1" Text="{Binding FormatLabel}" Style="{StaticResource Eyebrow}" TextColor="{StaticResource Accent}" />
                     <Label Grid.Row="2" Text="{Binding Description}" Style="{StaticResource Muted}" FontSize="11" LineBreakMode="TailTruncation" MaxLines="2" />
+                </Grid>
                 </Grid>
             </Border>
         </DataTemplate>
@@ -124,10 +129,11 @@
                         <Setter Property="Opacity" Value="0.6" />
                     </DataTrigger>
                 </Border.Triggers>
-                <Border.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ChooseFormatCommand}" CommandParameter="{Binding .}" />
-                </Border.GestureRecognizers>
-                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="2">
+                <Grid>
+                    <Button BackgroundColor="Transparent" BorderWidth="0" CornerRadius="8" Padding="0" Margin="-12,-10"
+                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ChooseFormatCommand}" CommandParameter="{Binding .}"
+                            SemanticProperties.Description="{Binding DisplayName, StringFormat='Choose {0}'}" SemanticProperties.Hint="{Binding Description}" AutomationId="FormatButton" />
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="2" InputTransparent="True" CascadeInputTransparent="True">
                     <HorizontalStackLayout Spacing="8">
                         <Label Text="{Binding DisplayName}" Style="{StaticResource BodyStrong}" VerticalOptions="Center" />
                         <Border Style="{StaticResource Pill}" Padding="7,1" IsVisible="{Binding HasBadge}" VerticalOptions="Center">
@@ -137,6 +143,7 @@
                     <Label Grid.Column="1" Text="{Binding Extension}" Style="{StaticResource Muted}" FontFamily="OpenSansSemibold" VerticalOptions="Center" />
                     <Label Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Description}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
                     <Label Grid.Row="1" Grid.Column="1" Text="{Binding EngineLabel}" Style="{StaticResource Muted}" FontSize="10.5" HorizontalTextAlignment="End" IsVisible="{Binding IsAvailable, Converter={StaticResource Not}}" TextColor="{StaticResource Danger}" />
+                </Grid>
                 </Grid>
             </Border>
         </DataTemplate>

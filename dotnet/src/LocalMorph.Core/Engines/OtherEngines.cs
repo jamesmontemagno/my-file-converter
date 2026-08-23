@@ -204,11 +204,9 @@ public sealed class PandocEngine : IConversionEngine
             "md" => "gfm",
             "html" => "html5",
             "txt" => "plain",
-            "pdf" => "pdf",
             _ => format.Extension
         };
         args.AddRange(["--to", to]);
-        if (format.Id == "pdf") args.AddRange(["--pdf-engine", "wkhtmltopdf"]);
         args.AddRange(["--output", outputPath]);
         return args;
     }

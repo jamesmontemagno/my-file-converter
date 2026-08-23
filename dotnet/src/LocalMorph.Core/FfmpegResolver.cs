@@ -72,7 +72,7 @@ public static class FfmpegResolver
             yield return "win-x64";
             yield return "win-arm64";
         }
-        else if (OperatingSystem.IsMacOS())
+        else if (OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst())
         {
             yield return $"maccatalyst-{arch}";
             yield return "maccatalyst-x64";

@@ -104,6 +104,27 @@ public sealed class FormatCatalogTests
         Assert.Equal(EngineKind.Ffmpeg, FormatCatalog.ResolveEngine(TestData.Format("mp4-h264"), @"C:\a.mp4", tools));
     }
 
+    [Fact]
+    public void Compiled_but_broken_hardware_encoder_does_not_make_format_available()
+    {
+        // h264_nvenc is compiled in but failed its test encode (not in WorkingHardwareEncoders) and there is no libx264.
+        var brokenNvenc = new FfmpegCapabilities(new HashSet<string> { "h264_nvenc", "aac" }, new HashSet<string> { "cuda" }, [], null);
+        Assert.Null(FormatCatalog.ResolveEngine(TestData.Format("mp4-h264"), @"C:\a.mp4", TestData.Tools(brokenNvenc)));
+
+        var workingNvenc = new FfmpegCapabilities(new HashSet<string> { "h264_nvenc", "aac" }, new HashSet<string> { "cuda" },
+            [new HardwareEncoder("h264", "h264_nvenc", HardwareVendor.Nvidia, "NVIDIA NVENC")], null);
+        Assert.Equal(EngineKind.Ffmpeg, FormatCatalog.ResolveEngine(TestData.Format("mp4-h264"), @"C:\a.mp4", TestData.Tools(workingNvenc)));
+    }
+
+    [Fact]
+    public void Pdf_is_libreoffice_only_because_pandoc_needs_an_external_pdf_engine()
+    {
+        var pdf = TestData.Format("pdf");
+        Assert.Equal([EngineKind.LibreOffice], pdf.Engines);
+        Assert.Null(FormatCatalog.ResolveEngine(pdf, @"C:\docs\notes.md", TestData.Tools(extra: ToolKind.Pandoc)));
+        Assert.Equal(EngineKind.LibreOffice, FormatCatalog.ResolveEngine(pdf, @"C:\docs\notes.md", TestData.Tools(extra: ToolKind.LibreOffice)));
+    }
+
     [Theory]
     [InlineData("movie.MKV", MediaCategory.Video)]
     [InlineData("song.m4a", MediaCategory.Audio)]
@@ -275,6 +296,26 @@ public sealed class OutputNamingTests : IDisposable
         var reserved = new HashSet<string>([Path.GetFullPath(mp4), Path.GetFullPath(mkv)], StringComparer.OrdinalIgnoreCase);
         var output = OutputNaming.BuildOutputPath(mp4, TestData.Format("mkv-copy"), null, string.Empty, OverwritePolicy.Overwrite, reserved);
         Assert.Equal(Path.Combine(root, "clip (2).mkv"), output);
+    }
+
+    [Fact]
+    public void Preferred_path_uses_codec_specific_extension_for_audio_copy()
+    {
+        var webm = new SourceFile(Path.Combine(root, "clip.webm"), 1, MediaCategory.Video, DocumentFlavor.None,
+            new LocalMorph.Bridge.SourceMediaInfo(LocalMorph.Bridge.SourceMediaKind.Video, 10, 640, 360, 30, 48000, 2, "vp9", "vorbis", null, "webm"));
+        File.WriteAllText(Path.Combine(root, "clip.ogg"), "x");
+        var output = OutputNaming.BuildOutputPath(webm.Path, TestData.Format("audio-copy"), null, string.Empty, OverwritePolicy.Rename, null, webm);
+        Assert.Equal(Path.Combine(root, "clip (2).ogg"), output);
+    }
+
+    [Fact]
+    public void Preferred_path_is_the_unsuffixed_name_skip_policy_checks()
+    {
+        var source = Path.Combine(root, "clip.mp4");
+        File.WriteAllText(source, "x");
+        var preferred = OutputNaming.PreferredOutputPath(source, TestData.Format("mp3"), null, string.Empty);
+        Assert.Equal(Path.Combine(root, "clip.mp3"), preferred);
+        Assert.EndsWith(".mp3", preferred); // regression: the old check built "clipmp3" (missing dot)
     }
 
     [Fact]

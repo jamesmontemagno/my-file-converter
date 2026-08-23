@@ -18,13 +18,18 @@ public static class PlatformActions
 
             if (OperatingSystem.IsMacCatalyst() || OperatingSystem.IsMacOS())
             {
-                Process.Start(new ProcessStartInfo("/usr/bin/open", $"-R \"{path}\"") { UseShellExecute = false });
+                var open = new ProcessStartInfo("/usr/bin/open") { UseShellExecute = false };
+                open.ArgumentList.Add("-R");
+                open.ArgumentList.Add(path);
+                Process.Start(open);
                 return true;
             }
 
             var folder = Directory.Exists(path) ? path : Path.GetDirectoryName(path);
             if (folder is null) return false;
-            Process.Start(new ProcessStartInfo("xdg-open", $"\"{folder}\"") { UseShellExecute = false });
+            var xdg = new ProcessStartInfo("xdg-open") { UseShellExecute = false };
+            xdg.ArgumentList.Add(folder);
+            Process.Start(xdg);
             return true;
         }
         catch
@@ -68,8 +73,12 @@ public static class PlatformActions
 
             if (OperatingSystem.IsMacCatalyst() || OperatingSystem.IsMacOS())
             {
-                var script = $"tell application \"Terminal\" to do script \"{command.Replace("\"", "\\\"")}\"";
-                Process.Start(new ProcessStartInfo("/usr/bin/osascript", $"-e '{script}' -e 'tell application \"Terminal\" to activate'") { UseShellExecute = false });
+                var osascript = new ProcessStartInfo("/usr/bin/osascript") { UseShellExecute = false };
+                osascript.ArgumentList.Add("-e");
+                osascript.ArgumentList.Add($"tell application \"Terminal\" to do script \"{command.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"");
+                osascript.ArgumentList.Add("-e");
+                osascript.ArgumentList.Add("tell application \"Terminal\" to activate");
+                Process.Start(osascript);
                 return true;
             }
         }

@@ -53,7 +53,7 @@ public sealed record ConversionOptions
         if (WavBitDepth is not (16 or 24 or 32)) return "Bit depth must be 16, 24, or 32.";
         if (TrimStartSeconds is { } start && (!double.IsFinite(start) || start < 0)) return "Trim start must be zero or later.";
         if (TrimEndSeconds is { } end && (!double.IsFinite(end) || end <= (TrimStartSeconds ?? 0))) return "Trim end must be after trim start.";
-        if (TargetSizeMegabytes is { } size && (!double.IsFinite(size) || size <= 0)) return "Target size must be a positive number of megabytes.";
+        if (TargetSizeMegabytes is { } size && (!double.IsFinite(size) || size <= 0)) return "Enter a target size in megabytes (for example 25).";
         if (FrameTimeSeconds is { } frame && (!double.IsFinite(frame) || frame < 0)) return "Frame time must be zero or later.";
         if (Rotation is not (0 or 90 or 180 or 270)) return "Rotation must be 0, 90, 180, or 270 degrees.";
         if (PlaybackSpeed is < 0.25 or > 4.0) return "Playback speed must be between 0.25× and 4×.";

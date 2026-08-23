@@ -28,7 +28,8 @@ Users then install with:
 
 ```text
 winget install Refractored.LocalMorph
-brew install --cask jamesmontemagno/my-file-converter/localmorph
+brew tap jamesmontemagno/my-file-converter https://github.com/jamesmontemagno/my-file-converter
+brew install --cask localmorph
 ```
 
 ## Windows secrets (environment `windows-release`)
