@@ -150,10 +150,14 @@ public sealed class ConversionQueue : IDisposable
 /// <summary>Decides where an output goes and how name collisions are handled.</summary>
 public static class OutputNaming
 {
+    // Windows' invalid set is a superset of macOS/Linux; sanitizing to it everywhere keeps names portable
+    // across machines, shares, and cloud-synced folders.
+    private static readonly char[] InvalidFileNameChars =
+        Path.GetInvalidFileNameChars().Concat(['<', '>', ':', '"', '/', '\\', '|', '?', '*']).Distinct().ToArray();
+
     public static string Sanitize(string stem)
     {
-        var invalid = Path.GetInvalidFileNameChars();
-        var cleaned = new string(stem.Select(character => invalid.Contains(character) ? '-' : character).ToArray()).Trim().Trim('.', '-');
+        var cleaned = new string(stem.Select(character => InvalidFileNameChars.Contains(character) || char.IsControl(character) ? '-' : character).ToArray()).Trim().Trim('.', '-');
         if (string.IsNullOrWhiteSpace(cleaned)) cleaned = "converted";
         return cleaned.Length > 180 ? cleaned[..180] : cleaned;
     }
