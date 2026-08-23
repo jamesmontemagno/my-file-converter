@@ -207,8 +207,8 @@ public sealed class FfmpegEngineTests
         var plan = new FfmpegEngine().Plan(job, TestData.Tools(), Path.GetTempPath());
 
         Assert.Equal(2, plan.Steps.Count);
-        var pass1 = string.Join(' ', plan.Steps[0].StartInfo.ArgumentList);
-        var pass2 = string.Join(' ', plan.Steps[1].StartInfo.ArgumentList);
+        var pass1 = string.Join(' ', plan.Steps[0].StartInfo!.ArgumentList);
+        var pass2 = string.Join(' ', plan.Steps[1].StartInfo!.ArgumentList);
         Assert.Contains("-pass 1", pass1);
         Assert.Contains("-an -f null", pass1);
         Assert.Contains("-pass 2", pass2);
@@ -226,8 +226,8 @@ public sealed class FfmpegEngineTests
         var plan = new FfmpegEngine().Plan(job, TestData.Tools(TestData.WithNvenc), Path.GetTempPath());
 
         Assert.Equal(2, plan.Steps.Count);
-        Assert.Contains("libx264", string.Join(' ', plan.Steps[1].StartInfo.ArgumentList));
-        Assert.DoesNotContain("nvenc", string.Join(' ', plan.Steps[1].StartInfo.ArgumentList));
+        Assert.Contains("libx264", string.Join(' ', plan.Steps[1].StartInfo!.ArgumentList));
+        Assert.DoesNotContain("nvenc", string.Join(' ', plan.Steps[1].StartInfo!.ArgumentList));
     }
 
     [Fact]

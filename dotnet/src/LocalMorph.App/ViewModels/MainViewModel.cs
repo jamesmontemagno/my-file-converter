@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using LocalMorph.App.Services;
 using LocalMorph.Core.Engines;
 using LocalMorph.Core.Formats;
+using LocalMorph.Core.Imaging;
 using LocalMorph.Core.Jobs;
 using LocalMorph.Core.Tools;
 using LocalMorph.Core.Updates;
@@ -219,6 +220,14 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasValidationMessage))]
     public partial string? ValidationMessage { get; set; }
 
+    /// <summary>Shown when queued HEIC/HEIF photos lack a reliable decoder (Windows HEIF codec or ImageMagick).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDecoderHint))]
+    public partial string? DecoderHint { get; set; }
+
+    [ObservableProperty]
+    public partial string DecoderHintAction { get; set; } = "Open Tools";
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ConvertButtonText))]
     [NotifyPropertyChangedFor(nameof(CanConvert))]
@@ -284,6 +293,7 @@ public partial class MainViewModel : ObservableObject
     public bool HasHistory => History.Count > 0;
     public bool HasFailed => Files.Any(file => file.IsFailed || file.IsCanceled) && !IsConverting;
     public bool HasValidationMessage => !string.IsNullOrWhiteSpace(ValidationMessage);
+    public bool HasDecoderHint => !string.IsNullOrWhiteSpace(DecoderHint);
     public bool HasCustomOutputDirectory => !string.IsNullOrWhiteSpace(OutputDirectory);
     public string OutputDirectoryLabel => HasCustomOutputDirectory ? OutputDirectory : "Next to each source file";
     public string OutputExtensionLabel => SelectedFormat?.Extension ?? string.Empty;
@@ -463,6 +473,7 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowAdvancedSection));
         RefreshFormats();
         UpdateCommandPreview();
+        UpdateDecoderHint();
 
         // Files added before ffprobe was found still need metadata.
         foreach (var file in Files.Where(file => file.Source is null || file.Source.Media is null && file.Category is MediaCategory.Video or MediaCategory.Audio or MediaCategory.Image))
@@ -631,6 +642,49 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(ConvertButtonText));
         RefreshFormats();
         UpdateBatchStatus();
+        UpdateDecoderHint();
+    }
+
+    private ToolKind? missingDecoder;
+
+    /// <summary>HEIC/HEIF photos decode through the Windows HEIF codec (or ImageMagick); FFmpeg alone is unreliable for them.</summary>
+    private void UpdateDecoderHint()
+    {
+        missingDecoder = Files
+            .SelectMany(file => FormatCatalog.MissingDecodersFor(file.Path, Inventory))
+            .Cast<ToolKind?>()
+            .FirstOrDefault();
+
+        if (missingDecoder is not { } kind)
+        {
+            DecoderHint = null;
+            return;
+        }
+
+        var count = Files.Count(file => PlatformImageCodec.IsHeif(file.Path));
+        var photos = count == 1 ? "This HEIC photo needs" : $"{count} HEIC photos need";
+        if (kind == ToolKind.WindowsHeif)
+        {
+            DecoderHint = $"{photos} the free Windows HEIF Image Extensions codec to convert reliably (or ImageMagick).";
+            DecoderHintAction = "Get from Store";
+        }
+        else
+        {
+            DecoderHint = $"{photos} {ToolCatalog.Get(kind).DisplayName} to convert reliably.";
+            DecoderHintAction = "Open Tools";
+        }
+    }
+
+    [RelayCommand]
+    private void ResolveDecoderHint()
+    {
+        if (missingDecoder == ToolKind.WindowsHeif && PlatformActions.LaunchInstaller(ToolKind.WindowsHeif))
+        {
+            ShowToast("Install the codec, then refresh Tools.");
+            return;
+        }
+
+        View = WorkspaceView.Tools;
     }
 
     private void OnFilePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

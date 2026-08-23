@@ -1,5 +1,6 @@
 using LocalMorph.Core.Engines;
 using LocalMorph.Core.Formats;
+using LocalMorph.Core.Imaging;
 using LocalMorph.Core.Jobs;
 using LocalMorph.Core.Tools;
 using Xunit;
@@ -247,6 +248,158 @@ public sealed class ToolTests
         var command = ToolCatalog.InstallCommand(ToolKind.ImageMagick);
         if (OperatingSystem.IsWindows()) Assert.Equal("winget install --id ImageMagick.ImageMagick -e", command);
         else Assert.Contains("imagemagick", command);
+    }
+
+    [Fact]
+    public void Windows_heif_codec_is_a_store_tool_only_on_windows()
+    {
+        var descriptor = ToolCatalog.All.FirstOrDefault(tool => tool.Kind == ToolKind.WindowsHeif);
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Null(descriptor);
+            return;
+        }
+
+        Assert.NotNull(descriptor);
+        Assert.True(descriptor.IsStoreCodec);
+        Assert.Empty(descriptor.ExecutableNames);
+        Assert.Equal("ms-windows-store://pdp/?productid=9PMMSR1CGPWG", ToolCatalog.InstallCommand(ToolKind.WindowsHeif));
+        Assert.Equal(ToolCatalog.InstallCommand(ToolKind.WindowsHeif), ToolCatalog.StoreUri(descriptor));
+        Assert.Contains("9pmmsr1cgpwg", descriptor.WebsiteUrl);
+    }
+}
+
+/// <summary>Stand-in for the Windows Imaging Component: "decodes" by writing a small file.</summary>
+internal sealed class FakeImageCodec(bool installed) : IPlatformImageCodec
+{
+    public List<(string Source, string Output, string Format)> Calls { get; } = [];
+
+    public ToolInfo? Probe() => installed
+        ? new ToolInfo(ToolKind.WindowsHeif, "Microsoft HEIF Decoder", "1.2.3.0", ToolSource.System, "HEVC ok")
+        : null;
+
+    public Task ConvertAsync(SourceFile source, OutputFormat format, ConversionOptions options, string outputPath, CancellationToken token)
+    {
+        Calls.Add((source.Path, outputPath, format.Id));
+        File.WriteAllBytes(outputPath, [0x89, 0x50, 0x4E, 0x47]);
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class WindowsImagingEngineTests : IDisposable
+{
+    private readonly string root = Path.Combine(Path.GetTempPath(), "localmorph-tests", Guid.NewGuid().ToString("N"));
+    private readonly IPlatformImageCodec? previous = PlatformImageCodec.Current;
+
+    public WindowsImagingEngineTests() => Directory.CreateDirectory(root);
+
+    public void Dispose()
+    {
+        PlatformImageCodec.Current = previous;
+        try { Directory.Delete(root, recursive: true); } catch { }
+    }
+
+    private static ToolInventory WithCodec(params ToolKind[] extra) => TestData.Tools(extra: [ToolKind.WindowsHeif, .. extra]);
+
+    [Fact]
+    public void Store_codec_lookup_uses_platform_codec_probe_not_disk()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        PlatformImageCodec.Current = null;
+        Assert.Null(ToolLocator.Find(ToolKind.WindowsHeif));
+
+        PlatformImageCodec.Current = new FakeImageCodec(installed: false);
+        Assert.Null(ToolLocator.Find(ToolKind.WindowsHeif));
+
+        PlatformImageCodec.Current = new FakeImageCodec(installed: true);
+        var info = ToolLocator.Find(ToolKind.WindowsHeif);
+        Assert.NotNull(info);
+        Assert.Equal(ToolSource.System, info.Source);
+        Assert.Equal("HEVC ok", info.Notes);
+    }
+
+    [Fact]
+    public void Heic_sources_prefer_the_windows_codec_when_installed()
+    {
+        var png = TestData.Format("png");
+        Assert.Equal(EngineKind.WindowsImaging, FormatCatalog.ResolveEngine(png, @"C:\photos\IMG_0001.heic", WithCodec()));
+        Assert.Equal(EngineKind.WindowsImaging, FormatCatalog.ResolveEngine(TestData.Format("jpg"), @"C:\photos\IMG_0001.HEIF", WithCodec(ToolKind.ImageMagick)));
+        // Outputs WIC cannot write still go to ImageMagick/FFmpeg.
+        Assert.Equal(EngineKind.ImageMagick, FormatCatalog.ResolveEngine(TestData.Format("webp"), @"C:\photos\IMG_0001.heic", WithCodec(ToolKind.ImageMagick)));
+        Assert.Equal(EngineKind.Ffmpeg, FormatCatalog.ResolveEngine(TestData.Format("webp"), @"C:\photos\IMG_0001.heic", WithCodec()));
+        // The codec is only for HEIF inputs; ordinary images keep their usual engines.
+        Assert.Equal(EngineKind.Ffmpeg, FormatCatalog.ResolveEngine(png, @"C:\photos\IMG_0001.jpg", WithCodec()));
+        Assert.Equal(EngineKind.Ffmpeg, FormatCatalog.ResolveEngine(png, @"C:\photos\IMG_0001.heic", TestData.Tools()));
+    }
+
+    [Fact]
+    public void Missing_decoders_are_reported_for_heif_only()
+    {
+        var expected = OperatingSystem.IsWindows() ? ToolKind.WindowsHeif : ToolKind.ImageMagick;
+        Assert.Equal([expected], FormatCatalog.MissingDecodersFor(@"C:\photos\a.heic", TestData.Tools()).ToArray());
+        Assert.Empty(FormatCatalog.MissingDecodersFor(@"C:\photos\a.heic", TestData.Tools(extra: ToolKind.ImageMagick)));
+        Assert.Empty(FormatCatalog.MissingDecodersFor(@"C:\photos\a.heic", WithCodec()));
+        Assert.Empty(FormatCatalog.MissingDecodersFor(@"C:\photos\a.png", TestData.Tools()));
+    }
+
+    [Fact]
+    public async Task In_process_step_runs_the_codec_and_completes_the_job()
+    {
+        var codec = new FakeImageCodec(installed: true);
+        PlatformImageCodec.Current = codec;
+        var source = Path.Combine(root, "IMG_0001.heic");
+        File.WriteAllBytes(source, [1, 2, 3]);
+        var output = Path.Combine(root, "IMG_0001.png");
+        var job = new ConversionJob(TestData.Image(source), TestData.Format("png"), new ConversionOptions { TargetHeight = 1080, Rotation = 90 }, output, EngineKind.WindowsImaging);
+
+        await ConversionRunner.RunAsync(job, WithCodec(), Path.Combine(root, "work"));
+
+        Assert.Equal(JobState.Completed, job.State);
+        Assert.Single(codec.Calls);
+        Assert.Equal((source, output, "png"), codec.Calls[0]);
+        Assert.Contains("windows-imaging", job.CommandLine);
+        Assert.Contains("max-height=1080", job.CommandLine);
+        Assert.Contains("rotate=90", job.CommandLine);
+        Assert.Equal(4, job.Result!.OutputBytes);
+    }
+
+    [Fact]
+    public async Task Codec_failure_marks_the_job_failed_and_removes_partial_output()
+    {
+        PlatformImageCodec.Current = new ThrowingCodec();
+        var source = Path.Combine(root, "broken.heic");
+        File.WriteAllBytes(source, [1]);
+        var output = Path.Combine(root, "broken.jpg");
+        var job = new ConversionJob(TestData.Image(source), TestData.Format("jpg"), new ConversionOptions(), output, EngineKind.WindowsImaging);
+
+        await ConversionRunner.RunAsync(job, WithCodec(), Path.Combine(root, "work"));
+
+        Assert.Equal(JobState.Failed, job.State);
+        Assert.Contains("HEVC decoder is missing", job.Error);
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public void Planning_without_the_codec_fails_clearly()
+    {
+        PlatformImageCodec.Current = new FakeImageCodec(installed: true);
+        var job = new ConversionJob(TestData.Image(@"C:\photos\a.heic"), TestData.Format("png"), new ConversionOptions(), @"C:\photos\a.png", EngineKind.WindowsImaging);
+        var ex = Assert.Throws<InvalidOperationException>(() => new WindowsImagingEngine().Plan(job, TestData.Tools(), root));
+        Assert.Contains("HEIF Image Extensions", ex.Message);
+
+        var webp = new ConversionJob(TestData.Image(@"C:\photos\a.heic"), TestData.Format("webp"), new ConversionOptions(), @"C:\photos\a.webp", EngineKind.WindowsImaging);
+        Assert.Throws<InvalidOperationException>(() => new WindowsImagingEngine().Plan(webp, WithCodec(), root));
+    }
+
+    private sealed class ThrowingCodec : IPlatformImageCodec
+    {
+        public ToolInfo? Probe() => null;
+
+        public Task ConvertAsync(SourceFile source, OutputFormat format, ConversionOptions options, string outputPath, CancellationToken token)
+        {
+            File.WriteAllBytes(outputPath, [0xFF]);
+            throw new InvalidOperationException("Windows could not decode this HEIC photo: the HEVC decoder is missing.");
+        }
     }
 }
 

@@ -8,10 +8,15 @@ namespace LocalMorph.Core.Engines;
 /// <summary>Progress sample parsed from a tool's output.</summary>
 public sealed record ProgressSample(double? Ratio, double? SecondsRemaining, string? Speed, bool Finished);
 
-/// <summary>One external process invocation. A plan may have several (e.g. two-pass encodes).</summary>
+/// <summary>One unit of work in a plan: an external process, or an in-process <see cref="Execute"/> delegate. A plan may have several (e.g. two-pass encodes).</summary>
 public sealed class EngineStep
 {
-    public required ProcessStartInfo StartInfo { get; init; }
+    /// <summary>Process to run; null for in-process steps.</summary>
+    public ProcessStartInfo? StartInfo { get; init; }
+    /// <summary>In-process work (for example a platform image codec). Throw to fail the job.</summary>
+    public Func<ConversionJob, CancellationToken, Task>? Execute { get; init; }
+    /// <summary>Shown in the command preview for in-process steps, which have no command line.</summary>
+    public string? Summary { get; init; }
     public required string Label { get; init; }
     public double ProgressStart { get; init; }
     public double ProgressEnd { get; init; } = 1;
@@ -20,6 +25,9 @@ public sealed class EngineStep
     public Func<string, ProgressSample?>? ParseStdout { get; init; }
     /// <summary>Parses a stderr line into progress (for tools that report progress on stderr).</summary>
     public Func<string, ProgressSample?>? ParseStderr { get; init; }
+
+    public bool IsInProcess => StartInfo is null;
+    public string Describe() => StartInfo is { } startInfo ? CommandLine.Describe(startInfo) : Summary ?? Label;
 }
 
 public sealed class ConversionPlan
@@ -29,7 +37,7 @@ public sealed class ConversionPlan
     public Func<CancellationToken, Task>? Finalize { get; init; }
     /// <summary>Always runs, success or failure.</summary>
     public Action? Cleanup { get; init; }
-    public string Describe() => string.Join("\n", Steps.Select(step => CommandLine.Describe(step.StartInfo)));
+    public string Describe() => string.Join("\n", Steps.Select(step => step.Describe()));
 }
 
 public interface IConversionEngine
@@ -73,7 +81,8 @@ public static class EngineRegistry
         [EngineKind.ImageMagick] = new ImageMagickEngine(),
         [EngineKind.LibreOffice] = new LibreOfficeEngine(),
         [EngineKind.Pandoc] = new PandocEngine(),
-        [EngineKind.Ghostscript] = new GhostscriptEngine()
+        [EngineKind.Ghostscript] = new GhostscriptEngine(),
+        [EngineKind.WindowsImaging] = new WindowsImagingEngine()
     };
 
     public static IConversionEngine Get(EngineKind kind) => Engines[kind];

@@ -34,8 +34,8 @@ public static class ConversionRunner
             {
                 token.ThrowIfCancellationRequested();
                 job.ReportProgress(step.ProgressStart, step.Label);
-                job.AppendLog($"$ {CommandLine.Describe(step.StartInfo)}");
-                var exitCode = await RunStepAsync(job, step, token);
+                job.AppendLog($"$ {step.Describe()}");
+                var exitCode = step.IsInProcess ? await RunInProcessAsync(job, step, token) : await RunStepAsync(job, step, token);
                 if (exitCode != 0)
                 {
                     // Tools often create/truncate the destination before failing; never leave a corrupt file behind.
@@ -72,9 +72,17 @@ public static class ConversionRunner
         }
     }
 
+    private static async Task<int> RunInProcessAsync(ConversionJob job, EngineStep step, CancellationToken token)
+    {
+        if (step.Execute is null) throw new InvalidOperationException($"Step '{step.Label}' has neither a process nor an in-process action.");
+        await step.Execute(job, token);
+        return 0;
+    }
+
     private static async Task<int> RunStepAsync(ConversionJob job, EngineStep step, CancellationToken token)
     {
-        using var process = new Process { StartInfo = step.StartInfo, EnableRaisingEvents = true };
+        var startInfo = step.StartInfo ?? throw new InvalidOperationException($"Step '{step.Label}' has no process to run.");
+        using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         var span = step.ProgressEnd - step.ProgressStart;
         string? lastSpeed = null;
         var stepStart = DateTime.UtcNow;
@@ -111,7 +119,7 @@ public static class ConversionRunner
             }
         }
 
-        if (!process.Start()) throw new InvalidOperationException($"Could not start {Path.GetFileName(step.StartInfo.FileName)}.");
+        if (!process.Start()) throw new InvalidOperationException($"Could not start {Path.GetFileName(startInfo.FileName)}.");
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 

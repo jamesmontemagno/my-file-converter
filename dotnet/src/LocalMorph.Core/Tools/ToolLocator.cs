@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using LocalMorph.Core.Imaging;
 
 namespace LocalMorph.Core.Tools;
 
@@ -12,6 +13,12 @@ public static class ToolLocator
     public static ToolInfo? Find(ToolKind kind, string? appBaseDirectory = null)
     {
         var descriptor = ToolCatalog.Get(kind);
+        if (descriptor.IsStoreCodec)
+        {
+            try { return PlatformImageCodec.Current?.Probe(); }
+            catch { return null; }
+        }
+
         foreach (var (candidate, source) in EnumerateCandidates(descriptor, appBaseDirectory ?? AppContext.BaseDirectory))
         {
             if (!IsExecutable(candidate)) continue;

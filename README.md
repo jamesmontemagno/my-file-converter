@@ -88,6 +88,11 @@ redistribute FFmpeg.
 - **Tools view** — finds FFmpeg, ImageMagick, LibreOffice, Pandoc, and Ghostscript on PATH, in
   winget/Homebrew/Program Files locations, or bundled with the app; one-click install via
   `winget`/`brew` for anything missing.
+- **HEIC on Windows** — HEIC/HEIF photos decode natively through the Windows **HEIF Image
+  Extensions** codec (Windows Imaging Component), no ImageMagick needed for PNG/JPEG/BMP/TIFF/GIF
+  output. If the codec is missing, the Tools view and the queue show a *Get from Store* action that
+  opens its Microsoft Store page. (Most iPhone photos also need the free "HEVC Video Extensions from
+  Device Manufacturer"; the Tools view tells you when that decoder is absent.)
 - **History** — every finished conversion with size savings; reopen, reveal, or reconvert.
 - **Command preview** — see (and copy) the exact command that will run.
 

@@ -7,17 +7,21 @@ public enum ToolKind
     ImageMagick,
     LibreOffice,
     Pandoc,
-    Ghostscript
+    Ghostscript,
+    /// <summary>Microsoft Store "HEIF Image Extensions" codec used by the Windows Imaging Component to decode HEIC/HEIF.</summary>
+    WindowsHeif
 }
 
 public enum ToolSource
 {
     Bundled,
     Path,
-    KnownLocation
+    KnownLocation,
+    /// <summary>Provided by the operating system (for example a Store-installed codec), not an executable.</summary>
+    System
 }
 
-public sealed record ToolInfo(ToolKind Kind, string Path, string? Version, ToolSource Source)
+public sealed record ToolInfo(ToolKind Kind, string Path, string? Version, ToolSource Source, string? Notes = null)
 {
     public string ShortVersion => ToolCatalog.ShortenVersion(Kind, Version);
 }
@@ -30,37 +34,64 @@ public sealed record ToolDescriptor(
     string WingetId,
     string BrewFormula,
     string WebsiteUrl,
-    bool IsCore);
+    bool IsCore,
+    string? StoreProductId = null)
+{
+    /// <summary>True for codecs delivered through the Microsoft Store rather than an executable on disk.</summary>
+    public bool IsStoreCodec => StoreProductId is not null;
+}
 
 public static class ToolCatalog
 {
-    public static readonly IReadOnlyList<ToolDescriptor> All =
-    [
-        new(ToolKind.Ffmpeg, "FFmpeg", "Video, audio, and image conversion",
-            OperatingSystem.IsWindows() ? ["ffmpeg.exe"] : ["ffmpeg"],
-            "Gyan.FFmpeg", "ffmpeg", "https://ffmpeg.org/download.html", IsCore: true),
-        new(ToolKind.Ffprobe, "FFprobe", "Media inspection (ships with FFmpeg)",
-            OperatingSystem.IsWindows() ? ["ffprobe.exe"] : ["ffprobe"],
-            "Gyan.FFmpeg", "ffmpeg", "https://ffmpeg.org/download.html", IsCore: true),
-        new(ToolKind.ImageMagick, "ImageMagick", "HEIC, SVG, PSD, RAW photos, and PDF pages",
-            OperatingSystem.IsWindows() ? ["magick.exe"] : ["magick"],
-            "ImageMagick.ImageMagick", "imagemagick", "https://imagemagick.org/script/download.php", IsCore: false),
-        new(ToolKind.LibreOffice, "LibreOffice", "Word, Excel, PowerPoint, and OpenDocument files",
-            OperatingSystem.IsWindows() ? ["soffice.exe", "soffice.com"] : ["soffice"],
-            "TheDocumentFoundation.LibreOffice", "--cask libreoffice", "https://www.libreoffice.org/download/", IsCore: false),
-        new(ToolKind.Pandoc, "Pandoc", "Markdown, HTML, EPUB, and rich text documents",
-            OperatingSystem.IsWindows() ? ["pandoc.exe"] : ["pandoc"],
-            "JohnMacFarlane.Pandoc", "pandoc", "https://pandoc.org/installing.html", IsCore: false),
-        new(ToolKind.Ghostscript, "Ghostscript", "PDF compression and PDF to image",
-            OperatingSystem.IsWindows() ? ["gswin64c.exe", "gswin32c.exe", "gs.exe"] : ["gs"],
-            "ArtifexSoftware.GhostScript", "ghostscript", "https://ghostscript.com/releases/gsdnld.html", IsCore: false)
-    ];
+    /// <summary>Microsoft Store product ID of "HEIF Image Extensions" (free, published by Microsoft).</summary>
+    public const string HeifImageExtensionsProductId = "9PMMSR1CGPWG";
 
-    public static ToolDescriptor Get(ToolKind kind) => All.First(descriptor => descriptor.Kind == kind);
+    public static readonly IReadOnlyList<ToolDescriptor> All = Build();
+
+    private static IReadOnlyList<ToolDescriptor> Build()
+    {
+        var tools = new List<ToolDescriptor>
+        {
+            new(ToolKind.Ffmpeg, "FFmpeg", "Video, audio, and image conversion",
+                OperatingSystem.IsWindows() ? ["ffmpeg.exe"] : ["ffmpeg"],
+                "Gyan.FFmpeg", "ffmpeg", "https://ffmpeg.org/download.html", IsCore: true),
+            new(ToolKind.Ffprobe, "FFprobe", "Media inspection (ships with FFmpeg)",
+                OperatingSystem.IsWindows() ? ["ffprobe.exe"] : ["ffprobe"],
+                "Gyan.FFmpeg", "ffmpeg", "https://ffmpeg.org/download.html", IsCore: true),
+            new(ToolKind.ImageMagick, "ImageMagick", "HEIC, SVG, PSD, RAW photos, and PDF pages",
+                OperatingSystem.IsWindows() ? ["magick.exe"] : ["magick"],
+                "ImageMagick.ImageMagick", "imagemagick", "https://imagemagick.org/script/download.php", IsCore: false),
+            new(ToolKind.LibreOffice, "LibreOffice", "Word, Excel, PowerPoint, and OpenDocument files",
+                OperatingSystem.IsWindows() ? ["soffice.exe", "soffice.com"] : ["soffice"],
+                "TheDocumentFoundation.LibreOffice", "--cask libreoffice", "https://www.libreoffice.org/download/", IsCore: false),
+            new(ToolKind.Pandoc, "Pandoc", "Markdown, HTML, EPUB, and rich text documents",
+                OperatingSystem.IsWindows() ? ["pandoc.exe"] : ["pandoc"],
+                "JohnMacFarlane.Pandoc", "pandoc", "https://pandoc.org/installing.html", IsCore: false),
+            new(ToolKind.Ghostscript, "Ghostscript", "PDF compression and PDF to image",
+                OperatingSystem.IsWindows() ? ["gswin64c.exe", "gswin32c.exe", "gs.exe"] : ["gs"],
+                "ArtifexSoftware.GhostScript", "ghostscript", "https://ghostscript.com/releases/gsdnld.html", IsCore: false)
+        };
+
+        if (OperatingSystem.IsWindows())
+        {
+            tools.Add(new(ToolKind.WindowsHeif, "HEIF Image Extensions", "HEIC/HEIF photos from iPhone and iPad (Windows codec)",
+                [], string.Empty, string.Empty, $"https://apps.microsoft.com/detail/{HeifImageExtensionsProductId.ToLowerInvariant()}", IsCore: false,
+                StoreProductId: HeifImageExtensionsProductId));
+        }
+
+        return tools;
+    }
+
+    public static ToolDescriptor Get(ToolKind kind) => All.FirstOrDefault(descriptor => descriptor.Kind == kind)
+        ?? throw new ArgumentOutOfRangeException(nameof(kind), kind, $"{kind} is not available on this platform.");
+
+    /// <summary>Deep link that opens the codec's page in the Microsoft Store app.</summary>
+    public static string StoreUri(ToolDescriptor descriptor) => $"ms-windows-store://pdp/?productid={descriptor.StoreProductId}";
 
     public static string InstallCommand(ToolKind kind)
     {
         var descriptor = Get(kind);
+        if (descriptor.IsStoreCodec) return StoreUri(descriptor);
         if (OperatingSystem.IsWindows()) return $"winget install --id {descriptor.WingetId} -e";
         if (OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst()) return $"brew install {descriptor.BrewFormula}";
         return $"sudo apt install {descriptor.BrewFormula.Replace("--cask ", string.Empty)}";

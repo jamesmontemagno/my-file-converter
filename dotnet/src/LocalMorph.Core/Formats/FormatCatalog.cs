@@ -1,3 +1,4 @@
+using LocalMorph.Core.Imaging;
 using LocalMorph.Core.Tools;
 
 namespace LocalMorph.Core.Formats;
@@ -8,7 +9,9 @@ public enum EngineKind
     ImageMagick,
     LibreOffice,
     Pandoc,
-    Ghostscript
+    Ghostscript,
+    /// <summary>In-process Windows Imaging Component decode (HEIC/HEIF via the Store HEIF Image Extensions codec).</summary>
+    WindowsImaging
 }
 
 [Flags]
@@ -207,6 +210,10 @@ public static class FormatCatalog
         var sourceCategory = SourceClassifier.Classify(sourcePath);
         var flavor = SourceClassifier.ClassifyDocument(sourcePath);
 
+        // HEIC/HEIF photos decode natively through the Windows HEIF codec when it is installed; it is
+        // faster than ImageMagick and far more reliable than FFmpeg's HEIF demuxer.
+        if (CanUseWindowsImaging(format, sourcePath, tools)) return EngineKind.WindowsImaging;
+
         // Image inputs FFmpeg cannot decode go to ImageMagick first if it exists.
         var ordered = format.Engines.AsEnumerable();
         if (sourceCategory == MediaCategory.Image && SourceClassifier.ImageMagickPreferredInputs.Contains(extension) && format.Engines.Contains(EngineKind.ImageMagick))
@@ -240,8 +247,26 @@ public static class FormatCatalog
         EngineKind.LibreOffice => tools.Has(ToolKind.LibreOffice),
         EngineKind.Pandoc => tools.Has(ToolKind.Pandoc),
         EngineKind.Ghostscript => tools.Has(ToolKind.Ghostscript),
+        EngineKind.WindowsImaging => tools.Has(ToolKind.WindowsHeif),
         _ => false
     };
+
+    /// <summary>True when this HEIC/HEIF source can be written as <paramref name="format"/> by the Windows HEIF codec.</summary>
+    public static bool CanUseWindowsImaging(OutputFormat format, string sourcePath, ToolInventory tools) =>
+        PlatformImageCodec.IsHeif(sourcePath) &&
+        PlatformImageCodec.EncodableFormats.Contains(format.Id) &&
+        tools.Has(ToolKind.WindowsHeif);
+
+    /// <summary>
+    /// Decoders the user could install to read this source reliably. HEIC/HEIF on Windows wants the Store HEIF codec
+    /// (or ImageMagick); FFmpeg is only a best-effort fallback for those files.
+    /// </summary>
+    public static IEnumerable<ToolKind> MissingDecodersFor(string sourcePath, ToolInventory tools)
+    {
+        if (!PlatformImageCodec.IsHeif(sourcePath) || tools.Has(ToolKind.ImageMagick)) yield break;
+        if (OperatingSystem.IsWindows() && !tools.Has(ToolKind.WindowsHeif)) yield return ToolKind.WindowsHeif;
+        if (!OperatingSystem.IsWindows()) yield return ToolKind.ImageMagick;
+    }
 
     /// <summary>A hardware encoder only counts when its test encode succeeded; compiled-in but broken encoders do not make a format available.</summary>
     private static bool HasUsableEncoder(OutputFormat format, FfmpegCapabilities capabilities) =>
@@ -264,6 +289,7 @@ public static class FormatCatalog
         EngineKind.LibreOffice => ToolKind.LibreOffice,
         EngineKind.Pandoc => ToolKind.Pandoc,
         EngineKind.Ghostscript => ToolKind.Ghostscript,
+        EngineKind.WindowsImaging => ToolKind.WindowsHeif,
         _ => ToolKind.Ffmpeg
     };
 }

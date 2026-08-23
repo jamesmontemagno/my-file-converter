@@ -32,6 +32,11 @@ public static class MauiProgram
 		builder.Services.AddSingleton<MainViewModel>();
 		builder.Services.AddSingleton<MainPage>();
 
+#if WINDOWS
+		// HEIC/HEIF decode through the Windows Imaging Component (Store "HEIF Image Extensions" codec).
+		LocalMorph.Core.Imaging.PlatformImageCodec.Current = new Platforms.Windows.WindowsImageCodec();
+#endif
+
 #if MACCATALYST
 		// Finder "Open with" / double-click: files arrive as URL contexts on the scene, either at
 		// connect time (cold start) or later while the app is running.

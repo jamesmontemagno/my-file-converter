@@ -72,14 +72,20 @@ public sealed partial class ToolItemViewModel : ObservableObject
     public string Name => Descriptor.DisplayName;
     public string Purpose => Descriptor.Purpose;
     public bool IsCore => Descriptor.IsCore;
+    public bool IsStoreCodec => Descriptor.IsStoreCodec;
     public string InstallCommand => ToolCatalog.InstallCommand(Kind);
+    /// <summary>Mono text under a missing tool: the package-manager command, or where the codec comes from.</summary>
+    public string InstallHint => IsStoreCodec ? "Free from the Microsoft Store" : InstallCommand;
+    public string InstallActionLabel => IsStoreCodec ? "Get from Store" : "Install";
     public string WebsiteUrl => Descriptor.WebsiteUrl;
     public bool CanLaunchInstaller => PlatformActions.CanLaunchInstaller;
+    public bool CanCopyCommand => !IsStoreCodec;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusIcon))]
     [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(IsMissing))]
+    [NotifyPropertyChangedFor(nameof(CanRevealPath))]
     public partial bool IsInstalled { get; set; }
 
     [ObservableProperty]
@@ -96,6 +102,7 @@ public sealed partial class ToolItemViewModel : ObservableObject
     public partial string? Extra { get; set; }
 
     public bool IsMissing => !IsInstalled;
+    public bool CanRevealPath => IsInstalled && !IsStoreCodec;
     public string StatusIcon => IsInstalled ? Icons.CheckCircle : Icons.Download;
     public string StatusText => IsInstalled ? $"Installed · {Version}" : IsCore ? "Required · not found" : "Optional · not installed";
 
@@ -104,11 +111,13 @@ public sealed partial class ToolItemViewModel : ObservableObject
         IsInstalled = info is not null;
         Version = info?.ShortVersion;
         Path = info?.Path;
+        Extra = info?.Notes;
         Source = info?.Source switch
         {
             ToolSource.Bundled => "Bundled with LocalMorph",
             ToolSource.Path => "Found on PATH",
             ToolSource.KnownLocation => "Found in a known install location",
+            ToolSource.System => "Provided by Windows",
             _ => null
         };
     }

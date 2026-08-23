@@ -59,9 +59,12 @@ public static class PlatformActions
         }
     }
 
-    /// <summary>Opens a terminal running the package-manager install command so the user can watch and approve it.</summary>
+    /// <summary>Opens a terminal running the package-manager install command so the user can watch and approve it. Store codecs open their Microsoft Store page instead.</summary>
     public static bool LaunchInstaller(ToolKind kind)
     {
+        var descriptor = ToolCatalog.Get(kind);
+        if (descriptor.IsStoreCodec) return OpenStorePage(ToolCatalog.StoreUri(descriptor), descriptor.WebsiteUrl);
+
         var command = ToolCatalog.InstallCommand(kind);
         try
         {
@@ -90,4 +93,26 @@ public static class PlatformActions
     }
 
     public static bool CanLaunchInstaller => OperatingSystem.IsWindows() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsMacOS();
+
+    /// <summary>Opens the Microsoft Store app at a product page, falling back to the web store when the ms-windows-store: protocol is unavailable.</summary>
+    public static bool OpenStorePage(string storeUri, string webUrl)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(storeUri) { UseShellExecute = true });
+            return true;
+        }
+        catch
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(webUrl) { UseShellExecute = true });
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
 }

@@ -204,14 +204,14 @@
                         </Label>
                         <Label Text="{Binding Extra}" Style="{StaticResource Muted}" IsVisible="{Binding Extra, Converter={StaticResource HasText}}" />
                         <Label Text="{Binding Path}" Style="{StaticResource Muted}" FontSize="11" LineBreakMode="MiddleTruncation" IsVisible="{Binding IsInstalled}" />
-                        <Label Text="{Binding InstallCommand}" Style="{StaticResource Mono}" IsVisible="{Binding IsMissing}" Margin="0,4,0,0" />
+                        <Label Text="{Binding InstallHint}" Style="{StaticResource Mono}" IsVisible="{Binding IsMissing}" Margin="0,4,0,0" />
                     </VerticalStackLayout>
                     <VerticalStackLayout Grid.Column="2" Grid.RowSpan="3" Spacing="6" VerticalOptions="Start" IsVisible="{Binding IsMissing}">
-                        <Button Style="{StaticResource PrimaryButton}" HeightRequest="36" FontSize="12" Text="Install" Command="{Binding LaunchInstallerCommand}" IsVisible="{Binding CanLaunchInstaller}" />
-                        <Button Style="{StaticResource SecondaryButton}" HeightRequest="34" FontSize="12" Text="Copy command" Command="{Binding CopyInstallCommandCommand}" />
+                        <Button Style="{StaticResource PrimaryButton}" HeightRequest="36" FontSize="12" Text="{Binding InstallActionLabel}" Command="{Binding LaunchInstallerCommand}" IsVisible="{Binding CanLaunchInstaller}" AutomationId="ToolInstallButton" />
+                        <Button Style="{StaticResource SecondaryButton}" HeightRequest="34" FontSize="12" Text="Copy command" Command="{Binding CopyInstallCommandCommand}" IsVisible="{Binding CanCopyCommand}" />
                         <Button Style="{StaticResource GhostButton}" HeightRequest="32" FontSize="12" Text="Website" Command="{Binding OpenWebsiteCommand}" />
                     </VerticalStackLayout>
-                    <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" HeightRequest="34" FontSize="12" Text="Show location" Command="{Binding RevealPathCommand}" IsVisible="{Binding IsInstalled}" VerticalOptions="Start" />
+                    <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" HeightRequest="34" FontSize="12" Text="Show location" Command="{Binding RevealPathCommand}" IsVisible="{Binding CanRevealPath}" VerticalOptions="Start" />
                 </Grid>
             </Border>
         </DataTemplate>
@@ -651,6 +651,16 @@
                                 </Grid>
                             </VerticalStackLayout>
                         </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Decoder hint (HEIC/HEIF photos without the Windows HEIF codec or ImageMagick) -->
+                    <Border IsVisible="{Binding HasDecoderHint}" Padding="12" StrokeThickness="1" StrokeShape="RoundRectangle 8"
+                            Stroke="{StaticResource Accent}" Background="{AppThemeBinding Light={StaticResource AccentSoftLight}, Dark={StaticResource AccentSoftDark}}" AutomationId="DecoderHint">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                            <Label Style="{StaticResource Icon}" Text="{x:Static local:Icons.Image}" FontSize="16" TextColor="{StaticResource Accent}" VerticalOptions="Center" />
+                            <Label Grid.Column="1" Text="{Binding DecoderHint}" Style="{StaticResource Body}" LineBreakMode="WordWrap" VerticalOptions="Center" />
+                            <Button Grid.Column="2" Style="{StaticResource PrimaryButton}" HeightRequest="34" FontSize="12" Text="{Binding DecoderHintAction}" Command="{Binding ResolveDecoderHintCommand}" VerticalOptions="Center" AutomationId="DecoderHintButton" />
+                        </Grid>
                     </Border>
 
                     <!-- Validation -->
