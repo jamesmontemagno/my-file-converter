@@ -111,7 +111,8 @@ brew install --cask localmorph                                       # macOS 15+
 
 Releases are tag-driven (`vX.Y.Z-windows`, `vX.Y.Z-mac`): signed MSIX + winget manifest on Windows,
 notarized universal `.app` + Sparkle appcast + Homebrew cask on macOS, and the app checks
-`localmorph.com/appcast*.xml` for updates. See [docs/release-setup.md](docs/release-setup.md).
+`localmorph.com/appcast*.xml` for updates. One-time setup (environments, secrets, Azure/Apple accounts):
+[docs/shipping-checklist.md](docs/shipping-checklist.md); pipeline details: [docs/release-setup.md](docs/release-setup.md).
 
 ## Deployment
 
