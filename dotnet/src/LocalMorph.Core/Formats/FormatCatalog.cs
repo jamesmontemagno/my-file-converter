@@ -263,9 +263,8 @@ public static class FormatCatalog
     /// </summary>
     public static IEnumerable<ToolKind> MissingDecodersFor(string sourcePath, ToolInventory tools)
     {
-        if (!PlatformImageCodec.IsHeif(sourcePath) || tools.Has(ToolKind.ImageMagick)) yield break;
-        if (OperatingSystem.IsWindows() && !tools.Has(ToolKind.WindowsHeif)) yield return ToolKind.WindowsHeif;
-        if (!OperatingSystem.IsWindows()) yield return ToolKind.ImageMagick;
+        if (!PlatformImageCodec.IsHeif(sourcePath) || tools.Has(ToolKind.ImageMagick) || tools.Has(ToolKind.WindowsHeif)) yield break;
+        yield return OperatingSystem.IsWindows() ? ToolKind.WindowsHeif : ToolKind.ImageMagick;
     }
 
     /// <summary>A hardware encoder only counts when its test encode succeeded; compiled-in but broken encoders do not make a format available.</summary>
