@@ -9,7 +9,7 @@
              x:Class="LocalMorph.App.MainPage"
              x:DataType="vm:MainViewModel"
              Title="LocalMorph"
-             Background="{AppThemeBinding Light={StaticResource PageLight}, Dark={StaticResource PageDark}}">
+             Background="{OnPlatform WinUI=Transparent, Default={AppThemeBinding Light={StaticResource PageLight}, Dark={StaticResource PageDark}}}">
 
     <ContentPage.Resources>
         <toolkit:InvertedBoolConverter x:Key="Not" />
@@ -215,21 +215,11 @@
             <DropGestureRecognizer AllowDrop="True" DragOver="OnDragOver" DragLeave="OnDragLeave" Drop="OnDrop" />
         </Grid.GestureRecognizers>
 
-        <!-- ===================== Header ===================== -->
-        <Grid Grid.Row="0" Padding="24,16,24,12" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="12">
-            <HorizontalStackLayout Spacing="12">
-                <Border WidthRequest="38" HeightRequest="38" Padding="0" StrokeThickness="0" StrokeShape="RoundRectangle 9" Background="{StaticResource Accent}">
-                    <Label Text="LM" TextColor="White" FontFamily="OpenSansSemibold" FontSize="13" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" />
-                </Border>
-                <VerticalStackLayout VerticalOptions="Center" Spacing="0">
-                    <Label Text="LocalMorph" FontFamily="OpenSansSemibold" FontSize="20" TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
-                    <Label Text="Convert anything, right here" Style="{StaticResource Muted}" FontSize="11" />
-                </VerticalStackLayout>
-            </HorizontalStackLayout>
-
-            <Border Grid.Column="1" HorizontalOptions="Center" VerticalOptions="Center" Padding="4" StrokeThickness="1" StrokeShape="RoundRectangle 10"
+        <!-- ===================== Command row (brand lives in the title bar) ===================== -->
+        <Grid Grid.Row="0" Padding="24,10,24,4" ColumnDefinitions="*,Auto,*" ColumnSpacing="12">
+            <Border Grid.Column="1" Padding="3" StrokeThickness="1" StrokeShape="RoundRectangle 9" VerticalOptions="Center"
                     Stroke="{AppThemeBinding Light={StaticResource StrokeLight}, Dark={StaticResource StrokeDark}}"
-                    Background="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource CardDark}}">
+                    Background="{AppThemeBinding Light=#B3FFFFFF, Dark=#66161B22}">
                 <HorizontalStackLayout Spacing="2">
                     <Button Text="Convert" Command="{Binding ShowConvertCommand}" AutomationId="ConvertTab" Style="{StaticResource TabButton}">
                         <Button.Triggers>
@@ -255,31 +245,32 @@
                 </HorizontalStackLayout>
             </Border>
 
-            <Border Grid.Column="2" Padding="12,7" StrokeThickness="0" StrokeShape="RoundRectangle 999" VerticalOptions="Center" Background="{StaticResource Accent}" IsVisible="{Binding HasUpdate}" AutomationId="UpdatePill">
-                <Border.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding ShowToolsCommand}" />
-                </Border.GestureRecognizers>
-                <HorizontalStackLayout Spacing="8">
-                    <Label Style="{StaticResource Icon}" Text="{x:Static local:Icons.Download}" FontSize="15" TextColor="White" />
-                    <Label Text="{Binding UpdateLabel}" FontFamily="OpenSansSemibold" FontSize="11.5" VerticalOptions="Center" TextColor="White" />
-                </HorizontalStackLayout>
-            </Border>
-
-            <Button Grid.Column="3" Style="{StaticResource IconButton}" WidthRequest="40" HeightRequest="40" FontSize="20" Text="{Binding ThemeIcon}" ToolTipProperties.Text="{Binding ThemeLabel}" Command="{Binding CycleThemeCommand}" VerticalOptions="Center" AutomationId="ThemeButton" />
-
-            <Border Grid.Column="4" Padding="12,7" StrokeThickness="1" StrokeShape="RoundRectangle 999" VerticalOptions="Center"
-                    Stroke="{AppThemeBinding Light=#CBE5D2, Dark=#24503A}"
-                    Background="{AppThemeBinding Light={StaticResource SuccessSoftLight}, Dark={StaticResource SuccessSoftDark}}">
-                <HorizontalStackLayout Spacing="8">
-                    <Label Style="{StaticResource Icon}" Text="{x:Static local:Icons.Shield}" FontSize="15" TextColor="{StaticResource Success}" />
-                    <Label Text="Files never leave this device" FontFamily="OpenSansSemibold" FontSize="11.5" VerticalOptions="Center"
-                           TextColor="{AppThemeBinding Light=#1F5A34, Dark=#BFE8CC}" />
-                </HorizontalStackLayout>
-            </Border>
+            <HorizontalStackLayout Grid.Column="2" Spacing="8" HorizontalOptions="End" VerticalOptions="Center">
+                <Border Padding="10,5" StrokeThickness="0" StrokeShape="RoundRectangle 999" Background="{StaticResource Accent}" IsVisible="{Binding HasUpdate}" AutomationId="UpdatePill">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding ShowToolsCommand}" />
+                    </Border.GestureRecognizers>
+                    <HorizontalStackLayout Spacing="6">
+                        <Label Style="{StaticResource Icon}" Text="{x:Static local:Icons.Download}" FontSize="13" TextColor="White" />
+                        <Label Text="{Binding UpdateLabel}" FontFamily="OpenSansSemibold" FontSize="11.5" VerticalOptions="Center" TextColor="White" />
+                    </HorizontalStackLayout>
+                </Border>
+                <Border Padding="10,5" StrokeThickness="1" StrokeShape="RoundRectangle 999"
+                        Stroke="{AppThemeBinding Light=#CBE5D2, Dark=#24503A}"
+                        Background="{AppThemeBinding Light={StaticResource SuccessSoftLight}, Dark={StaticResource SuccessSoftDark}}"
+                        ToolTipProperties.Text="Everything is converted on this computer. Nothing is uploaded.">
+                    <HorizontalStackLayout Spacing="6">
+                        <Label Style="{StaticResource Icon}" Text="{x:Static local:Icons.Shield}" FontSize="13" TextColor="{StaticResource Success}" />
+                        <Label Text="Files stay on this device" FontFamily="OpenSansSemibold" FontSize="11.5" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light=#1F5A34, Dark=#BFE8CC}" />
+                    </HorizontalStackLayout>
+                </Border>
+                <Button Style="{StaticResource IconButton}" WidthRequest="36" HeightRequest="36" FontSize="18" Text="{Binding ThemeIcon}" ToolTipProperties.Text="{Binding ThemeLabel}" Command="{Binding CycleThemeCommand}" AutomationId="ThemeButton" />
+            </HorizontalStackLayout>
         </Grid>
 
         <!-- ===================== Convert workspace ===================== -->
-        <Grid Grid.Row="1" x:Name="Workspace" IsVisible="{Binding IsConvertView}" ColumnDefinitions="*,440" ColumnSpacing="16" Padding="24,0,24,16">
+        <Grid Grid.Row="1" x:Name="Workspace" IsVisible="{Binding IsConvertView}" ColumnDefinitions="*,440" ColumnSpacing="16" Padding="24,8,24,16">
 
             <!-- Left: queue + preview -->
             <ScrollView Grid.Column="0">
@@ -314,7 +305,7 @@
                             <TapGestureRecognizer Command="{Binding AddFilesCommand}" />
                         </Border.GestureRecognizers>
                         <VerticalStackLayout Spacing="10" VerticalOptions="Center" HorizontalOptions="Center">
-                            <Label Style="{StaticResource IconAccent}" Text="{x:Static local:Icons.Download}" FontSize="44" HorizontalOptions="Center" />
+                            <Image Source="localmorph_logo.png" WidthRequest="72" HeightRequest="72" HorizontalOptions="Center" Margin="0,0,0,6" />
                             <Label Text="Drop files here" Style="{StaticResource Title}" HorizontalTextAlignment="Center" />
                             <Label Text="or click to browse. Add as many as you like — they'll convert in parallel." Style="{StaticResource Muted}" HorizontalTextAlignment="Center" />
                             <FlexLayout Wrap="Wrap" JustifyContent="Center" Margin="0,10,0,0">
@@ -484,9 +475,7 @@
                                 </Grid>
                             </Border>
                             <Label Text="{Binding ApplicabilityLabel}" Style="{StaticResource Muted}" TextColor="{StaticResource Accent}" IsVisible="{Binding ApplicabilityLabel, Converter={StaticResource HasText}}" AutomationId="ApplicabilityLabel" />
-                            <CollectionView IsVisible="{Binding IsFormatChooserOpen}" IsGrouped="True" ItemsSource="{Binding FormatGroups}"
-                                            ItemTemplate="{StaticResource FormatTemplate}" GroupHeaderTemplate="{StaticResource FormatGroupHeaderTemplate}"
-                                            SelectionMode="None" HeightRequest="420" AutomationId="FormatList" />
+
                         </VerticalStackLayout>
                     </Border>
 
@@ -709,10 +698,35 @@
                     </Border>
                 </VerticalStackLayout>
             </ScrollView>
+            <!-- Format chooser: slides over the settings column so the long list is never clipped by the page scroller. -->
+            <Grid Grid.Column="1" IsVisible="{Binding IsFormatChooserOpen}" AutomationId="FormatChooser">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ToggleFormatChooserCommand}" />
+                </Grid.GestureRecognizers>
+                <BoxView Color="{AppThemeBinding Light=#66F3F5F9, Dark=#990D1117}" />
+                <Border Style="{StaticResource Card}" Padding="0" Margin="0,0,0,8" VerticalOptions="Fill">
+                    <Border.GestureRecognizers>
+                        <!-- Swallow taps so clicking inside the card does not close it. -->
+                        <TapGestureRecognizer />
+                    </Border.GestureRecognizers>
+                    <Grid RowDefinitions="Auto,*">
+                        <Grid Padding="16,14,10,10" ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="OUTPUT FORMAT" Style="{StaticResource Eyebrow}" />
+                                <Label Text="Choose what to make" Style="{StaticResource SectionTitle}" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="1" Style="{StaticResource IconButton}" Text="{x:Static local:Icons.Dismiss}" ToolTipProperties.Text="Close" Command="{Binding ToggleFormatChooserCommand}" AutomationId="CloseFormatChooser" />
+                        </Grid>
+                        <CollectionView Grid.Row="1" Margin="12,0,12,12" IsGrouped="True" ItemsSource="{Binding FormatGroups}"
+                                        ItemTemplate="{StaticResource FormatTemplate}" GroupHeaderTemplate="{StaticResource FormatGroupHeaderTemplate}"
+                                        SelectionMode="None" AutomationId="FormatList" />
+                    </Grid>
+                </Border>
+            </Grid>
         </Grid>
 
         <!-- ===================== History ===================== -->
-        <ScrollView Grid.Row="1" IsVisible="{Binding IsHistoryView}" Padding="24,0,24,16">
+        <ScrollView Grid.Row="1" IsVisible="{Binding IsHistoryView}" Padding="24,8,24,16">
             <VerticalStackLayout Spacing="14" MaximumWidthRequest="980">
                 <Grid ColumnDefinitions="*,Auto">
                     <VerticalStackLayout Spacing="2">
@@ -733,7 +747,7 @@
         </ScrollView>
 
         <!-- ===================== Tools ===================== -->
-        <ScrollView Grid.Row="1" IsVisible="{Binding IsToolsView}" Padding="24,0,24,16">
+        <ScrollView Grid.Row="1" IsVisible="{Binding IsToolsView}" Padding="24,8,24,16">
             <VerticalStackLayout Spacing="14" MaximumWidthRequest="980">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                     <VerticalStackLayout Spacing="2">
@@ -806,7 +820,7 @@
 
         <!-- ===================== Status bar ===================== -->
         <Grid Grid.Row="2" Padding="24,10" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="10"
-              BackgroundColor="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource CardDark}}">
+              BackgroundColor="{AppThemeBinding Light=#99FFFFFF, Dark=#80161B22}">
             <Grid.GestureRecognizers>
                 <TapGestureRecognizer Command="{Binding ShowToolsCommand}" />
             </Grid.GestureRecognizers>

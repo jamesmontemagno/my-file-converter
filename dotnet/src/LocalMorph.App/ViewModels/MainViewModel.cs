@@ -133,6 +133,7 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsConvertView))]
     [NotifyPropertyChangedFor(nameof(IsHistoryView))]
     [NotifyPropertyChangedFor(nameof(IsToolsView))]
+    [NotifyPropertyChangedFor(nameof(TitleSubtitle))]
     public partial WorkspaceView View { get; set; } = WorkspaceView.Convert;
 
     [ObservableProperty]
@@ -222,9 +223,11 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ConvertButtonText))]
     [NotifyPropertyChangedFor(nameof(CanConvert))]
     [NotifyPropertyChangedFor(nameof(CanCancelAll))]
+    [NotifyPropertyChangedFor(nameof(TitleSubtitle))]
     public partial bool IsConverting { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TitleSubtitle))]
     public partial string BatchStatus { get; set; } = string.Empty;
 
     [ObservableProperty]
@@ -265,6 +268,16 @@ public partial class MainViewModel : ObservableObject
     public bool IsToolsView => View == WorkspaceView.Tools;
     public bool HasFiles => Files.Count > 0;
     public bool HasNoFiles => Files.Count == 0;
+
+    /// <summary>Short context shown next to the app name in the title bar.</summary>
+    public string TitleSubtitle => View switch
+    {
+        WorkspaceView.History => "History",
+        WorkspaceView.Tools => "Tools",
+        _ when IsConverting => BatchStatus,
+        _ when Files.Count > 0 => $"{Files.Count} file{(Files.Count == 1 ? string.Empty : "s")} queued",
+        _ => "Local file conversion"
+    };
     public bool HasSelectedFile => SelectedFile is not null;
     public bool HasFormat => SelectedFormat is not null;
     public bool HasFfmpeg => Inventory.HasFfmpeg;
@@ -601,6 +614,7 @@ public partial class MainViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HasFiles));
         OnPropertyChanged(nameof(HasNoFiles));
+        OnPropertyChanged(nameof(TitleSubtitle));
         OnPropertyChanged(nameof(HasFailed));
         OnPropertyChanged(nameof(FilesSummary));
         OnPropertyChanged(nameof(CanConvert));
