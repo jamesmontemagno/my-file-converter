@@ -1,5 +1,9 @@
 # Desktop release setup
 
+> **Start with [`shipping-checklist.md`](shipping-checklist.md)** — it walks through every secret,
+> environment, Azure/Apple account step, and verification needed before the first tag. This file
+> describes how the pipeline behaves once that is in place.
+
 LocalMorph Desktop ships through three channels, all driven by git tags:
 
 | Channel | Trigger | Workflow | Output |
