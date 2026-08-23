@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\LocalMorph.Bridge\LocalMorph.Bridge.csproj" />
+    <ProjectReference Include="..\..\src\LocalMorph.Core\LocalMorph.Core.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.10" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
