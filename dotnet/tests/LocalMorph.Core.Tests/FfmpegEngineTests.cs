@@ -282,14 +282,16 @@ public sealed class FfmpegEngineTests
     [Fact]
     public void Audio_copy_plan_rewrites_output_extension()
     {
-        var source = new SourceFile(@"C:\media\clip.webm", 1, MediaCategory.Video, DocumentFlavor.None,
+        var sourcePath = Path.Combine(Path.GetTempPath(), "media", "clip.webm");
+        var outDir = Path.Combine(Path.GetTempPath(), "out");
+        var source = new SourceFile(sourcePath, 1, MediaCategory.Video, DocumentFlavor.None,
             new LocalMorph.Bridge.SourceMediaInfo(LocalMorph.Bridge.SourceMediaKind.Video, 10, 640, 360, 30, 48000, 2, "vp9", "opus", null, "webm"));
         // The extension is chosen before collision handling so reservations apply to the real name.
-        var preferred = OutputNaming.PreferredOutputPath(source.Path, TestData.Format("audio-copy"), @"C:\out", string.Empty, source);
-        Assert.Equal(@"C:\out\clip.opus", preferred);
+        var preferred = OutputNaming.PreferredOutputPath(source.Path, TestData.Format("audio-copy"), outDir, string.Empty, source);
+        Assert.Equal(Path.Combine(outDir, "clip.opus"), preferred);
         var job = new ConversionJob(source, TestData.Format("audio-copy"), new ConversionOptions(), preferred, EngineKind.Ffmpeg);
         new FfmpegEngine().Plan(job, TestData.Tools(), Path.GetTempPath());
-        Assert.Equal(@"C:\out\clip.opus", job.OutputPath);
+        Assert.Equal(preferred, job.OutputPath);
     }
 
     [Fact]
