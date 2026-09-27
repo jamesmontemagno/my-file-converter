@@ -239,6 +239,6 @@ public sealed partial class FfmpegCapabilities
     private static partial Regex EncoderLineRegex();
 
     // FFmpeg 7 prints three flag columns (TSC); FFmpeg 8+ dropped command support and prints two (TS).
-    [GeneratedRegex(@"^\s*[T.][S.][C.]?\s+(?<name>[A-Za-z0-9_]+)\s+\S+->\S+", RegexOptions.Compiled)]
+    [GeneratedRegex(@"^\s*[T.][S.][C.]?\s+(?<name>[A-Za-z0-9_\-]+)\s+\S+->\S+", RegexOptions.Compiled)]
     private static partial Regex FilterLineRegex();
 }
