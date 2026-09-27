@@ -320,6 +320,7 @@
                                 <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Audio · MP3, FLAC, WAV, M4A, Opus" FontSize="11" TextColor="{StaticResource Accent}" FontFamily="OpenSansSemibold" /></Border>
                                 <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Images · PNG, JPEG, WebP, HEIC, AVIF" FontSize="11" TextColor="{StaticResource Accent}" FontFamily="OpenSansSemibold" /></Border>
                                 <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Documents · PDF, DOCX, XLSX, PPTX, MD" FontSize="11" TextColor="{StaticResource Accent}" FontFamily="OpenSansSemibold" /></Border>
+                                <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Subtitles · SRT, VTT, ASS" FontSize="11" TextColor="{StaticResource Accent}" FontFamily="OpenSansSemibold" /></Border>
                             </FlexLayout>
                         </VerticalStackLayout>
                     </Border>
@@ -362,7 +363,7 @@
                                     <toolkit:MediaElement x:Name="Player" AutomationId="PreviewMediaElement" ShouldAutoPlay="False" ShouldShowPlaybackControls="True" Aspect="AspectFit"
                                                           Background="#0B0F16" PositionChanged="OnPlayerPositionChanged" />
                                     <Image x:Name="PreviewImage" AutomationId="PreviewImage" Aspect="AspectFit" Background="#0B0F16" />
-                                    <VerticalStackLayout x:Name="DocPlaceholder" IsVisible="{Binding IsDocument}" VerticalOptions="Center" HorizontalOptions="Center" Spacing="8">
+                                    <VerticalStackLayout x:Name="DocPlaceholder" IsVisible="{Binding ShowsPlaceholder}" VerticalOptions="Center" HorizontalOptions="Center" Spacing="8">
                                         <Label Style="{StaticResource Icon}" Text="{Binding Icon}" FontSize="54" TextColor="#8FA3C0" />
                                         <Label Text="{Binding CategoryLabel}" Style="{StaticResource Muted}" TextColor="#8FA3C0" HorizontalTextAlignment="Center" />
                                         <Label Text="{Binding Summary}" Style="{StaticResource Muted}" TextColor="#8FA3C0" HorizontalTextAlignment="Center" />
@@ -408,6 +409,49 @@
                                     <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" HeightRequest="36" FontSize="12" Text="Use current frame" Clicked="OnUseCurrentFrame" AutomationId="UseFrameButton" />
                                 </Grid>
                                 <Slider Style="{StaticResource AccentSlider}" Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding FrameTimeSeconds, Mode=OneWay}" ValueChanged="OnFrameSliderChanged" />
+                            </VerticalStackLayout>
+
+                            <!-- Tracks: pick the audio track, swap the soundtrack, choose or add subtitles -->
+                            <VerticalStackLayout Spacing="10" IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ShowFileTracks}" AutomationId="TracksPanel">
+                                <BoxView Style="{StaticResource Divider}" />
+                                <HorizontalStackLayout Spacing="8">
+                                    <Label Style="{StaticResource IconAccent}" Text="{x:Static local:Icons.Filmstrip}" FontSize="16" />
+                                    <Label Text="Tracks" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
+                                    <Label Text="{Binding TracksSummary}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                </HorizontalStackLayout>
+
+                                <VerticalStackLayout Spacing="4" IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ShowAudioTrackPicker}">
+                                    <Label Text="Audio track" Style="{StaticResource FieldLabel}" />
+                                    <Picker Style="{StaticResource Select}" ItemsSource="{Binding AudioTrackChoices}" SelectedItem="{Binding SelectedAudioTrack}" AutomationId="AudioTrackPicker"
+                                            ToolTipProperties.Text="The track to keep (or put first). Handy for picking a language or dropping commentary." />
+                                </VerticalStackLayout>
+
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8" IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ShowReplaceAudio}">
+                                    <Label Style="{StaticResource IconMuted}" Text="{x:Static local:Icons.Audio}" FontSize="16" VerticalOptions="Center" />
+                                    <VerticalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Center">
+                                        <Label Text="Replace audio" Style="{StaticResource FieldLabel}" />
+                                        <Label Text="{Binding ReplacementAudioLabel}" Style="{StaticResource Muted}" LineBreakMode="MiddleTruncation" AutomationId="ReplacementAudioLabel" />
+                                    </VerticalStackLayout>
+                                    <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" HeightRequest="36" FontSize="12" Text="Choose…"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=PickReplacementAudioCommand}" AutomationId="PickReplacementAudioButton" />
+                                    <Button Grid.Column="3" Style="{StaticResource GhostButton}" Text="Remove" Command="{Binding ClearReplacementAudioCommand}" IsVisible="{Binding HasReplacementAudio}" AutomationId="ClearReplacementAudioButton" />
+                                </Grid>
+
+                                <VerticalStackLayout Spacing="4" IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ShowSubtitleTrackPicker}">
+                                    <Label Text="Subtitle track" Style="{StaticResource FieldLabel}" />
+                                    <Picker Style="{StaticResource Select}" ItemsSource="{Binding SubtitleTrackChoices}" SelectedItem="{Binding SelectedSubtitleTrack}" AutomationId="SubtitleTrackPicker" />
+                                </VerticalStackLayout>
+
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8" IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ShowExternalSubtitle}">
+                                    <Label Style="{StaticResource IconMuted}" Text="{x:Static local:Icons.DocumentText}" FontSize="16" VerticalOptions="Center" />
+                                    <VerticalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Center">
+                                        <Label Text="Add subtitle file" Style="{StaticResource FieldLabel}" />
+                                        <Label Text="{Binding ExternalSubtitleLabel}" Style="{StaticResource Muted}" LineBreakMode="MiddleTruncation" AutomationId="ExternalSubtitleLabel" />
+                                    </VerticalStackLayout>
+                                    <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" HeightRequest="36" FontSize="12" Text="Choose…"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=PickExternalSubtitleCommand}" AutomationId="PickExternalSubtitleButton" />
+                                    <Button Grid.Column="3" Style="{StaticResource GhostButton}" Text="Remove" Command="{Binding ClearExternalSubtitleCommand}" IsVisible="{Binding HasExternalSubtitle}" AutomationId="ClearExternalSubtitleButton" />
+                                </Grid>
                             </VerticalStackLayout>
 
                             <!-- Failure details -->
@@ -542,6 +586,13 @@
                                 <Label Grid.Row="2" Grid.Column="1" Text="Bit depth" Style="{StaticResource FieldLabel}" Margin="0,8,0,0" IsVisible="{Binding ShowBitDepth}" />
                                 <Picker Grid.Row="3" Grid.Column="1" Style="{StaticResource Select}" ItemsSource="{Binding BitDepthOptions}" SelectedItem="{Binding SelectedBitDepth}" IsVisible="{Binding ShowBitDepth}" AutomationId="BitDepthPicker" />
                             </Grid>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10" RowDefinitions="Auto,Auto" RowSpacing="4" IsVisible="{Binding ShowAudio}">
+                                <Label Text="Volume" Style="{StaticResource FieldLabel}" />
+                                <Picker Grid.Row="1" Style="{StaticResource Select}" ItemsSource="{Binding VolumeOptions}" SelectedItem="{Binding SelectedVolume}" AutomationId="VolumePicker" />
+                                <Label Grid.Column="1" Text="Audio sync" Style="{StaticResource FieldLabel}" />
+                                <Picker Grid.Row="1" Grid.Column="1" Style="{StaticResource Select}" ItemsSource="{Binding AudioDelayOptions}" SelectedItem="{Binding SelectedAudioDelay}" AutomationId="AudioSyncPicker"
+                                        ToolTipProperties.Text="Shift the sound to fix lip-sync drift." />
+                            </Grid>
                             <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding ShowAudio}">
                                 <VerticalStackLayout Spacing="0">
                                     <Label Text="Normalize loudness" Style="{StaticResource FieldLabel}" />
@@ -549,6 +600,76 @@
                                 </VerticalStackLayout>
                                 <Switch Grid.Column="1" Style="{StaticResource AccentSwitch}" IsToggled="{Binding NormalizeAudio}" />
                             </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Tracks & subtitles -->
+                    <Border Style="{StaticResource Card}" Padding="16,14" IsVisible="{Binding ShowTracksSection}" AutomationId="TracksCard">
+                        <VerticalStackLayout Spacing="12">
+                            <Label Text="TRACKS &amp; SUBTITLES" Style="{StaticResource Eyebrow}" />
+                            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding ShowKeepAllAudio}">
+                                <VerticalStackLayout Spacing="0">
+                                    <Label Text="Keep every audio track" Style="{StaticResource FieldLabel}" />
+                                    <Label Text="The chosen track goes first and plays by default." Style="{StaticResource Muted}" />
+                                </VerticalStackLayout>
+                                <Switch Grid.Column="1" Style="{StaticResource AccentSwitch}" IsToggled="{Binding KeepAllAudioTracks}" AutomationId="KeepAllAudioSwitch" />
+                            </Grid>
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowSubtitleMode}">
+                                <Label Text="Subtitles" Style="{StaticResource FieldLabel}" />
+                                <Picker Style="{StaticResource Select}" ItemsSource="{Binding SubtitleModeOptions}" SelectedItem="{Binding SelectedSubtitleMode}" AutomationId="SubtitleModePicker" />
+                                <Label Text="{Binding SubtitleModeHint}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Edit & effects -->
+                    <Border Style="{StaticResource Card}" Padding="16,14" IsVisible="{Binding ShowEditSection}" AutomationId="EditCard">
+                        <VerticalStackLayout Spacing="12">
+                            <Label Text="EDIT &amp; EFFECTS" Style="{StaticResource Eyebrow}" />
+                            <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowVideoFilters}">
+                                <VerticalStackLayout Spacing="4">
+                                    <HorizontalStackLayout Spacing="6">
+                                        <Label Style="{StaticResource IconAccent}" Text="{x:Static local:Icons.Crop}" FontSize="15" />
+                                        <Label Text="Crop to shape" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
+                                    </HorizontalStackLayout>
+                                    <Picker Style="{StaticResource Select}" ItemsSource="{Binding CropOptions}" SelectedItem="{Binding SelectedCrop}" AutomationId="CropPicker" />
+                                </VerticalStackLayout>
+                                <Grid ColumnDefinitions="*,Auto,*,Auto" ColumnSpacing="8">
+                                    <Label Text="Mirror" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
+                                    <Switch Grid.Column="1" Style="{StaticResource AccentSwitch}" IsToggled="{Binding FlipHorizontal}" AutomationId="FlipHorizontalSwitch" ToolTipProperties.Text="Flip left-to-right" />
+                                    <Label Grid.Column="2" Text="Upside down" Style="{StaticResource FieldLabel}" VerticalOptions="Center" Margin="8,0,0,0" />
+                                    <Switch Grid.Column="3" Style="{StaticResource AccentSwitch}" IsToggled="{Binding FlipVertical}" AutomationId="FlipVerticalSwitch" ToolTipProperties.Text="Flip top-to-bottom" />
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <VerticalStackLayout Spacing="0">
+                                        <Label Text="Deinterlace" Style="{StaticResource FieldLabel}" />
+                                        <Label Text="Remove comb lines from TV, DVD, and camcorder footage." Style="{StaticResource Muted}" />
+                                    </VerticalStackLayout>
+                                    <Switch Grid.Column="1" Style="{StaticResource AccentSwitch}" IsToggled="{Binding Deinterlace}" AutomationId="DeinterlaceSwitch" />
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <VerticalStackLayout Spacing="0">
+                                        <Label Text="Reduce noise" Style="{StaticResource FieldLabel}" />
+                                        <Label Text="Smooth grain from low-light or old recordings." Style="{StaticResource Muted}" />
+                                    </VerticalStackLayout>
+                                    <Switch Grid.Column="1" Style="{StaticResource AccentSwitch}" IsToggled="{Binding Denoise}" AutomationId="DenoiseSwitch" />
+                                </Grid>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowEffects}">
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="10" RowDefinitions="Auto,Auto" RowSpacing="4">
+                                    <Label Text="Fade in" Style="{StaticResource FieldLabel}" />
+                                    <Picker Grid.Row="1" Style="{StaticResource Select}" ItemsSource="{Binding FadeOptions}" SelectedItem="{Binding SelectedFadeIn}" AutomationId="FadeInPicker" />
+                                    <Label Grid.Column="1" Text="Fade out" Style="{StaticResource FieldLabel}" />
+                                    <Picker Grid.Row="1" Grid.Column="1" Style="{StaticResource Select}" ItemsSource="{Binding FadeOptions}" SelectedItem="{Binding SelectedFadeOut}" AutomationId="FadeOutPicker" />
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <VerticalStackLayout Spacing="0">
+                                        <Label Text="Play in reverse" Style="{StaticResource FieldLabel}" />
+                                        <Label Text="Best for short clips; long videos need a lot of memory." Style="{StaticResource Muted}" />
+                                    </VerticalStackLayout>
+                                    <Switch Grid.Column="1" Style="{StaticResource AccentSwitch}" IsToggled="{Binding Reverse}" AutomationId="ReverseSwitch" />
+                                </Grid>
+                            </VerticalStackLayout>
                         </VerticalStackLayout>
                     </Border>
 

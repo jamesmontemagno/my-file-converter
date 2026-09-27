@@ -29,6 +29,8 @@ public partial class FileItemViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsAudio))]
     [NotifyPropertyChangedFor(nameof(IsImage))]
     [NotifyPropertyChangedFor(nameof(IsDocument))]
+    [NotifyPropertyChangedFor(nameof(IsSubtitle))]
+    [NotifyPropertyChangedFor(nameof(ShowsPlaceholder))]
     [NotifyPropertyChangedFor(nameof(HasTimeline))]
     [NotifyPropertyChangedFor(nameof(CategoryLabel))]
     public partial MediaCategory Category { get; set; }
@@ -40,7 +42,40 @@ public partial class FileItemViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasTimeline))]
     [NotifyPropertyChangedFor(nameof(DurationSeconds))]
     [NotifyPropertyChangedFor(nameof(HasAudio))]
+    [NotifyPropertyChangedFor(nameof(HasMultipleAudioTracks))]
+    [NotifyPropertyChangedFor(nameof(HasSubtitleTracks))]
+    [NotifyPropertyChangedFor(nameof(TracksSummary))]
     public partial SourceFile? Source { get; set; }
+
+    /// <summary>The source's audio tracks as picker choices (value = 0-based audio track number).</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<ChoiceOption<int>> AudioTrackChoices { get; set; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TracksSummary))]
+    public partial ChoiceOption<int>? SelectedAudioTrack { get; set; }
+
+    /// <summary>The source's subtitle tracks as picker choices (value = 0-based subtitle track number).</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<ChoiceOption<int>> SubtitleTrackChoices { get; set; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TracksSummary))]
+    public partial ChoiceOption<int>? SelectedSubtitleTrack { get; set; }
+
+    /// <summary>An audio file that replaces the video's soundtrack.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasReplacementAudio))]
+    [NotifyPropertyChangedFor(nameof(ReplacementAudioLabel))]
+    [NotifyPropertyChangedFor(nameof(TracksSummary))]
+    public partial string? ReplacementAudioPath { get; set; }
+
+    /// <summary>A subtitle file to add as a track or burn into the picture.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasExternalSubtitle))]
+    [NotifyPropertyChangedFor(nameof(ExternalSubtitleLabel))]
+    [NotifyPropertyChangedFor(nameof(TracksSummary))]
+    public partial string? ExternalSubtitlePath { get; set; }
 
     [ObservableProperty]
     public partial string Summary { get; set; }
@@ -106,6 +141,32 @@ public partial class FileItemViewModel : ObservableObject
     public bool IsAudio => Category == MediaCategory.Audio;
     public bool IsImage => Category == MediaCategory.Image;
     public bool IsDocument => Category == MediaCategory.Document;
+    public bool IsSubtitle => Category == MediaCategory.Subtitle;
+    public bool ShowsPlaceholder => IsDocument || IsSubtitle;
+    public bool HasMultipleAudioTracks => AudioTrackChoices.Count > 1;
+    public bool HasSubtitleTracks => SubtitleTrackChoices.Count > 0;
+    public bool HasReplacementAudio => !string.IsNullOrWhiteSpace(ReplacementAudioPath);
+    public bool HasExternalSubtitle => !string.IsNullOrWhiteSpace(ExternalSubtitlePath);
+    public string ReplacementAudioLabel => HasReplacementAudio ? System.IO.Path.GetFileName(ReplacementAudioPath!) : "Keep the original soundtrack";
+    public string ExternalSubtitleLabel => HasExternalSubtitle ? System.IO.Path.GetFileName(ExternalSubtitlePath!) : "No subtitle file added";
+
+    /// <summary>One line describing the streams this file carries and what will happen to them.</summary>
+    public string TracksSummary
+    {
+        get
+        {
+            if (Source is null || !IsVideo) return string.Empty;
+            var parts = new List<string>();
+            var audio = Source.AudioTracks.Count;
+            parts.Add(audio switch { 0 => "No audio", 1 => "1 audio track", _ => $"{audio} audio tracks" });
+            var subtitles = Source.SubtitleTracks.Count;
+            if (subtitles > 0) parts.Add(subtitles == 1 ? "1 subtitle track" : $"{subtitles} subtitle tracks");
+            if (Source.Media?.ChapterCount is > 0 and var chapters) parts.Add(chapters == 1 ? "1 chapter" : $"{chapters} chapters");
+            if (HasReplacementAudio) parts.Add($"audio → {ReplacementAudioLabel}");
+            if (HasExternalSubtitle) parts.Add($"+ {ExternalSubtitleLabel}");
+            return string.Join(" · ", parts);
+        }
+    }
     public bool HasTimeline => (IsVideo || IsAudio || Source?.IsAnimatedImage == true) && DurationSeconds > 0;
     public bool HasAudio => Source?.HasAudio ?? (IsAudio || IsVideo);
     public double DurationSeconds => Source?.DurationSeconds ?? 0;
@@ -116,6 +177,7 @@ public partial class FileItemViewModel : ObservableObject
         MediaCategory.Video => "Video",
         MediaCategory.Audio => "Audio",
         MediaCategory.Image => "Image",
+        MediaCategory.Subtitle => "Subtitles",
         MediaCategory.Document => Flavor switch
         {
             DocumentFlavor.Spreadsheet => "Spreadsheet",
@@ -131,6 +193,7 @@ public partial class FileItemViewModel : ObservableObject
         MediaCategory.Video => Icons.Video,
         MediaCategory.Audio => Icons.Audio,
         MediaCategory.Image => Icons.Image,
+        MediaCategory.Subtitle => Icons.DocumentText,
         MediaCategory.Document => Flavor switch
         {
             DocumentFlavor.Spreadsheet => Icons.Table,
@@ -177,6 +240,13 @@ public partial class FileItemViewModel : ObservableObject
         TrimStartSeconds = 0;
         TrimEndSeconds = source.DurationSeconds ?? 0;
         FrameTimeSeconds = 0;
+        AudioTrackChoices = source.AudioTracks.Select(track => new ChoiceOption<int>(track.Describe(), track.TypeIndex)).ToList();
+        SelectedAudioTrack = AudioTrackChoices.FirstOrDefault();
+        SubtitleTrackChoices = source.SubtitleTracks.Select(track => new ChoiceOption<int>(track.Describe(), track.TypeIndex)).ToList();
+        SelectedSubtitleTrack = SubtitleTrackChoices.FirstOrDefault();
+        OnPropertyChanged(nameof(HasMultipleAudioTracks));
+        OnPropertyChanged(nameof(HasSubtitleTracks));
+        OnPropertyChanged(nameof(TracksSummary));
         IsInspecting = false;
         OnPropertyChanged(nameof(HasTimeline));
         OnPropertyChanged(nameof(HasTrim));
@@ -261,6 +331,15 @@ public partial class FileItemViewModel : ObservableObject
             options = options with { FrameTimeSeconds = FrameTimeSeconds };
         }
 
+        var burnsIn = shared.Subtitles == SubtitleMode.BurnIn && format.Supports(FormatFeatures.BurnSubtitles);
+        options = options with
+        {
+            AudioTrack = format.Supports(FormatFeatures.AudioTracks) && SelectedAudioTrack is { Value: > 0 } audioTrack ? audioTrack.Value : null,
+            SubtitleTrack = (format.Supports(FormatFeatures.SubtitleTrack) || burnsIn) && SelectedSubtitleTrack is { } subtitleTrack ? subtitleTrack.Value : null,
+            ReplacementAudioPath = IsVideo && format.Supports(FormatFeatures.MultiAudio) && !shared.RemoveAudio ? ReplacementAudioPath : null,
+            ExternalSubtitlePath = IsVideo && (format.Supports(FormatFeatures.Subtitles) || burnsIn) ? ExternalSubtitlePath : null
+        };
+
         return options;
     }
 
@@ -287,6 +366,23 @@ public partial class FileItemViewModel : ObservableObject
 
     [RelayCommand]
     private void RevealSource() => PlatformActions.RevealInFolder(Path);
+
+    // A picker whose ItemsSource is swapped briefly reports "nothing selected"; keep the real choice instead.
+    partial void OnSelectedAudioTrackChanged(ChoiceOption<int>? oldValue, ChoiceOption<int>? newValue)
+    {
+        if (newValue is null && AudioTrackChoices.Count > 0) SelectedAudioTrack = oldValue ?? AudioTrackChoices[0];
+    }
+
+    partial void OnSelectedSubtitleTrackChanged(ChoiceOption<int>? oldValue, ChoiceOption<int>? newValue)
+    {
+        if (newValue is null && SubtitleTrackChoices.Count > 0) SelectedSubtitleTrack = oldValue ?? SubtitleTrackChoices[0];
+    }
+
+    [RelayCommand]
+    private void ClearReplacementAudio() => ReplacementAudioPath = null;
+
+    [RelayCommand]
+    private void ClearExternalSubtitle() => ExternalSubtitlePath = null;
 
     [RelayCommand]
     private void ResetTrim()

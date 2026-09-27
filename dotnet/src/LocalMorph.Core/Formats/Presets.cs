@@ -54,7 +54,7 @@ public static class Presets
             new ConversionOptions { AudioBitrateKbps = 48, Channels = ChannelMode.Mono }, [MediaCategory.Audio, MediaCategory.Video]),
         new("editing-wav", "Editing · WAV", "24-bit 48 kHz WAV for DAWs and video editors.", "\uF33B", "wav",
             new ConversionOptions { WavBitDepth = 24, SampleRate = 48000 }, [MediaCategory.Audio, MediaCategory.Video]),
-        new("waveform", "Waveform", "PNG picture of the soundtrack.", "\uF33B", "waveform",
+        new("waveform", "Waveform", "PNG picture of the soundtrack.", "\uE855", "waveform",
             new ConversionOptions(), [MediaCategory.Audio, MediaCategory.Video]),
 
         new("web-image", "Web image", "WebP at 82% quality, capped at 1920 px tall.", "\uF45B", "webp",

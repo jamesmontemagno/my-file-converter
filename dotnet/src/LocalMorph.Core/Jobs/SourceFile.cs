@@ -31,6 +31,7 @@ public sealed record SourceFile(
         get
         {
             var parts = new List<string> { FormatBytes(SizeBytes) };
+            if (Category == MediaCategory.Subtitle) parts.Add(System.IO.Path.GetExtension(Path).TrimStart('.').ToUpperInvariant() + " subtitles");
             if (Media?.Width is { } width && Media.Height is { } height) parts.Add($"{width}×{height}");
             if (Media?.DurationSeconds is { } duration && duration > 0 && Category != MediaCategory.Image) parts.Add(FormatDuration(duration));
             if (Media?.VideoCodec is { } videoCodec && Category == MediaCategory.Video) parts.Add(videoCodec.ToUpperInvariant());
