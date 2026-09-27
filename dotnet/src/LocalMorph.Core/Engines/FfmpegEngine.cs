@@ -44,6 +44,9 @@ public sealed class FfmpegEngine : IConversionEngine
         var arguments = BuildArguments(context, pass: 0, passLog: null);
         var label = context.Format.Category switch
         {
+            MediaCategory.Subtitle => context.Source.Category == MediaCategory.Subtitle ? "Converting subtitles" : "Extracting subtitles",
+            MediaCategory.Image when context.Format.Id == ContactSheetId => "Building contact sheet",
+            MediaCategory.Image when context.Format.Id == WaveformId => "Drawing waveform",
             MediaCategory.Image when context.Source.Category == MediaCategory.Video => "Extracting frame",
             MediaCategory.Image => "Converting image",
             MediaCategory.Audio => context.Format.AudioCodec == "copy" ? "Extracting audio" : "Encoding audio",
@@ -67,10 +70,21 @@ public sealed class FfmpegEngine : IConversionEngine
     public static IReadOnlyList<string> BuildArguments(SourceFile source, OutputFormat format, ConversionOptions options, FfmpegCapabilities capabilities, string outputPath) =>
         BuildArguments(new BuildContext(source, format, options, capabilities, outputPath), pass: 0, passLog: null);
 
+    public const string ContactSheetId = "contact-sheet";
+    public const string WaveformId = "waveform";
+    private const int ContactSheetColumns = 4;
+    private const int ContactSheetRows = 4;
+
+    private static List<string> BaseArguments() => ["-hide_banner", "-y", "-nostdin", "-loglevel", "error", "-progress", "pipe:1", "-nostats"];
+
     private static List<string> BuildArguments(BuildContext context, int pass, string? passLog)
     {
+        if (context.Format.Category == MediaCategory.Subtitle) return BuildSubtitleArguments(context);
+        if (context.Format.Id == ContactSheetId) return BuildContactSheetArguments(context);
+        if (context.Format.Id == WaveformId) return BuildWaveformArguments(context);
+
         var (source, format, options, caps) = (context.Source, context.Format, context.Options, context.Capabilities);
-        var args = new List<string> { "-hide_banner", "-y", "-nostdin", "-loglevel", "error", "-progress", "pipe:1", "-nostats" };
+        var args = BaseArguments();
 
         var isVideoTarget = format.Category == MediaCategory.Video;
         var isAudioTarget = format.Category == MediaCategory.Audio;
@@ -101,6 +115,28 @@ public sealed class FfmpegEngine : IConversionEngine
 
         args.AddRange(["-i", source.Path]);
 
+        // Extra inputs go straight after the source so the output options below (-t, -frames) never bind to them.
+        var nextInput = 1;
+        int? replacementAudioInput = null;
+        int? softSubtitleInput = null;
+        if (isVideoTarget && pass != 1)
+        {
+            if (context.ReplacementAudioPath is { } replacementAudio && !dropAudio)
+            {
+                // A new soundtrack starts at the beginning of the output, so it is not seeked with the trim.
+                args.AddRange(["-i", replacementAudio]);
+                replacementAudioInput = nextInput++;
+            }
+
+            if (context.SoftSubtitlePath is { } subtitleFile)
+            {
+                // Subtitles follow the source timeline, so they seek with the trim.
+                if (options.TrimStartSeconds is { } subtitleStart && subtitleStart > 0 && format.Supports(FormatFeatures.Trim)) args.AddRange(["-ss", Num(subtitleStart)]);
+                args.AddRange(["-i", subtitleFile]);
+                softSubtitleInput = nextInput++;
+            }
+        }
+
         if (frameExtract)
         {
             args.AddRange(["-frames:v", "1", "-update", "1"]);
@@ -122,21 +158,28 @@ public sealed class FfmpegEngine : IConversionEngine
         }
         else if (sourceIsImage && isVideoTarget && !source.IsAnimatedImage)
         {
-            args.AddRange(["-t", Num(options.TrimEndSeconds ?? 5)]);
+            // A still picture with a soundtrack lasts as long as the audio (-shortest below).
+            if (replacementAudioInput is null) args.AddRange(["-t", Num(options.TrimEndSeconds ?? 5)]);
         }
 
         // ---- stream mapping ----
         if (isVideoTarget)
         {
-            args.AddRange(["-map", "0:v:0"]);
-            if (!dropAudio && (source.HasAudio || !sourceIsImage)) args.AddRange(["-map", "0:a:0?"]);
-            if (format.Extension == "mkv") args.AddRange(["-map", "0:s?", "-c:s", "copy"]);
-            else args.Add("-sn");
+            args.AddRange(["-map", context.BitmapSubtitleIndex is not null ? "[v]" : "0:v:0"]);
+            if (replacementAudioInput is { } audioInput)
+            {
+                args.AddRange(["-map", $"{audioInput}:a:0", "-shortest"]);
+            }
+            else if (!dropAudio && (source.HasAudio || !sourceIsImage))
+            {
+                AddAudioMaps(args, context);
+            }
+            AddSubtitleMaps(args, context, softSubtitleInput);
             args.Add("-dn");
         }
         else if (isAudioTarget)
         {
-            args.AddRange(["-map", "0:a:0", "-vn", "-sn", "-dn"]);
+            args.AddRange(["-map", $"0:a:{context.AudioTrack}", "-vn", "-sn", "-dn"]);
         }
         else if (isImageTarget)
         {
@@ -156,7 +199,16 @@ public sealed class FfmpegEngine : IConversionEngine
             {
                 AddVideoEncoder(args, context, pass, passLog);
                 var filters = BuildVideoFilters(context);
-                if (filters.Count > 0) args.AddRange(["-vf", string.Join(",", filters)]);
+                if (context.BitmapSubtitleIndex is { } bitmapIndex)
+                {
+                    // Picture subtitles (PGS/VobSub) are overlaid from the source's own subtitle stream.
+                    var chain = filters.Count > 0 ? "," + string.Join(",", filters) : string.Empty;
+                    args.AddRange(["-filter_complex", $"[0:v:0][0:s:{bitmapIndex}]overlay=eof_action=pass{chain}[v]"]);
+                }
+                else if (filters.Count > 0)
+                {
+                    args.AddRange(["-vf", string.Join(",", filters)]);
+                }
                 if (options.FrameRate is { } fps && format.VideoCodec != "gif") args.AddRange(["-r", Num(fps)]);
             }
 
@@ -169,6 +221,11 @@ public sealed class FfmpegEngine : IConversionEngine
             if (dropAudio || sourceIsImage && !source.HasAudio)
             {
                 args.Add("-an");
+            }
+            else if (format.AudioCodec == "copy" && replacementAudioInput is not null && format.Extension != "mkv")
+            {
+                // A replacement soundtrack may be anything (WAV, FLAC…); MP4/MOV need a codec they can hold.
+                args.AddRange(["-c:a", context.Capabilities.HasEncoder("aac_at") ? "aac_at" : "aac", "-b:a", $"{options.AudioBitrateKbps ?? 192}k"]);
             }
             else if (format.AudioCodec == "copy")
             {
@@ -208,6 +265,189 @@ public sealed class FfmpegEngine : IConversionEngine
 
         args.Add(context.OutputPath);
         return args;
+    }
+
+    private static void AddAudioMaps(List<string> args, BuildContext context)
+    {
+        var (source, format, options) = (context.Source, context.Format, context.Options);
+        var audioStreams = source.Media?.AudioStreams ?? [];
+        var selected = context.AudioTrack;
+        if (options.KeepAllAudioTracks && format.Supports(FormatFeatures.MultiAudio))
+        {
+            if (audioStreams.Count <= 1)
+            {
+                args.AddRange(["-map", "0:a?"]);
+                return;
+            }
+
+            // The chosen track goes first and becomes the default; the rest keep their order.
+            args.AddRange(["-map", $"0:a:{selected}"]);
+            for (var track = 0; track < audioStreams.Count; track++)
+            {
+                if (track != selected) args.AddRange(["-map", $"0:a:{track}"]);
+            }
+            args.AddRange(["-disposition:a:0", "default"]);
+            for (var output = 1; output < audioStreams.Count; output++) args.AddRange([$"-disposition:a:{output}", "0"]);
+            return;
+        }
+
+        if (selected == 0)
+        {
+            args.AddRange(["-map", "0:a:0?"]);
+        }
+        else
+        {
+            args.AddRange(["-map", $"0:a:{selected}", "-disposition:a:0", "default"]);
+        }
+    }
+
+    private static void AddSubtitleMaps(List<string> args, BuildContext context, int? softSubtitleInput)
+    {
+        var (source, format, options) = (context.Source, context.Format, context.Options);
+        var mode = format.Supports(FormatFeatures.Subtitles) ? options.Subtitles : SubtitleMode.Auto;
+        var codec = SoftSubtitleCodec(format);
+        // Matroska cannot store MP4's mov_text, so convert those tracks to SubRip instead of copying.
+        if (codec == "copy" && (source.Media?.SubtitleStreams ?? []).Any(stream => stream.Codec == "mov_text")) codec = "srt";
+        if (mode == SubtitleMode.BurnIn || codec is null)
+        {
+            args.Add("-sn");
+            return;
+        }
+
+        var mapped = 0;
+        var keepSource = mode == SubtitleMode.Keep || mode == SubtitleMode.Auto && format.Extension == "mkv";
+        if (keepSource && format.Extension == "mkv")
+        {
+            // Matroska holds every subtitle format as-is, pictures included.
+            args.AddRange(["-map", "0:s?"]);
+            mapped++;
+        }
+        else if (keepSource)
+        {
+            // MP4/MOV/WebM only hold text subtitles; picture tracks (PGS/VobSub) are left out.
+            foreach (var stream in source.Media?.SubtitleStreams ?? [])
+            {
+                if (stream.IsPictureSubtitle) continue;
+                args.AddRange(["-map", $"0:s:{stream.TypeIndex}"]);
+                mapped++;
+            }
+        }
+
+        if (softSubtitleInput is { } input)
+        {
+            args.AddRange(["-map", $"{input}:s:0"]);
+            mapped++;
+        }
+
+        if (mapped == 0) args.Add("-sn");
+        else args.AddRange(["-c:s", codec]);
+    }
+
+    /// <summary>The subtitle codec a container stores soft subtitles as, or null when it has none.</summary>
+    private static string? SoftSubtitleCodec(OutputFormat format) => format.Extension switch
+    {
+        "mkv" => "copy",
+        "mp4" or "mov" or "m4v" => "mov_text",
+        "webm" => "webvtt",
+        _ => null
+    };
+
+    private static List<string> BuildSubtitleArguments(BuildContext context)
+    {
+        var (source, format, options) = (context.Source, context.Format, context.Options);
+        var args = BaseArguments();
+        args.AddRange(["-i", source.Path]);
+        var track = 0;
+        if (source.Category != MediaCategory.Subtitle)
+        {
+            track = options.SubtitleTrack ?? 0;
+            var streams = source.Media?.SubtitleStreams;
+            if (streams is not null && source.Media?.Streams is not null)
+            {
+                if (streams.Count == 0) throw new InvalidOperationException($"{source.FileName} has no subtitle tracks to extract.");
+                if (track >= streams.Count) throw new InvalidOperationException($"{source.FileName} has {streams.Count} subtitle track{(streams.Count == 1 ? string.Empty : "s")}; choose another.");
+                if (streams[track].IsPictureSubtitle)
+                {
+                    throw new InvalidOperationException($"Subtitle track {track + 1} is picture-based ({streams[track].Codec}). Only text subtitles can be saved as {format.DisplayName}; burn it into a video instead.");
+                }
+            }
+        }
+
+        args.AddRange(["-map", $"0:s:{track}", "-vn", "-an", "-dn", "-c:s", format.Extension switch { "vtt" => "webvtt", "ass" => "ass", _ => "srt" }]);
+        args.Add(context.OutputPath);
+        return args;
+    }
+
+    private static void AddTrimInput(List<string> args, BuildContext context)
+    {
+        if (context.Options.TrimStartSeconds is { } start && start > 0 && context.Format.Supports(FormatFeatures.Trim)) args.AddRange(["-ss", Num(start)]);
+        args.AddRange(["-i", context.Source.Path]);
+        if (context.Options.TrimEndSeconds is { } end && context.Format.Supports(FormatFeatures.Trim))
+        {
+            var length = end - (context.Options.TrimStartSeconds ?? 0);
+            if (length > 0) args.AddRange(["-t", Num(length)]);
+        }
+    }
+
+    private static List<string> BuildContactSheetArguments(BuildContext context)
+    {
+        var (source, options) = (context.Source, context.Options);
+        if (context.OutputDurationSeconds is not { } duration || duration <= 0)
+        {
+            throw new InvalidOperationException("A contact sheet needs a video with a known duration.");
+        }
+
+        var tiles = ContactSheetColumns * ContactSheetRows;
+        var args = BaseArguments();
+        AddTrimInput(args, context);
+        var filters = new List<string>
+        {
+            // Sample evenly across the clip, then lay the frames out on a dark grid.
+            $"fps={Num(tiles / duration)}:round=down",
+            "scale=480:-2:flags=lanczos"
+        };
+        filters.AddRange(context.Options.Rotation switch { 90 => ["transpose=1"], 180 => ["hflip,vflip"], 270 => ["transpose=2"], _ => [] });
+        filters.Add($"tile={ContactSheetColumns}x{ContactSheetRows}:padding=6:margin=6:color=0x0B0F16");
+        args.AddRange(["-map", "0:v:0", "-an", "-sn", "-dn", "-vf", string.Join(",", filters), "-frames:v", "1", "-update", "1",
+            "-c:v", "mjpeg", "-q:v", Num(Clamp(31 - options.Quality * 0.29, 2, 31)), "-pix_fmt", "yuvj420p"]);
+        if (options.StripMetadata) args.AddRange(["-map_metadata", "-1"]);
+        args.Add(context.OutputPath);
+        return args;
+    }
+
+    private static List<string> BuildWaveformArguments(BuildContext context)
+    {
+        var args = BaseArguments();
+        AddTrimInput(args, context);
+        args.AddRange(["-filter_complex", $"[0:a:{context.AudioTrack}]aformat=channel_layouts=mono,showwavespic=s=1920x480:colors=0x3B82F6[wave]",
+            "-map", "[wave]", "-frames:v", "1", "-update", "1", "-c:v", "png"]);
+        if (context.Options.StripMetadata) args.AddRange(["-map_metadata", "-1"]);
+        args.Add(context.OutputPath);
+        return args;
+    }
+
+    /// <summary>
+    /// Escapes a value (typically a file path) for a filter option inside a filtergraph: once for the option parser
+    /// (<c>\ ' :</c>) and once for the graph parser (<c>\ ' [ ] , ;</c>).
+    /// </summary>
+    public static string EscapeFilterValue(string value)
+    {
+        var normalized = OperatingSystem.IsWindows() ? value.Replace('\\', '/') : value;
+        var option = new System.Text.StringBuilder();
+        foreach (var character in normalized)
+        {
+            if (character is '\\' or '\'' or ':') option.Append('\\');
+            option.Append(character);
+        }
+
+        var graph = new System.Text.StringBuilder();
+        foreach (var character in option.ToString())
+        {
+            if (character is '\\' or '\'' or '[' or ']' or ',' or ';') graph.Append('\\');
+            graph.Append(character);
+        }
+
+        return graph.ToString();
     }
 
     private static void AddVideoEncoder(List<string> args, BuildContext context, int pass, string? passLog)
@@ -385,9 +625,22 @@ public sealed class FfmpegEngine : IConversionEngine
         if (options.Channels == ChannelMode.Stereo) args.AddRange(["-ac", "2"]);
 
         var audioFilters = new List<string>();
+        if (context.Format.Supports(FormatFeatures.AudioTuning) && options.AudioDelayMilliseconds != 0)
+        {
+            audioFilters.Add(options.AudioDelayMilliseconds > 0
+                ? $"adelay=delays={Num(options.AudioDelayMilliseconds)}:all=1"
+                : $"atrim=start={Num(-options.AudioDelayMilliseconds / 1000.0)},asetpts=PTS-STARTPTS");
+        }
         if (Math.Abs(options.PlaybackSpeed - 1.0) > 0.001) audioFilters.AddRange(TempoFilters(options.PlaybackSpeed));
+        var effects = context.Format.Supports(FormatFeatures.Effects);
+        if (effects && options.Reverse) audioFilters.Add("areverse");
         if (options.VolumePercent != 100) audioFilters.Add($"volume={Num(options.VolumePercent / 100.0)}");
         if (options.NormalizeAudio) audioFilters.Add("loudnorm=I=-16:TP=-1.5:LRA=11");
+        if (effects && options.FadeInSeconds > 0) audioFilters.Add($"afade=t=in:st=0:d={Num(options.FadeInSeconds)}");
+        if (effects && options.FadeOutSeconds > 0 && context.OutputDurationSeconds is { } audioDuration)
+        {
+            audioFilters.Add($"afade=t=out:st={Num(Math.Max(0, audioDuration - options.FadeOutSeconds))}:d={Num(options.FadeOutSeconds)}");
+        }
         if (audioFilters.Count > 0) args.AddRange(["-af", string.Join(",", audioFilters)]);
     }
 
@@ -437,22 +690,31 @@ public sealed class FfmpegEngine : IConversionEngine
         var (source, format, options) = (context.Source, context.Format, context.Options);
         var filters = new List<string>();
         var needsEven = format.VideoCodec is "h264" or "hevc" or "av1" or "vp9" or "mpeg4" or "prores";
+        var isVideoTarget = format.Category == MediaCategory.Video;
+        var videoFilters = isVideoTarget && format.Supports(FormatFeatures.VideoFilters);
+        var effects = isVideoTarget && format.Supports(FormatFeatures.Effects);
 
-        if (Math.Abs(options.PlaybackSpeed - 1.0) > 0.001 && format.Category == MediaCategory.Video)
-        {
-            filters.Add($"setpts=PTS/{Num(options.PlaybackSpeed)}");
-        }
+        // Clean-up filters work best on the untouched source frames.
+        if (videoFilters && options.Deinterlace) filters.Add("yadif");
+        if (videoFilters && options.Denoise) filters.Add("hqdn3d");
 
-        if (format.VideoCodec == "gif")
-        {
-            filters.Add($"fps={Num(options.FrameRate ?? 15)}");
-        }
+        // Retiming early keeps GIF scaling cheap; burned-in subtitles need the source timeline, so they retime later.
+        var retimeEarly = context.BurnSubtitleFilter is null;
+        if (retimeEarly) AddRetiming(filters, context);
 
         switch (options.Rotation)
         {
             case 90: filters.Add("transpose=1"); break;
             case 180: filters.Add("hflip,vflip"); break;
             case 270: filters.Add("transpose=2"); break;
+        }
+
+        if (videoFilters && options.FlipHorizontal) filters.Add("hflip");
+        if (videoFilters && options.FlipVertical) filters.Add("vflip");
+        if (videoFilters && CropAspects.TryParse(options.CropAspect, out var aspectWidth, out var aspectHeight))
+        {
+            // Center crop to the largest region with the requested shape (after rotation, so 9:16 means the output shape).
+            filters.Add($"crop=w='min(iw,ih*{aspectWidth}/{aspectHeight})':h='min(ih,iw*{aspectHeight}/{aspectWidth})'");
         }
 
         if (format.Id == "ico")
@@ -477,6 +739,24 @@ public sealed class FfmpegEngine : IConversionEngine
             filters.Add("scale=trunc(iw/2)*2:trunc(ih/2)*2");
         }
 
+        if (context.BurnSubtitleFilter is { } burnIn)
+        {
+            // libass times subtitles from the frame timestamps, which restart at zero after an input seek.
+            var shift = options.TrimStartSeconds is { } start && start > 0 && format.Supports(FormatFeatures.Trim) ? start : 0;
+            if (shift > 0) filters.Add($"setpts=PTS+{Num(shift)}/TB");
+            filters.Add(burnIn);
+            if (shift > 0) filters.Add("setpts=PTS-STARTPTS");
+        }
+
+        if (!retimeEarly) AddRetiming(filters, context);
+
+        if (effects && options.Reverse) filters.Add("reverse");
+        if (effects && options.FadeInSeconds > 0) filters.Add($"fade=t=in:st=0:d={Num(options.FadeInSeconds)}");
+        if (effects && options.FadeOutSeconds > 0 && context.OutputDurationSeconds is { } duration)
+        {
+            filters.Add($"fade=t=out:st={Num(Math.Max(0, duration - options.FadeOutSeconds))}:d={Num(options.FadeOutSeconds)}");
+        }
+
         if (format.VideoCodec == "gif")
         {
             filters.Add("split[s0][s1];[s0]palettegen=stats_mode=diff[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle");
@@ -489,6 +769,19 @@ public sealed class FfmpegEngine : IConversionEngine
         }
 
         return filters;
+    }
+
+    private static void AddRetiming(List<string> filters, BuildContext context)
+    {
+        if (Math.Abs(context.Options.PlaybackSpeed - 1.0) > 0.001 && context.Format.Category == MediaCategory.Video)
+        {
+            filters.Add($"setpts=PTS/{Num(context.Options.PlaybackSpeed)}");
+        }
+
+        if (context.Format.VideoCodec == "gif")
+        {
+            filters.Add($"fps={Num(context.Options.FrameRate ?? 15)}");
+        }
     }
 
     private static IEnumerable<string> TempoFilters(double speed)
@@ -508,29 +801,10 @@ public sealed class FfmpegEngine : IConversionEngine
         yield return $"atempo={Num(remaining)}";
     }
 
-    private static long? EffectiveDurationMicroseconds(BuildContext context)
-    {
-        var source = context.Source;
-        var options = context.Options;
-        if (context.Format.Category == MediaCategory.Image) return null;
-        double? duration = source.DurationSeconds;
-        if (source.Category == MediaCategory.Image && !source.IsAnimatedImage && context.Format.Category == MediaCategory.Video)
-        {
-            duration = options.TrimEndSeconds ?? 5;
-        }
-        else if (options.TrimEndSeconds is { } end)
-        {
-            duration = end - (options.TrimStartSeconds ?? 0);
-        }
-        else if (duration is { } total && options.TrimStartSeconds is { } start)
-        {
-            duration = total - start;
-        }
-
-        if (duration is not > 0) return null;
-        if (context.Format.Supports(FormatFeatures.PlaybackSpeed) && Math.Abs(options.PlaybackSpeed - 1.0) > 0.001) duration /= options.PlaybackSpeed;
-        return (long)(duration.Value * 1_000_000);
-    }
+    private static long? EffectiveDurationMicroseconds(BuildContext context) =>
+        context.Format.Category == MediaCategory.Image || context.OutputDurationSeconds is not { } duration
+            ? null
+            : (long)(duration * 1_000_000);
 
     public static ProgressSample? ParseProgress(string line, long? durationMicroseconds)
     {
@@ -619,9 +893,93 @@ public sealed class FfmpegEngine : IConversionEngine
             }
 
             UsesTwoPass = TargetVideoKbps is not null && format.VideoCodec == "h264";
+
+            var audioStreams = source.Media?.AudioStreams ?? [];
+            AudioTrack = format.Supports(FormatFeatures.AudioTracks) ? options.AudioTrack ?? 0 : 0;
+            if (AudioTrack > 0 && source.Media?.Streams is not null && AudioTrack >= audioStreams.Count)
+            {
+                throw new InvalidOperationException(audioStreams.Count == 0
+                    ? $"{source.FileName} has no audio tracks."
+                    : $"{source.FileName} has {audioStreams.Count} audio track{(audioStreams.Count == 1 ? string.Empty : "s")}; choose another.");
+            }
+
+            var isVideoTarget = format.Category == MediaCategory.Video;
+            if (isVideoTarget && format.Supports(FormatFeatures.MultiAudio) && !string.IsNullOrWhiteSpace(options.ReplacementAudioPath))
+            {
+                if (!File.Exists(options.ReplacementAudioPath)) throw new InvalidOperationException($"The replacement audio file {Path.GetFileName(options.ReplacementAudioPath)} no longer exists.");
+                ReplacementAudioPath = options.ReplacementAudioPath;
+            }
+
+            var externalSubtitles = string.IsNullOrWhiteSpace(options.ExternalSubtitlePath) ? null : options.ExternalSubtitlePath;
+            if (isVideoTarget && externalSubtitles is not null && !File.Exists(externalSubtitles))
+            {
+                throw new InvalidOperationException($"The subtitle file {Path.GetFileName(externalSubtitles)} no longer exists.");
+            }
+
+            if (isVideoTarget && options.BurnsSubtitles && format.Supports(FormatFeatures.BurnSubtitles))
+            {
+                if (externalSubtitles is not null)
+                {
+                    BurnSubtitleFilter = $"subtitles=filename={EscapeFilterValue(externalSubtitles)}";
+                }
+                else
+                {
+                    var subtitleStreams = source.Media?.SubtitleStreams ?? [];
+                    var track = options.SubtitleTrack ?? 0;
+                    if (source.Media?.Streams is not null && subtitleStreams.Count == 0)
+                    {
+                        throw new InvalidOperationException($"{source.FileName} has no subtitle tracks to burn in. Add a subtitle file instead.");
+                    }
+                    if (source.Media?.Streams is not null && track >= subtitleStreams.Count)
+                    {
+                        throw new InvalidOperationException($"{source.FileName} has {subtitleStreams.Count} subtitle track{(subtitleStreams.Count == 1 ? string.Empty : "s")}; choose another.");
+                    }
+
+                    if (track < subtitleStreams.Count && subtitleStreams[track].IsPictureSubtitle) BitmapSubtitleIndex = track;
+                    else BurnSubtitleFilter = $"subtitles=filename={EscapeFilterValue(source.Path)}:si={track}";
+                }
+            }
+            else if (isVideoTarget && externalSubtitles is not null && format.Supports(FormatFeatures.Subtitles) && SoftSubtitleCodec(format) is not null)
+            {
+                SoftSubtitlePath = externalSubtitles;
+            }
+
+            OutputDurationSeconds = ComputeOutputDuration(source, format, options, ReplacementAudioPath is not null);
+        }
+
+        private static double? ComputeOutputDuration(SourceFile source, OutputFormat format, ConversionOptions options, bool replacementAudio)
+        {
+            double? duration;
+            if (source.Category == MediaCategory.Image && !source.IsAnimatedImage && format.Category == MediaCategory.Video)
+            {
+                duration = replacementAudio ? null : options.TrimEndSeconds ?? 5;
+            }
+            else
+            {
+                var total = source.DurationSeconds;
+                var trims = format.Supports(FormatFeatures.Trim);
+                var start = trims ? options.TrimStartSeconds ?? 0 : 0;
+                var end = trims ? options.TrimEndSeconds ?? total : total;
+                duration = end is { } finish ? finish - start : null;
+            }
+
+            if (duration is not > 0) return null;
+            return format.Supports(FormatFeatures.PlaybackSpeed) && Math.Abs(options.PlaybackSpeed - 1.0) > 0.001 ? duration / options.PlaybackSpeed : duration;
         }
 
         private const int MinimumVideoKbps = 100;
+
+        /// <summary>Audio track to read, counted among the source's audio streams.</summary>
+        public int AudioTrack { get; }
+        public string? ReplacementAudioPath { get; }
+        /// <summary>External subtitle file added as a soft track.</summary>
+        public string? SoftSubtitlePath { get; }
+        /// <summary>libass <c>subtitles</c> filter that renders text subtitles into the picture.</summary>
+        public string? BurnSubtitleFilter { get; }
+        /// <summary>Picture subtitle stream (PGS/VobSub) overlaid onto the video.</summary>
+        public int? BitmapSubtitleIndex { get; }
+        /// <summary>Length of the output after trim and speed, when known.</summary>
+        public double? OutputDurationSeconds { get; }
 
         public SourceFile Source { get; }
         public OutputFormat Format { get; }

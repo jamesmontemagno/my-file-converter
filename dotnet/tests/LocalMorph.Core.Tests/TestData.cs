@@ -34,6 +34,20 @@ internal static class TestData
         new(path, 50_000_000, MediaCategory.Video, DocumentFlavor.None,
             new SourceMediaInfo(SourceMediaKind.Video, duration, width, height, 29.97, audio ? 48000 : null, audio ? 2 : null, "h264", audio ? "aac" : null, 6_000_000, "mov,mp4,m4a"));
 
+    public static SourceFile MultiTrackVideo(string path = @"C:\media\movie.mkv", bool pictureSubtitles = false) =>
+        new(path, 900_000_000, MediaCategory.Video, DocumentFlavor.None,
+            new SourceMediaInfo(SourceMediaKind.Video, 120, 1920, 1080, 23.976, 48000, 6, "h264", "ac3", 8_000_000, "matroska,webm", null,
+                [
+                    new MediaStreamInfo(0, 0, MediaStreamType.Video, "h264"),
+                    new MediaStreamInfo(1, 0, MediaStreamType.Audio, "ac3", "eng", null, 6, "5.1", IsDefault: true),
+                    new MediaStreamInfo(2, 1, MediaStreamType.Audio, "aac", "spa", "Commentary", 2, "stereo"),
+                    new MediaStreamInfo(3, 0, MediaStreamType.Subtitle, pictureSubtitles ? "hdmv_pgs_subtitle" : "subrip", "eng", IsDefault: true),
+                    new MediaStreamInfo(4, 1, MediaStreamType.Subtitle, "subrip", "fre")
+                ], ChapterCount: 12));
+
+    public static SourceFile Subtitle(string path = @"C:\media\movie.srt") =>
+        new(path, 40_000, MediaCategory.Subtitle, DocumentFlavor.None, null);
+
     public static SourceFile Audio(string path = @"C:\media\song.flac") =>
         new(path, 30_000_000, MediaCategory.Audio, DocumentFlavor.None,
             new SourceMediaInfo(SourceMediaKind.Audio, 200, null, null, null, 44100, 2, null, "flac", 900_000, "flac"));

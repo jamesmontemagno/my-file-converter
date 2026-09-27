@@ -6,7 +6,9 @@ public enum MediaCategory
     Audio,
     Image,
     Document,
-    Unknown
+    Unknown,
+    /// <summary>Text subtitle files (SRT, WebVTT, ASS/SSA).</summary>
+    Subtitle
 }
 
 public enum DocumentFlavor
@@ -52,7 +54,9 @@ public static class SourceClassifier
         [".html"] = MediaCategory.Document, [".htm"] = MediaCategory.Document, [".epub"] = MediaCategory.Document, [".xlsx"] = MediaCategory.Document,
         [".xls"] = MediaCategory.Document, [".ods"] = MediaCategory.Document, [".csv"] = MediaCategory.Document, [".pptx"] = MediaCategory.Document,
         [".ppt"] = MediaCategory.Document, [".odp"] = MediaCategory.Document, [".tex"] = MediaCategory.Document, [".rst"] = MediaCategory.Document,
-        [".wpd"] = MediaCategory.Document, [".pages"] = MediaCategory.Document, [".numbers"] = MediaCategory.Document, [".key"] = MediaCategory.Document
+        [".wpd"] = MediaCategory.Document, [".pages"] = MediaCategory.Document, [".numbers"] = MediaCategory.Document, [".key"] = MediaCategory.Document,
+        // subtitles
+        [".srt"] = MediaCategory.Subtitle, [".vtt"] = MediaCategory.Subtitle, [".ass"] = MediaCategory.Subtitle, [".ssa"] = MediaCategory.Subtitle
     };
 
     /// <summary>Images FFmpeg cannot reliably decode; ImageMagick handles these.</summary>
