@@ -164,6 +164,23 @@ public sealed class FfmpegMediaToolsTests : IDisposable
             """;
         var filters = Tools.FfmpegCapabilities.ParseFilters(text);
         Assert.Equal(["abench", "overlay", "subtitles", "amovie"], filters.ToArray());
+
+        // FFmpeg 8+ dropped the command-support column.
+        const string modern = """
+            Filters:
+              T.. = Timeline support
+              .S. = Slice threading
+              A = Audio input/output
+              V = Video input/output
+              N = Dynamic number and/or type of input/output
+              | = Source or sink filter
+              ------
+             .. abench            A->A       Benchmark part of a filtergraph.
+             TS overlay           VV->V      Overlay a video source on top of the input.
+             .S scale             V->V       Scale the input video size and/or convert the image format.
+             .. buffer            |->V       Buffer video frames.
+            """;
+        Assert.Equal(["abench", "overlay", "scale", "buffer"], Tools.FfmpegCapabilities.ParseFilters(modern).ToArray());
     }
 
     [Fact]
