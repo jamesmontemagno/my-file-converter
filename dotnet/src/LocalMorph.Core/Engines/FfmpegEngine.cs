@@ -943,6 +943,11 @@ public sealed class FfmpegEngine : IConversionEngine
                     if (track < subtitleStreams.Count && subtitleStreams[track].IsPictureSubtitle) BitmapSubtitleIndex = track;
                     else BurnSubtitleFilter = $"subtitles=filename={EscapeFilterValue(source.Path)}:si={track}";
                 }
+
+                if (BurnSubtitleFilter is not null && !capabilities.MayHaveFilter("subtitles"))
+                {
+                    throw new InvalidOperationException("This FFmpeg build can't burn in text subtitles (it was built without libass). Install a full FFmpeg build, or keep the subtitles as a track instead.");
+                }
             }
             else if (isVideoTarget && externalSubtitles is not null && format.Supports(FormatFeatures.Subtitles) && SoftSubtitleCodec(format) is not null)
             {

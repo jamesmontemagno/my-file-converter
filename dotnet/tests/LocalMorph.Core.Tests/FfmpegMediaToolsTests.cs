@@ -131,6 +131,42 @@ public sealed class FfmpegMediaToolsTests : IDisposable
     }
 
     [Fact]
+    public void Text_burn_in_without_libass_fails_with_a_friendly_message()
+    {
+        var noLibass = new Tools.FfmpegCapabilities(TestData.SoftwareOnly.Encoders, new HashSet<string>(), [], "ffmpeg version 9.0",
+            new HashSet<string> { "scale", "overlay", "crop" });
+        var error = Assert.Throws<InvalidOperationException>(() => FfmpegEngine.BuildArguments(TestData.MultiTrackVideo(), TestData.Format("mp4-h264"),
+            new ConversionOptions { Subtitles = SubtitleMode.BurnIn }, noLibass, "/out/result.mp4"));
+        Assert.Contains("libass", error.Message);
+
+        // Picture subtitles only need the overlay filter, so they still burn in.
+        var picture = FfmpegEngine.BuildArguments(TestData.MultiTrackVideo(pictureSubtitles: true), TestData.Format("mp4-h264"),
+            new ConversionOptions { Subtitles = SubtitleMode.BurnIn }, noLibass, "/out/result.mp4");
+        Assert.Contains("-filter_complex", picture);
+    }
+
+    [Fact]
+    public void Filter_list_is_parsed()
+    {
+        const string text = """
+            Filters:
+              T.. = Timeline support
+              .S. = Slice threading
+              ..C = Command support
+              A = Audio input/output
+              V = Video input/output
+              N = Dynamic number and/or type of input/output
+              | = Source or sink filter
+             ... abench            A->A       Benchmark part of a filtergraph.
+             TSC overlay           VV->V      Overlay a video source on top of the input.
+             ... subtitles         V->V       Render text subtitles onto input video using the libass library.
+             ... amovie            |->N       Read audio from a movie source.
+            """;
+        var filters = Tools.FfmpegCapabilities.ParseFilters(text);
+        Assert.Equal(["abench", "overlay", "subtitles", "amovie"], filters.ToArray());
+    }
+
+    [Fact]
     public void Burning_picture_subtitles_overlays_them()
     {
         var text = Joined(Build(TestData.MultiTrackVideo(pictureSubtitles: true), "mp4-h264", new ConversionOptions { Subtitles = SubtitleMode.BurnIn, SubtitleTrack = 0 }));

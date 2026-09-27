@@ -82,6 +82,9 @@ public sealed class FfmpegMediaToolsIntegrationTests
     [FfmpegFact]
     public async Task Burning_subtitles_from_an_awkward_path_works()
     {
+        // Some FFmpeg builds (e.g. Homebrew's default formula) ship without libass; LocalMorph then refuses text burn-in up front.
+        if (!Fixture.Inventory.Value.Ffmpeg.MayHaveFilter("subtitles")) return;
+
         var root = Path.Combine(Fixture.Root, "it's [a], test; dir");
         Directory.CreateDirectory(root);
         var video = await Fixture.MakeMultiTrackVideoAsync(root);
@@ -94,6 +97,14 @@ public sealed class FfmpegMediaToolsIntegrationTests
         var external = await Fixture.ConvertAsync(video, "webm-vp9",
             new ConversionOptions { Subtitles = SubtitleMode.BurnIn, ExternalSubtitlePath = captions, Speed = EncodingSpeed.Fast, TargetHeight = 180 });
         AssertCompleted(external);
+    }
+
+    [FfmpegFact]
+    public void Filters_are_discovered()
+    {
+        var filters = Fixture.Inventory.Value.Ffmpeg.Filters;
+        Assert.Contains("scale", filters);
+        Assert.Contains("overlay", filters);
     }
 
     [FfmpegFact]
