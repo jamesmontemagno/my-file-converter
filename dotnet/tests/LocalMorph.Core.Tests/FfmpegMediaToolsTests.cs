@@ -219,6 +219,13 @@ public sealed class FfmpegMediaToolsTests : IDisposable
     }
 
     [Fact]
+    public void Waveform_of_a_silent_video_fails_with_a_friendly_message()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => Build(TestData.Video(audio: false), "waveform"));
+        Assert.Contains("no audio", error.Message);
+    }
+
+    [Fact]
     public void Probe_describes_tracks_with_language_and_title()
     {
         var tracks = TestData.MultiTrackVideo().AudioTracks;

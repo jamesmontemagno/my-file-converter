@@ -417,6 +417,11 @@ public sealed class FfmpegEngine : IConversionEngine
 
     private static List<string> BuildWaveformArguments(BuildContext context)
     {
+        if (context.Source.Media is { } media && (media.Streams is null ? media.AudioCodec is null : media.AudioStreams.Count == 0))
+        {
+            throw new InvalidOperationException($"{context.Source.FileName} has no audio to draw.");
+        }
+
         var args = BaseArguments();
         AddTrimInput(args, context);
         args.AddRange(["-filter_complex", $"[0:a:{context.AudioTrack}]aformat=channel_layouts=mono,showwavespic=s=1920x480:colors=0x3B82F6[wave]",
