@@ -56,6 +56,43 @@ public static class Fixture
         return path;
     }
 
+    /// <summary>An MKV with two labelled audio tracks (stereo English, mono Spanish commentary) and an English SRT track.</summary>
+    public static async Task<string> MakeMultiTrackVideoAsync(string directory, string name = "multi.mkv", double seconds = 4)
+    {
+        var subtitles = await MakeSubtitlesAsync(directory, "embedded.srt");
+        var path = Path.Combine(directory, name);
+        await RunFfmpegAsync(["-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", $"testsrc2=size=640x360:rate=30:duration={seconds}",
+            "-f", "lavfi", "-i", $"sine=frequency=440:sample_rate=48000:duration={seconds}",
+            "-f", "lavfi", "-i", $"sine=frequency=880:sample_rate=48000:duration={seconds}",
+            "-i", subtitles,
+            "-filter_complex", "[1:a]aformat=channel_layouts=stereo[main]",
+            "-map", "0:v", "-map", "[main]", "-map", "2:a", "-map", "3:s",
+            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-c:s", "srt",
+            "-metadata:s:a:0", "language=eng", "-metadata:s:a:1", "language=spa", "-metadata:s:a:1", "title=Commentary",
+            "-metadata:s:s:0", "language=eng", path]);
+        return path;
+    }
+
+    public static async Task<string> MakeSubtitlesAsync(string directory, string name = "captions.srt")
+    {
+        var path = Path.Combine(directory, name);
+        await File.WriteAllTextAsync(path, "1\n00:00:00,500 --> 00:00:02,000\nHello from LocalMorph\n\n2\n00:00:02,500 --> 00:00:03,500\nSecond line\n");
+        return path;
+    }
+
+    public static async Task<string> ProbeAsync(string path, params string[] args)
+    {
+        var startInfo = new ProcessStartInfo(Inventory.Value.PathFor(ToolKind.Ffprobe)!) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
+        foreach (var arg in new[] { "-v", "error" }.Concat(args).Append(path)) startInfo.ArgumentList.Add(arg);
+        using var process = Process.Start(startInfo)!;
+        var error = process.StandardError.ReadToEndAsync();
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await error;
+        await process.WaitForExitAsync();
+        return output.Trim();
+    }
+
     private static async Task RunFfmpegAsync(IEnumerable<string> args)
     {
         var startInfo = new ProcessStartInfo(Inventory.Value.PathFor(ToolKind.Ffmpeg)!) { UseShellExecute = false, RedirectStandardError = true, CreateNoWindow = true };

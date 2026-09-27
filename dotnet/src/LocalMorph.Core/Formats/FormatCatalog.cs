@@ -31,7 +31,21 @@ public enum FormatFeatures
     Rotate = 1 << 10,
     RemoveAudio = 1 << 11,
     Lossless = 1 << 12,
-    PlaybackSpeed = 1 << 13
+    PlaybackSpeed = 1 << 13,
+    /// <summary>Pick which audio track of a multi-track source to use.</summary>
+    AudioTracks = 1 << 14,
+    /// <summary>Keep every audio track (choosing the default) or replace the soundtrack with another file.</summary>
+    MultiAudio = 1 << 15,
+    /// <summary>Keep subtitle tracks and add an external subtitle file as a selectable (soft) track.</summary>
+    Subtitles = 1 << 16,
+    /// <summary>Render (burn) a subtitle track or file permanently into the picture.</summary>
+    BurnSubtitles = 1 << 17,
+    /// <summary>Crop to an aspect ratio, flip, deinterlace, denoise.</summary>
+    VideoFilters = 1 << 18,
+    /// <summary>Fade in/out and reverse.</summary>
+    Effects = 1 << 19,
+    /// <summary>Pick which subtitle track to extract.</summary>
+    SubtitleTrack = 1 << 20
 }
 
 public sealed record OutputFormat(
@@ -57,6 +71,7 @@ public sealed record OutputFormat(
         MediaCategory.Audio => "Audio",
         MediaCategory.Image => "Image",
         MediaCategory.Document => "Document",
+        MediaCategory.Subtitle => "Subtitles",
         _ => "Other"
     };
 }
@@ -69,11 +84,18 @@ public static class FormatCatalog
     private static readonly IReadOnlySet<MediaCategory> FromImage = new HashSet<MediaCategory> { MediaCategory.Image };
     private static readonly IReadOnlySet<MediaCategory> FromDocument = new HashSet<MediaCategory> { MediaCategory.Document };
     private static readonly IReadOnlySet<MediaCategory> FromDocumentOrImage = new HashSet<MediaCategory> { MediaCategory.Document, MediaCategory.Image };
+    private static readonly IReadOnlySet<MediaCategory> FromVideoOrSubtitle = new HashSet<MediaCategory> { MediaCategory.Video, MediaCategory.Subtitle };
 
+    /// <summary>Everything that needs the picture re-encoded: burned-in subtitles, crop/flip/cleanup filters, fades, reverse.</summary>
+    private const FormatFeatures VideoEdits = FormatFeatures.BurnSubtitles | FormatFeatures.VideoFilters | FormatFeatures.Effects;
+    /// <summary>Track handling for containers that hold audio and subtitle streams.</summary>
+    private const FormatFeatures TrackHandling = FormatFeatures.AudioTracks | FormatFeatures.MultiAudio | FormatFeatures.Subtitles;
     private const FormatFeatures VideoCommon = FormatFeatures.Quality | FormatFeatures.Resolution | FormatFeatures.FrameRate |
                                                FormatFeatures.EncodingSpeed | FormatFeatures.AudioTuning | FormatFeatures.Trim |
-                                               FormatFeatures.Rotate | FormatFeatures.RemoveAudio | FormatFeatures.PlaybackSpeed;
-    private const FormatFeatures AudioCommon = FormatFeatures.AudioTuning | FormatFeatures.Trim | FormatFeatures.PlaybackSpeed;
+                                               FormatFeatures.Rotate | FormatFeatures.RemoveAudio | FormatFeatures.PlaybackSpeed |
+                                               TrackHandling | VideoEdits;
+    private const FormatFeatures AudioCommon = FormatFeatures.AudioTuning | FormatFeatures.Trim | FormatFeatures.PlaybackSpeed |
+                                               FormatFeatures.AudioTracks | FormatFeatures.Effects;
     private const FormatFeatures ImageCommon = FormatFeatures.Quality | FormatFeatures.Resolution | FormatFeatures.Rotate | FormatFeatures.FrameExtract;
 
     public static readonly IReadOnlyList<OutputFormat> All =
@@ -88,25 +110,26 @@ public static class FormatCatalog
         new("mkv-h264", "MKV · H.264", "mkv", "Flexible container that keeps subtitles and chapters.", MediaCategory.Video, FromVideo,
             VideoCommon | FormatFeatures.TargetSize | FormatFeatures.HardwareAccel, [EngineKind.Ffmpeg], "h264", "aac", ["libx264", "h264_nvenc", "h264_qsv", "h264_amf", "h264_videotoolbox"]),
         new("mkv-copy", "MKV · Remux (no re-encode)", "mkv", "Change the container only. Instant and lossless.", MediaCategory.Video, FromVideo,
-            FormatFeatures.Trim | FormatFeatures.RemoveAudio, [EngineKind.Ffmpeg], "copy", "copy", Badge: "Lossless"),
+            FormatFeatures.Trim | FormatFeatures.RemoveAudio | TrackHandling, [EngineKind.Ffmpeg], "copy", "copy", Badge: "Lossless"),
         new("mp4-copy", "MP4 · Remux (no re-encode)", "mp4", "Repackage H.264/HEVC streams into MP4 without quality loss.", MediaCategory.Video, FromVideo,
-            FormatFeatures.Trim | FormatFeatures.RemoveAudio, [EngineKind.Ffmpeg], "copy", "copy", Badge: "Lossless"),
+            FormatFeatures.Trim | FormatFeatures.RemoveAudio | TrackHandling, [EngineKind.Ffmpeg], "copy", "copy", Badge: "Lossless"),
         new("mov-h264", "MOV · H.264", "mov", "QuickTime container for Apple workflows.", MediaCategory.Video, FromVideo,
             VideoCommon | FormatFeatures.TargetSize | FormatFeatures.HardwareAccel, [EngineKind.Ffmpeg], "h264", "aac", ["libx264", "h264_nvenc", "h264_qsv", "h264_amf", "h264_videotoolbox"]),
         new("mov-prores", "MOV · ProRes 422", "mov", "Editing-grade intermediate for Final Cut, Premiere, and Resolve.", MediaCategory.Video, FromVideo,
-            FormatFeatures.Resolution | FormatFeatures.FrameRate | FormatFeatures.Trim | FormatFeatures.Rotate | FormatFeatures.RemoveAudio, [EngineKind.Ffmpeg], "prores", "pcm_s16le", ["prores_ks", "prores"], Badge: "Pro"),
+            FormatFeatures.Resolution | FormatFeatures.FrameRate | FormatFeatures.Trim | FormatFeatures.Rotate | FormatFeatures.RemoveAudio | TrackHandling | VideoEdits, [EngineKind.Ffmpeg], "prores", "pcm_s16le", ["prores_ks", "prores"], Badge: "Pro"),
         new("webm-vp9", "WebM · VP9", "webm", "Open web format, great for browsers and embeds.", MediaCategory.Video, FromVideoOrImage,
             VideoCommon, [EngineKind.Ffmpeg], "vp9", "libopus", ["libvpx-vp9"]),
         new("webm-av1", "WebM · AV1", "webm", "Open and tiny. Slow to encode.", MediaCategory.Video, FromVideo,
             VideoCommon, [EngineKind.Ffmpeg], "av1", "libopus", ["libsvtav1", "libaom-av1"]),
         new("avi-mpeg4", "AVI · MPEG-4", "avi", "Legacy format for older players and devices.", MediaCategory.Video, FromVideo,
-            FormatFeatures.Quality | FormatFeatures.Resolution | FormatFeatures.FrameRate | FormatFeatures.AudioTuning | FormatFeatures.Trim | FormatFeatures.RemoveAudio, [EngineKind.Ffmpeg], "mpeg4", "libmp3lame", ["mpeg4"]),
+            FormatFeatures.Quality | FormatFeatures.Resolution | FormatFeatures.FrameRate | FormatFeatures.AudioTuning | FormatFeatures.Trim | FormatFeatures.RemoveAudio |
+            FormatFeatures.AudioTracks | FormatFeatures.MultiAudio | VideoEdits, [EngineKind.Ffmpeg], "mpeg4", "libmp3lame", ["mpeg4"]),
         new("gif", "Animated GIF", "gif", "Short loops with an optimized palette.", MediaCategory.Video, FromVideoOrImage,
-            FormatFeatures.Resolution | FormatFeatures.FrameRate | FormatFeatures.Trim | FormatFeatures.Rotate | FormatFeatures.PlaybackSpeed, [EngineKind.Ffmpeg], "gif"),
+            FormatFeatures.Resolution | FormatFeatures.FrameRate | FormatFeatures.Trim | FormatFeatures.Rotate | FormatFeatures.PlaybackSpeed | VideoEdits, [EngineKind.Ffmpeg], "gif"),
         new("webp-anim", "Animated WebP", "webp", "Much smaller than GIF with full color.", MediaCategory.Video, FromVideo,
-            FormatFeatures.Quality | FormatFeatures.Resolution | FormatFeatures.FrameRate | FormatFeatures.Trim | FormatFeatures.Rotate, [EngineKind.Ffmpeg], "libwebp_anim", RequiredEncoders: ["libwebp_anim", "libwebp"]),
+            FormatFeatures.Quality | FormatFeatures.Resolution | FormatFeatures.FrameRate | FormatFeatures.Trim | FormatFeatures.Rotate | VideoEdits, [EngineKind.Ffmpeg], "libwebp_anim", RequiredEncoders: ["libwebp_anim", "libwebp"]),
         new("apng", "Animated PNG", "apng", "Lossless animation with transparency.", MediaCategory.Video, FromVideo,
-            FormatFeatures.Resolution | FormatFeatures.FrameRate | FormatFeatures.Trim | FormatFeatures.Rotate, [EngineKind.Ffmpeg], "apng", RequiredEncoders: ["apng"]),
+            FormatFeatures.Resolution | FormatFeatures.FrameRate | FormatFeatures.Trim | FormatFeatures.Rotate | VideoEdits, [EngineKind.Ffmpeg], "apng", RequiredEncoders: ["apng"]),
 
         // ---- Audio ----
         new("mp3", "MP3", "mp3", "Universal compatibility.", MediaCategory.Audio, FromVideoOrAudio,
@@ -126,7 +149,7 @@ public static class FormatCatalog
         new("aiff", "AIFF", "aiff", "Uncompressed audio for Apple and pro audio apps.", MediaCategory.Audio, FromVideoOrAudio,
             AudioCommon | FormatFeatures.WavBitDepth, [EngineKind.Ffmpeg], null, "pcm_be", Badge: "Lossless"),
         new("audio-copy", "Extract audio (no re-encode)", "m4a", "Pull the original audio stream out of a video untouched.", MediaCategory.Audio, FromVideo,
-            FormatFeatures.Trim, [EngineKind.Ffmpeg], null, "copy", Badge: "Lossless"),
+            FormatFeatures.Trim | FormatFeatures.AudioTracks, [EngineKind.Ffmpeg], null, "copy", Badge: "Lossless"),
 
         // ---- Image ----
         new("png", "PNG", "png", "Lossless with transparency.", MediaCategory.Image, FromVideoOrImage,
@@ -149,8 +172,20 @@ public static class FormatCatalog
             FormatFeatures.None, [EngineKind.ImageMagick, EngineKind.Ffmpeg], "bmp"),
         new("heic", "HEIC", "heic", "Apple's high-efficiency photo format.", MediaCategory.Image, FromImage,
             FormatFeatures.Quality | FormatFeatures.Resolution | FormatFeatures.Rotate, [EngineKind.ImageMagick]),
+        new("contact-sheet", "Contact sheet", "jpg", "A 4×4 grid of thumbnails spread across the whole clip.", MediaCategory.Image, FromVideo,
+            FormatFeatures.Quality | FormatFeatures.Trim, [EngineKind.Ffmpeg], "mjpeg", RequiredEncoders: ["mjpeg"]),
+        new("waveform", "Waveform image", "png", "A picture of the soundtrack for thumbnails, podcasts, and edits.", MediaCategory.Image, FromVideoOrAudio,
+            FormatFeatures.Trim | FormatFeatures.AudioTracks, [EngineKind.Ffmpeg], "png", RequiredEncoders: ["png"]),
         new("pdf-image", "PDF (from image)", "pdf", "Wrap an image into a single-page PDF.", MediaCategory.Document, FromImage,
             FormatFeatures.Quality | FormatFeatures.Resolution, [EngineKind.ImageMagick]),
+
+        // ---- Subtitles (FFmpeg's text subtitle encoders are built into every build) ----
+        new("subtitles-srt", "SubRip (SRT)", "srt", "Plain-text subtitles every player and editor understands.", MediaCategory.Subtitle, FromVideoOrSubtitle,
+            FormatFeatures.SubtitleTrack, [EngineKind.Ffmpeg], Badge: "Popular"),
+        new("subtitles-vtt", "WebVTT", "vtt", "Subtitles for HTML5 video, YouTube, and the web.", MediaCategory.Subtitle, FromVideoOrSubtitle,
+            FormatFeatures.SubtitleTrack, [EngineKind.Ffmpeg]),
+        new("subtitles-ass", "Advanced SubStation (ASS)", "ass", "Styled subtitles for Aegisub and anime fansubs.", MediaCategory.Subtitle, FromVideoOrSubtitle,
+            FormatFeatures.SubtitleTrack, [EngineKind.Ffmpeg]),
 
         // ---- Documents ----
         // Pandoc needs an external PDF engine (wkhtmltopdf/LaTeX) that we do not manage, so PDF is LibreOffice-only.

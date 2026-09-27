@@ -17,6 +17,13 @@ public sealed record SourceFile(
     public double? DurationSeconds => Media?.DurationSeconds;
     public bool HasAudio => Media?.Channels is > 0 || Category == MediaCategory.Audio;
     public bool HasVideoStream => Media?.Width is > 0;
+    public IReadOnlyList<MediaStreamInfo> AudioTracks => Media?.AudioStreams ?? [];
+    public IReadOnlyList<MediaStreamInfo> SubtitleTracks => Media?.SubtitleStreams ?? [];
+
+    /// <summary>Codec of the given audio track (0-based among audio streams), falling back to the first track's codec.</summary>
+    public string? AudioCodecFor(int? track) =>
+        track is { } index && index >= 0 && index < AudioTracks.Count ? AudioTracks[index].Codec ?? Media?.AudioCodec : Media?.AudioCodec;
+
     public bool IsAnimatedImage => Category == MediaCategory.Image && SourceClassifier.AnimatedImageInputs.Contains(Extension) && Media?.DurationSeconds is > 0.05;
 
     public string Summary
@@ -24,11 +31,15 @@ public sealed record SourceFile(
         get
         {
             var parts = new List<string> { FormatBytes(SizeBytes) };
+            if (Category == MediaCategory.Subtitle) parts.Add(System.IO.Path.GetExtension(Path).TrimStart('.').ToUpperInvariant() + " subtitles");
             if (Media?.Width is { } width && Media.Height is { } height) parts.Add($"{width}×{height}");
             if (Media?.DurationSeconds is { } duration && duration > 0 && Category != MediaCategory.Image) parts.Add(FormatDuration(duration));
             if (Media?.VideoCodec is { } videoCodec && Category == MediaCategory.Video) parts.Add(videoCodec.ToUpperInvariant());
             if (Media?.AudioCodec is { } audioCodec && Category is MediaCategory.Audio or MediaCategory.Video) parts.Add(audioCodec.ToUpperInvariant());
             if (Media?.SampleRate is { } sampleRate && Category == MediaCategory.Audio) parts.Add($"{sampleRate / 1000.0:0.#} kHz");
+            if (Category == MediaCategory.Video && AudioTracks.Count > 1) parts.Add($"{AudioTracks.Count} audio tracks");
+            if (Category == MediaCategory.Video && SubtitleTracks.Count > 0) parts.Add(SubtitleTracks.Count == 1 ? "1 subtitle track" : $"{SubtitleTracks.Count} subtitle tracks");
+            if (Media?.ChapterCount is > 0 and var chapters) parts.Add(chapters == 1 ? "1 chapter" : $"{chapters} chapters");
             return string.Join("  ·  ", parts);
         }
     }

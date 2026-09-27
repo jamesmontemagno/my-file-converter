@@ -43,8 +43,10 @@ public sealed partial class FfmpegCapabilities
         IReadOnlySet<string> encoders,
         IReadOnlySet<string> hardwareAccelerations,
         IReadOnlyList<HardwareEncoder> workingHardwareEncoders,
-        string? version)
+        string? version,
+        IReadOnlySet<string>? filters = null)
     {
+        Filters = filters ?? new HashSet<string>();
         Encoders = encoders;
         HardwareAccelerations = hardwareAccelerations;
         WorkingHardwareEncoders = workingHardwareEncoders;
@@ -52,6 +54,9 @@ public sealed partial class FfmpegCapabilities
     }
 
     public IReadOnlySet<string> Encoders { get; }
+
+    /// <summary>Filters compiled into this FFmpeg; empty when unknown (callers then assume a filter exists).</summary>
+    public IReadOnlySet<string> Filters { get; }
     public IReadOnlySet<string> HardwareAccelerations { get; }
     public IReadOnlyList<HardwareEncoder> WorkingHardwareEncoders { get; }
     public string? Version { get; }
@@ -60,6 +65,9 @@ public sealed partial class FfmpegCapabilities
     public bool HasEncoder(string name) => Encoders.Contains(name);
 
     public bool HasAnyEncoder(params string[] names) => names.Any(Encoders.Contains);
+
+    /// <summary>False only when the filter list is known and lacks <paramref name="name"/> (e.g. <c>subtitles</c> without libass).</summary>
+    public bool MayHaveFilter(string name) => Filters.Count == 0 || Filters.Contains(name);
 
     public HardwareEncoder? HardwareEncoderFor(string codec) =>
         WorkingHardwareEncoders.FirstOrDefault(encoder => encoder.Codec == codec);
@@ -74,7 +82,9 @@ public sealed partial class FfmpegCapabilities
         var version = ToolLocator.ReadVersion(ToolKind.Ffmpeg, ffmpegPath);
         var encodersText = await RunAsync(ffmpegPath, ["-hide_banner", "-encoders"], TimeSpan.FromSeconds(10), token);
         var hwaccelText = await RunAsync(ffmpegPath, ["-hide_banner", "-hwaccels"], TimeSpan.FromSeconds(10), token);
+        var filtersText = await RunAsync(ffmpegPath, ["-hide_banner", "-filters"], TimeSpan.FromSeconds(10), token);
         var encoders = ParseEncoders(encodersText);
+        var filters = ParseFilters(filtersText);
         var hwaccels = ParseHardwareAccelerations(hwaccelText);
 
         var working = new List<HardwareEncoder>();
@@ -90,7 +100,7 @@ public sealed partial class FfmpegCapabilities
             }
         }
 
-        return new FfmpegCapabilities(encoders, hwaccels, working, version);
+        return new FfmpegCapabilities(encoders, hwaccels, working, version, filters);
     }
 
     public static IReadOnlySet<string> ParseEncoders(string text)
@@ -99,6 +109,17 @@ public sealed partial class FfmpegCapabilities
         foreach (var line in text.Split('\n'))
         {
             var match = EncoderLine.Match(line);
+            if (match.Success) set.Add(match.Groups["name"].Value);
+        }
+        return set;
+    }
+
+    public static IReadOnlySet<string> ParseFilters(string text)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var line in text.Split('\n'))
+        {
+            var match = FilterLineRegex().Match(line);
             if (match.Success) set.Add(match.Groups["name"].Value);
         }
         return set;
@@ -216,4 +237,8 @@ public sealed partial class FfmpegCapabilities
 
     [GeneratedRegex(@"^\s*[VAS][F.][S.][X.][B.][D.]\s+(?<name>[A-Za-z0-9_\-]+)\s+", RegexOptions.Compiled)]
     private static partial Regex EncoderLineRegex();
+
+    // FFmpeg 7 prints three flag columns (TSC); FFmpeg 8+ dropped command support and prints two (TS).
+    [GeneratedRegex(@"^\s*[T.][S.][C.]?\s+(?<name>[A-Za-z0-9_\-]+)\s+\S+->\S+", RegexOptions.Compiled)]
+    private static partial Regex FilterLineRegex();
 }

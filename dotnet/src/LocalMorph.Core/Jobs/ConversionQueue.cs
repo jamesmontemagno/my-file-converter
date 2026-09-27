@@ -163,21 +163,21 @@ public static class OutputNaming
     }
 
     /// <summary>Extension the output will really have: most formats are fixed, but stream-copy picks a container from the source codec.</summary>
-    public static string ExtensionFor(OutputFormat format, SourceFile? source) =>
-        format.Id == "audio-copy" ? "." + Engines.FfmpegEngine.AudioCopyExtension(source?.Media?.AudioCodec) : format.ExtensionWithDot;
+    public static string ExtensionFor(OutputFormat format, SourceFile? source, int? audioTrack = null) =>
+        format.Id == "audio-copy" ? "." + Engines.FfmpegEngine.AudioCopyExtension(source?.AudioCodecFor(audioTrack)) : format.ExtensionWithDot;
 
     /// <summary>The collision-free name the default policy would use, i.e. "&lt;stem&gt;.&lt;ext&gt;" before any "(2)" suffixing.</summary>
-    public static string PreferredOutputPath(string sourcePath, OutputFormat format, string? outputDirectory, string suffix, SourceFile? source = null)
+    public static string PreferredOutputPath(string sourcePath, OutputFormat format, string? outputDirectory, string suffix, SourceFile? source = null, int? audioTrack = null)
     {
         var directory = string.IsNullOrWhiteSpace(outputDirectory)
             ? Path.GetDirectoryName(sourcePath) ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
             : outputDirectory;
-        return Path.Combine(directory, Sanitize(Path.GetFileNameWithoutExtension(sourcePath) + suffix) + ExtensionFor(format, source));
+        return Path.Combine(directory, Sanitize(Path.GetFileNameWithoutExtension(sourcePath) + suffix) + ExtensionFor(format, source, audioTrack));
     }
 
-    public static string BuildOutputPath(string sourcePath, OutputFormat format, string? outputDirectory, string suffix, OverwritePolicy policy, ISet<string>? reserved = null, SourceFile? source = null)
+    public static string BuildOutputPath(string sourcePath, OutputFormat format, string? outputDirectory, string suffix, OverwritePolicy policy, ISet<string>? reserved = null, SourceFile? source = null, int? audioTrack = null)
     {
-        var candidate = PreferredOutputPath(sourcePath, format, outputDirectory, suffix, source);
+        var candidate = PreferredOutputPath(sourcePath, format, outputDirectory, suffix, source, audioTrack);
         var directory = Path.GetDirectoryName(candidate)!;
         var stem = Path.GetFileNameWithoutExtension(candidate);
         var extension = Path.GetExtension(candidate);

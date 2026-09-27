@@ -41,11 +41,30 @@ public sealed class FormatCatalogTests
     }
 
     [Fact]
-    public void Audio_sources_only_get_audio_targets()
+    public void Audio_sources_only_get_audio_targets_plus_waveform()
     {
         var formats = FormatCatalog.ForSource(MediaCategory.Audio).ToList();
-        Assert.All(formats, format => Assert.Equal(MediaCategory.Audio, format.Category));
+        Assert.All(formats.Where(format => format.Id != "waveform"), format => Assert.Equal(MediaCategory.Audio, format.Category));
+        Assert.Contains(formats, format => format.Id == "waveform");
         Assert.DoesNotContain(formats, format => format.Id == "audio-copy");
+    }
+
+    [Fact]
+    public void Subtitle_sources_get_subtitle_targets_only()
+    {
+        var formats = FormatCatalog.ForSource(MediaCategory.Subtitle).Select(format => format.Id).ToList();
+        Assert.Equal(["subtitles-srt", "subtitles-vtt", "subtitles-ass"], formats);
+        Assert.Equal(MediaCategory.Subtitle, SourceClassifier.Classify("movie.en.srt"));
+        Assert.Equal(MediaCategory.Subtitle, SourceClassifier.Classify("captions.vtt"));
+    }
+
+    [Fact]
+    public void Crop_aspects_parse()
+    {
+        Assert.True(CropAspects.TryParse("9:16", out var width, out var height));
+        Assert.Equal((9, 16), (width, height));
+        Assert.False(CropAspects.TryParse("banana", out _, out _));
+        Assert.False(CropAspects.TryParse("0:1", out _, out _));
     }
 
     [Fact]
