@@ -79,10 +79,22 @@ redistribute FFmpeg.
   MP3, AAC, FLAC, ALAC, Opus, OGG, WAV/AIFF, PNG, JPEG, WebP, AVIF, JPEG XL, TIFF, BMP, ICO, HEIC,
   plus PDF/DOCX/XLSX/PPTX/ODT/EPUB/Markdown/HTML document conversion.
 - **Quick presets** — Share anywhere, Fit in 25 MB (two-pass), Shrink with HEVC, GIF loop,
-  Extract audio, Remux, Grab a frame, Podcast, Favicon, Save as PDF, and more.
+  Extract audio, Remux, Vertical 9:16, Square 1:1, Mute video, Contact sheet, Extract subtitles,
+  Waveform, Grab a frame, Podcast, Favicon, Save as PDF, and more.
 - **Fine control** — quality, resolution (never upscales), frame rate, encoding speed, audio
   bitrate/sample rate/channels/bit depth, loudness normalization, trim from the media preview,
   frame grab at the current position, rotate, playback speed, strip metadata, lossless toggles.
+- **Audio tracks** — see every track with its language, channels, and title; keep just one (pick a
+  language, drop the commentary), keep them all with your choice first and default, save any track as
+  its own audio file, or **replace the soundtrack** with a new audio file (stream-copying the video).
+- **Subtitles** — keep embedded tracks (MKV keeps everything; MP4/MOV get text tracks as `mov_text`),
+  remove them, add an `.srt`/`.vtt`/`.ass` file as a selectable track, or **burn** a track or file into
+  the picture (text via libass, PGS/VobSub via overlay). Extract a subtitle track to SRT/VTT/ASS, or
+  convert subtitle files between those formats.
+- **Edit & effects** — crop to 16:9, 9:16, 1:1, 4:5, 4:3, or 21:9 (center crop), mirror/flip,
+  deinterlace, denoise, fade in/out (video and audio), reverse, volume, and audio-sync offset.
+- **Extras** — a 4×4 **contact sheet** of thumbnails across a video, and a **waveform** PNG of any
+  audio (or a video's chosen audio track).
 - **Hardware encoding** — NVIDIA NVENC, Intel Quick Sync, AMD AMF, and Apple VideoToolbox are
   detected with a real test encode and used automatically when they work.
 - **Tools view** — finds FFmpeg, ImageMagick, LibreOffice, Pandoc, and Ghostscript on PATH, in
