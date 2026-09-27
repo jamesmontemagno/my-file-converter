@@ -86,7 +86,9 @@ public static class Fixture
         var startInfo = new ProcessStartInfo(Inventory.Value.PathFor(ToolKind.Ffprobe)!) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
         foreach (var arg in new[] { "-v", "error" }.Concat(args).Append(path)) startInfo.ArgumentList.Add(arg);
         using var process = Process.Start(startInfo)!;
+        var error = process.StandardError.ReadToEndAsync();
         var output = await process.StandardOutput.ReadToEndAsync();
+        await error;
         await process.WaitForExitAsync();
         return output.Trim();
     }
