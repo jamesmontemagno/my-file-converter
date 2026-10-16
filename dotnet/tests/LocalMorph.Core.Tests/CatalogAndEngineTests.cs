@@ -375,7 +375,13 @@ public sealed class WindowsImagingEngineTests : IDisposable
 
         Assert.Equal(JobState.Completed, job.State);
         Assert.Single(codec.Calls);
-        Assert.Equal((source, output, "png"), codec.Calls[0]);
+        Assert.Equal(source, codec.Calls[0].Item1);
+        Assert.NotEqual(output, codec.Calls[0].Item2);
+        Assert.Equal(Path.GetDirectoryName(output), Path.GetDirectoryName(codec.Calls[0].Item2));
+        Assert.StartsWith(".localmorph-", Path.GetFileName(codec.Calls[0].Item2));
+        Assert.Equal("png", codec.Calls[0].Item3);
+        Assert.True(File.Exists(output));
+        Assert.False(File.Exists(codec.Calls[0].Item2));
         Assert.Contains("windows-imaging", job.CommandLine);
         Assert.Contains("max-height=1080", job.CommandLine);
         Assert.Contains("rotate=90", job.CommandLine);

@@ -1,0 +1,4 @@
+LIBRARY "LocalMorph.Shell.dll"
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE

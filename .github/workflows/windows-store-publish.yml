@@ -1,0 +1,160 @@
+name: Windows Store Publish
+
+on:
+  push:
+    tags:
+      - 'v*-windows'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Exact Windows release tag; required for package/publish, ignored for diagnostics'
+        type: string
+        required: false
+      mode:
+        description: 'Package never submits. Diagnose is read-only. Publish requires environment approval.'
+        type: choice
+        options: [package, diagnose, publish]
+        default: package
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: windows-store-publish
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  package:
+    name: Build and verify Store upload
+    if: github.event_name == 'push' || inputs.mode != 'diagnose'
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      source_commit: ${{ steps.version.outputs.source_commit }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate exact tag and Store version
+        id: version
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          . .\scripts\windows\Store-Functions.ps1
+          $version = Get-StoreVersion $env:RELEASE_TAG
+          $tagCommit = git rev-parse --verify "refs/tags/$env:RELEASE_TAG^{commit}"
+          if ($LASTEXITCODE -ne 0) { throw 'The release tag does not exist.' }
+          $head = git rev-parse HEAD
+          if ($head -ne $tagCommit) { throw 'Checkout does not match the requested tag commit.' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "source_commit=$head" >> $env:GITHUB_OUTPUT
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Windows MAUI workload
+        run: |
+          dotnet workload install maui-windows
+          if ($LASTEXITCODE -ne 0) { throw 'MAUI workload installation failed.' }
+      - name: Test packaging helpers
+        run: .\scripts\windows\Test-StoreScripts.ps1
+      - name: Build unsigned x64 and ARM64 Store upload with crash symbols
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          MICROSOFT_STORE_IDENTITY_NAME: ${{ secrets.MICROSOFT_STORE_IDENTITY_NAME }}
+          MICROSOFT_STORE_PUBLISHER: ${{ secrets.MICROSOFT_STORE_PUBLISHER }}
+          MICROSOFT_STORE_PUBLISHER_DISPLAY_NAME: ${{ secrets.MICROSOFT_STORE_PUBLISHER_DISPLAY_NAME }}
+          FFMPEG_COMPLIANCE_URL: ${{ vars.FFMPEG_COMPLIANCE_URL }}
+          FFMPEG_COMPLIANCE_SHA256: ${{ vars.FFMPEG_COMPLIANCE_SHA256 }}
+        run: .\scripts\windows\Build-Store.ps1 -Tag $env:RELEASE_TAG
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-store-package
+          path: artifacts/store/LocalMorph-*.msixupload
+          if-no-files-found: error
+
+  diagnose:
+    name: Read-only Partner Center diagnostics
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'diagnose'
+    runs-on: windows-latest
+    environment: microsoft-store
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Verify independent approval protection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .\scripts\windows\Test-StoreApproval.ps1
+      - name: Check authentication and application access without creating a draft
+        env:
+          MICROSOFT_STORE_PRODUCT_ID: ${{ vars.MICROSOFT_STORE_PRODUCT_ID || secrets.MICROSOFT_STORE_PRODUCT_ID }}
+          PARTNER_CENTER_TENANT_ID: ${{ secrets.PARTNER_CENTER_TENANT_ID }}
+          PARTNER_CENTER_SELLER_ID: ${{ secrets.PARTNER_CENTER_SELLER_ID }}
+          PARTNER_CENTER_CLIENT_ID: ${{ secrets.PARTNER_CENTER_CLIENT_ID }}
+          PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+        run: .\scripts\windows\Test-PartnerCenter.ps1
+
+  publish:
+    name: Submit approved upload to Microsoft Store
+    needs: package
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
+    runs-on: windows-latest
+    environment: microsoft-store
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - name: Verify independent approval protection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .\scripts\windows\Test-StoreApproval.ps1
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-store-package
+          path: artifacts/store
+      - name: Revalidate the downloaded upload
+        env:
+          IDENTITY_NAME: ${{ secrets.MICROSOFT_STORE_IDENTITY_NAME }}
+          PUBLISHER: ${{ secrets.MICROSOFT_STORE_PUBLISHER }}
+          PACKAGE_VERSION: ${{ needs.package.outputs.version }}
+          SOURCE_COMMIT: ${{ needs.package.outputs.source_commit }}
+        run: |
+          $uploads = @(Get-ChildItem artifacts\store -File -Filter *.msixupload)
+          if ($uploads.Count -ne 1) { throw 'Expected exactly one Store upload artifact.' }
+          .\scripts\windows\Test-StoreUpload.ps1 -Upload $uploads[0].FullName -IdentityName $env:IDENTITY_NAME -Publisher $env:PUBLISHER -Version $env:PACKAGE_VERSION -SourceCommit $env:SOURCE_COMMIT
+      - name: Check Partner Center access
+        env:
+          MICROSOFT_STORE_PRODUCT_ID: ${{ vars.MICROSOFT_STORE_PRODUCT_ID || secrets.MICROSOFT_STORE_PRODUCT_ID }}
+          PARTNER_CENTER_TENANT_ID: ${{ secrets.PARTNER_CENTER_TENANT_ID }}
+          PARTNER_CENTER_SELLER_ID: ${{ secrets.PARTNER_CENTER_SELLER_ID }}
+          PARTNER_CENTER_CLIENT_ID: ${{ secrets.PARTNER_CENTER_CLIENT_ID }}
+          PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+        run: .\scripts\windows\Test-PartnerCenter.ps1
+      - name: Set up Microsoft Store Developer CLI
+        uses: microsoft/microsoft-store-apppublisher@v1.4
+      - name: Configure Microsoft Store Developer CLI
+        env:
+          PARTNER_CENTER_TENANT_ID: ${{ secrets.PARTNER_CENTER_TENANT_ID }}
+          PARTNER_CENTER_SELLER_ID: ${{ secrets.PARTNER_CENTER_SELLER_ID }}
+          PARTNER_CENTER_CLIENT_ID: ${{ secrets.PARTNER_CENTER_CLIENT_ID }}
+          PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+        run: |
+          msstore reconfigure --tenantId $env:PARTNER_CENTER_TENANT_ID --sellerId $env:PARTNER_CENTER_SELLER_ID --clientId $env:PARTNER_CENTER_CLIENT_ID --clientSecret $env:PARTNER_CENTER_CLIENT_SECRET
+          if ($LASTEXITCODE -ne 0) { throw 'Microsoft Store CLI configuration failed.' }
+      - name: Submit the approved package
+        env:
+          MICROSOFT_STORE_PRODUCT_ID: ${{ vars.MICROSOFT_STORE_PRODUCT_ID || secrets.MICROSOFT_STORE_PRODUCT_ID }}
+        run: |
+          $uploads = @(Get-ChildItem artifacts\store -File -Filter *.msixupload)
+          if ($uploads.Count -ne 1) { throw 'Expected exactly one Store upload artifact.' }
+          msstore publish $uploads[0].FullName --appId $env:MICROSOFT_STORE_PRODUCT_ID
+          if ($LASTEXITCODE -ne 0) { throw 'Microsoft Store submission failed.' }

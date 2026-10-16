@@ -1,11 +1,21 @@
 using System.Diagnostics;
 using LocalMorph.Core.Tools;
+using LocalMorph.Core.Jobs;
 
 namespace LocalMorph.App.Services;
 
 /// <summary>Desktop integration that MAUI does not wrap: reveal in Explorer/Finder, launch a terminal installer.</summary>
 public static class PlatformActions
 {
+    public static async Task<string?> ChooseOutputAsync(IReadOnlyList<OutputResult> outputs)
+    {
+        if (outputs.Count == 0) return null;
+        if (outputs.Count == 1) return outputs[0].Path;
+        var paths = outputs.Select(output => output.Path).ToArray();
+        var selected = await Shell.Current.DisplayActionSheetAsync("Choose a result", "Cancel", null, paths);
+        return paths.Contains(selected) ? selected : null;
+    }
+
     public static bool RevealInFolder(string path)
     {
         try

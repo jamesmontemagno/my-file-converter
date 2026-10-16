@@ -13,7 +13,7 @@ public sealed class ImageMagickEngine : IConversionEngine
     public ConversionPlan Plan(ConversionJob job, ToolInventory tools, string workDirectory)
     {
         var magick = tools.PathFor(ToolKind.ImageMagick) ?? throw new InvalidOperationException("ImageMagick is not installed.");
-        var arguments = BuildArguments(job.Source, job.Format, job.Options, job.OutputPath);
+        var arguments = BuildArguments(job.Source, job.Format, job.Options, job.WorkingOutputPath);
         return new ConversionPlan
         {
             Steps = [new EngineStep { StartInfo = CommandLine.Create(magick, arguments), Label = "Converting with ImageMagick", IsIndeterminate = true }]
@@ -134,7 +134,7 @@ public sealed class LibreOfficeEngine : IConversionEngine
                               ?? throw new InvalidOperationException("LibreOffice finished but produced no output file. The document may be password protected or unsupported.");
                     produced = any;
                 }
-                File.Move(produced, job.OutputPath, overwrite: true);
+                File.Move(produced, job.WorkingOutputPath, overwrite: true);
                 return Task.CompletedTask;
             },
             Cleanup = () =>
@@ -192,7 +192,7 @@ public sealed class PandocEngine : IConversionEngine
         var pandoc = tools.PathFor(ToolKind.Pandoc) ?? throw new InvalidOperationException("Pandoc is not installed.");
         return new ConversionPlan
         {
-            Steps = [new EngineStep { StartInfo = CommandLine.Create(pandoc, BuildArguments(job.Source, job.Format, job.OutputPath)), Label = "Converting with Pandoc", IsIndeterminate = true }]
+            Steps = [new EngineStep { StartInfo = CommandLine.Create(pandoc, BuildArguments(job.Source, job.Format, job.WorkingOutputPath)), Label = "Converting with Pandoc", IsIndeterminate = true }]
         };
     }
 
@@ -222,7 +222,7 @@ public sealed class GhostscriptEngine : IConversionEngine
         var gs = tools.PathFor(ToolKind.Ghostscript) ?? throw new InvalidOperationException("Ghostscript is not installed.");
         return new ConversionPlan
         {
-            Steps = [new EngineStep { StartInfo = CommandLine.Create(gs, BuildArguments(job.Source, job.Format, job.Options, job.OutputPath)), Label = "Processing PDF with Ghostscript", IsIndeterminate = true }]
+            Steps = [new EngineStep { StartInfo = CommandLine.Create(gs, BuildArguments(job.Source, job.Format, job.Options, job.WorkingOutputPath)), Label = "Processing PDF with Ghostscript", IsIndeterminate = true }]
         };
     }
 

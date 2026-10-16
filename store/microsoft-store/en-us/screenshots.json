@@ -1,0 +1,44 @@
+[
+  {
+    "file": "01-batch-conversion.png",
+    "caption": "Queue videos, review compatible files, and choose a quick preset. Conversion runs locally on your PC.",
+    "headline": "Your files. Your computer.",
+    "subheading": "A clear batch queue, useful presets, and a preview before you convert."
+  },
+  {
+    "file": "02-sharing-presets.png",
+    "caption": "Prepare videos for sharing with a two-pass target-size preset and adjustable quality, resolution, and frame rate.",
+    "headline": "Ready for the next share.",
+    "subheading": "Choose a target-size preset, then fine-tune the settings that matter."
+  },
+  {
+    "file": "03-preview-trim-tracks.png",
+    "caption": "Expand the preview and adjust the selected file's trim points and audio tracks without changing the whole batch.",
+    "headline": "Keep the part that matters.",
+    "subheading": "Preview your clip, set its trim points, and choose the audio track."
+  },
+  {
+    "file": "04-join-compatible-clips.png",
+    "caption": "Join compatible video clips in queue order without re-encoding. Mismatched streams are reported before conversion.",
+    "headline": "One story. Joined in order.",
+    "subheading": "Combine compatible clips without another generation of video encoding."
+  },
+  {
+    "file": "05-split-into-clips.png",
+    "caption": "Split a video by source-timeline duration. Accurate mode re-encodes; fast mode copies streams at source keyframes.",
+    "headline": "Long clip. Shorter chapters.",
+    "subheading": "Choose a clip duration and an explicit accuracy mode."
+  },
+  {
+    "file": "06-image-conversion.png",
+    "caption": "Preview photos and convert a batch to a new image format, with the same local queue and clear output settings.",
+    "headline": "New format. Same great photo.",
+    "subheading": "Convert your image collection without uploading it to a conversion server."
+  },
+  {
+    "file": "07-completed-history.png",
+    "caption": "Find real completed conversions in history, including joined videos and the multiple outputs from a split operation.",
+    "headline": "Finished, and easy to find.",
+    "subheading": "Reopen results and review the operation that produced them."
+  }
+]

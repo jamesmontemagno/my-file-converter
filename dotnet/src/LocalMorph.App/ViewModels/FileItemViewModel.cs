@@ -45,6 +45,7 @@ public partial class FileItemViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasMultipleAudioTracks))]
     [NotifyPropertyChangedFor(nameof(HasSubtitleTracks))]
     [NotifyPropertyChangedFor(nameof(TracksSummary))]
+    [NotifyPropertyChangedFor(nameof(CanRetry))]
     public partial SourceFile? Source { get; set; }
 
     /// <summary>The source's audio tracks as picker choices (value = 0-based audio track number).</summary>
@@ -81,6 +82,7 @@ public partial class FileItemViewModel : ObservableObject
     public partial string Summary { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanRetry))]
     public partial bool IsInspecting { get; set; } = true;
 
     [ObservableProperty]
@@ -96,6 +98,9 @@ public partial class FileItemViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowProgress))]
     [NotifyPropertyChangedFor(nameof(StateIcon))]
     [NotifyPropertyChangedFor(nameof(HasOutput))]
+    [NotifyPropertyChangedFor(nameof(CanRetry))]
+    [NotifyPropertyChangedFor(nameof(CanMoveUp))]
+    [NotifyPropertyChangedFor(nameof(CanMoveDown))]
     public partial JobState? State { get; set; }
 
     [ObservableProperty]
@@ -136,6 +141,16 @@ public partial class FileItemViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanMoveUp))]
+    [NotifyPropertyChangedFor(nameof(CanMoveDown))]
+    public partial int QueueIndex { get; set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanMoveDown))]
+    public partial int QueueCount { get; set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasOutput))]
+    public partial IReadOnlyList<OutputResult> Outputs { get; set; } = [];
 
     public bool IsVideo => Category == MediaCategory.Video;
     public bool IsAudio => Category == MediaCategory.Audio;
@@ -213,8 +228,11 @@ public partial class FileItemViewModel : ObservableObject
     public bool IsTerminal => State is JobState.Completed or JobState.Failed or JobState.Canceled or JobState.Skipped;
     public bool CanCancel => State is JobState.Queued or JobState.Running;
     public bool CanRemove => !IsRunning;
+    public bool CanRetry => IsTerminal || (!IsInspecting && Source is null);
     public bool ShowProgress => IsRunning || IsQueued;
-    public bool HasOutput => IsCompleted && OutputPath is not null && File.Exists(OutputPath);
+    public bool HasOutput => Outputs.Any(output => File.Exists(output.Path));
+    public bool CanMoveUp => !CanCancel && QueueIndex > 0;
+    public bool CanMoveDown => !CanCancel && QueueIndex < QueueCount - 1;
     public string ProgressPercent => $"{Progress * 100:0}%";
     public string StateIcon => State switch
     {
@@ -230,20 +248,29 @@ public partial class FileItemViewModel : ObservableObject
 
     public event Action<FileItemViewModel>? RemoveRequested;
     public event Action<FileItemViewModel>? SelectRequested;
+    public event Func<FileItemViewModel, Task>? RetryRequested;
+    public event Action<FileItemViewModel, int>? MoveRequested;
+    public event Action<string>? FeedbackRequested;
 
     public void ApplySource(SourceFile source)
     {
+        var previous = Source;
+        var audioTrack = SelectedAudioTrack?.Value;
+        var subtitleTrack = SelectedSubtitleTrack?.Value;
         Source = source;
         Category = source.Category;
         Flavor = source.Flavor;
         Summary = source.Summary;
-        TrimStartSeconds = 0;
-        TrimEndSeconds = source.DurationSeconds ?? 0;
-        FrameTimeSeconds = 0;
+        if (previous?.Media is null)
+        {
+            TrimStartSeconds = 0;
+            TrimEndSeconds = source.DurationSeconds ?? 0;
+            FrameTimeSeconds = 0;
+        }
         AudioTrackChoices = source.AudioTracks.Select(track => new ChoiceOption<int>(track.Describe(), track.TypeIndex)).ToList();
-        SelectedAudioTrack = AudioTrackChoices.FirstOrDefault();
+        SelectedAudioTrack = AudioTrackChoices.FirstOrDefault(track => track.Value == audioTrack) ?? AudioTrackChoices.FirstOrDefault();
         SubtitleTrackChoices = source.SubtitleTracks.Select(track => new ChoiceOption<int>(track.Describe(), track.TypeIndex)).ToList();
-        SelectedSubtitleTrack = SubtitleTrackChoices.FirstOrDefault();
+        SelectedSubtitleTrack = SubtitleTrackChoices.FirstOrDefault(track => track.Value == subtitleTrack) ?? SubtitleTrackChoices.FirstOrDefault();
         OnPropertyChanged(nameof(HasMultipleAudioTracks));
         OnPropertyChanged(nameof(HasSubtitleTracks));
         OnPropertyChanged(nameof(TracksSummary));
@@ -255,6 +282,7 @@ public partial class FileItemViewModel : ObservableObject
 
     public void MarkInspectionFailed(string reason)
     {
+        Source = null;
         IsInspecting = false;
         Summary = reason;
     }
@@ -265,6 +293,7 @@ public partial class FileItemViewModel : ObservableObject
         job = newJob;
         OutputPath = newJob.OutputPath;
         OutputSummary = null;
+        Outputs = [];
         LogTail = null;
         CommandLine = null;
         Progress = 0;
@@ -283,6 +312,7 @@ public partial class FileItemViewModel : ObservableObject
         StatusMessage = string.Empty;
         OutputPath = null;
         OutputSummary = null;
+        Outputs = [];
     }
 
     private void OnJobChanged(ConversionJob changed)
@@ -300,10 +330,12 @@ public partial class FileItemViewModel : ObservableObject
                 LogTail = changed.LogTail;
                 if (changed.Result is { } result)
                 {
+                    Outputs = result.AllOutputs;
                     OutputPath = result.OutputPath;
-                    var ratio = Source is { SizeBytes: > 0 } source ? (double)result.OutputBytes / source.SizeBytes : 1;
+                    var inputBytes = changed.Inputs.Sum(input => input.SizeBytes);
+                    var ratio = inputBytes > 0 ? (double)result.OutputBytes / inputBytes : 1;
                     var change = ratio < 0.995 ? $"{Math.Min(99, (1 - ratio) * 100):0}% smaller" : ratio > 1.005 ? $"{(ratio - 1) * 100:0}% larger" : "same size";
-                    OutputSummary = $"{SourceFile.FormatBytes(result.OutputBytes)} · {change} · {ConversionJob.FormatElapsed(result.Elapsed)}";
+                    OutputSummary = $"{Outputs.Count} result(s) · {SourceFile.FormatBytes(result.OutputBytes)} · {change} · {ConversionJob.FormatElapsed(result.Elapsed)}";
                 }
                 OnPropertyChanged(nameof(HasOutput));
             }
@@ -353,15 +385,33 @@ public partial class FileItemViewModel : ObservableObject
     private void Select() => SelectRequested?.Invoke(this);
 
     [RelayCommand]
-    private async Task OpenOutputAsync()
+    private async Task RetryAsync()
     {
-        if (OutputPath is not null) await PlatformActions.OpenAsync(OutputPath);
+        ResetForRetry();
+        if (Source is null && RetryRequested is { } retry) await retry(this);
     }
 
     [RelayCommand]
-    private void RevealOutput()
+    private async Task CopyPathAsync() => await Clipboard.Default.SetTextAsync(Path);
+    [RelayCommand] private void MoveUp() => MoveRequested?.Invoke(this, -1);
+    [RelayCommand] private void MoveDown() => MoveRequested?.Invoke(this, 1);
+    [RelayCommand] private async Task CopyOutputPathsAsync() => await Clipboard.Default.SetTextAsync(string.Join(Environment.NewLine, Outputs.Select(output => output.Path)));
+
+    [RelayCommand]
+    private async Task CopyDiagnosticsAsync() => await Clipboard.Default.SetTextAsync($"{FileName}\n{StatusMessage}\n{CommandLine}\n{LogTail}");
+
+    [RelayCommand]
+    private async Task OpenOutputAsync()
     {
-        if (OutputPath is not null) PlatformActions.RevealInFolder(OutputPath);
+        var path = await PlatformActions.ChooseOutputAsync(Outputs);
+        if (path is not null && !await PlatformActions.OpenAsync(path)) FeedbackRequested?.Invoke("Could not open the result. It may have moved or been deleted.");
+    }
+
+    [RelayCommand]
+    private async Task RevealOutputAsync()
+    {
+        var path = await PlatformActions.ChooseOutputAsync(Outputs);
+        if (path is not null && (!File.Exists(path) || !PlatformActions.RevealInFolder(path))) FeedbackRequested?.Invoke("Could not show the result in its folder.");
     }
 
     [RelayCommand]

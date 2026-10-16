@@ -1,0 +1,41 @@
+LocalMorph
+
+SHORT DESCRIPTION
+Convert videos, audio, and images on your PC. Batch files, trim clips, choose a sharing preset, and keep your files on your device.
+
+DESCRIPTION
+Your files. Your computer. The format you need.
+
+LocalMorph is a desktop file converter that processes your files locally, without uploading them to a conversion server. Turn a video into a shareable MP4, extract its audio, convert a batch of photos, or prepare clips for your next project.
+
+START SIMPLE, GO DEEPER WHEN YOU NEED TO
+Add files or folders, choose a quick preset or output format, and review the batch before converting. See which files are compatible with your settings. Preview images and video in an expandable inspector, with a settings panel that grows with your window.
+
+VIDEO, AUDIO, AND IMAGES
+Work with formats including MP4, MKV, MOV, WebM, MP3, AAC, FLAC, WAV, Opus, PNG, JPEG, and WebP. Choose quality, resolution, frame rate, and audio settings. Hardware video encoding is used when supported and verified on your PC. Format availability depends on the selected conversion engine and installed components.
+
+TOOLS FOR REAL MEDIA WORK
+Trim clips, grab a frame, extract audio, select audio tracks, or add subtitles. Use a two-pass target-size preset to prepare files for sharing. Join compatible video clips without re-encoding, or split a video into shorter clips. Accurate splitting re-encodes; fast stream-copy splitting follows source keyframes. Optional measured loudness normalization, audio silence trimming, and supported HDR-to-SDR tone mapping provide more control when you need it.
+
+A QUEUE YOU CAN FOLLOW
+Import up to 2,000 supported files at a time. Convert in parallel, follow progress, and cancel individual jobs or the batch. Review completed files in history and reopen their results. Existing source files are protected, and removing a history entry does not delete the converted file.
+
+LOCAL BY DESIGN
+Media conversion runs on your PC. The Microsoft Store edition includes FFmpeg and ffprobe for video and audio processing. Document conversion and some image formats require optional external tools or Windows codecs; the Tools page shows what is available and what is missing. Installing optional tools or codecs may require internet access and acceptance of their own licenses.
+
+FEATURES
+Convert video, audio, and images locally on your PC
+Add files or folders, with up to 2,000 supported files per import
+Quick presets for sharing, target file size, audio extraction, and more
+Expandable media preview with per-file trim and track controls
+Join compatible clips without re-encoding, or split a video by duration
+Measured loudness normalization and leading/trailing audio silence trimming
+Quality, resolution, frame-rate, audio, crop, and subtitle controls
+Parallel conversions, cancellation, and history with access to completed results
+Hardware video encoding when supported and verified on your PC
+Tools page explains optional engines and codec availability
+
+FIRST SUBMISSION: Leave What's new blank.
+
+UPDATE DRAFT
+A roomier conversion workspace with an expandable media preview and a settings panel that grows with the window. Task-based preflight explains which files can run. New media tools include compatible-video joining, duration splitting, measured loudness normalization, audio silence trimming, and supported HDR-to-SDR conversion. File intake is cancellable, and history records multiple outputs and partial results.

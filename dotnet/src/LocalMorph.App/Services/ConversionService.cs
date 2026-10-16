@@ -31,7 +31,7 @@ public sealed class ConversionService : IDisposable
     public Task<ToolInventory> RefreshToolsAsync(bool verifyHardware = true, CancellationToken token = default)
     {
         if (refresh is { IsCompleted: false }) return refresh;
-        refresh = RefreshCoreAsync(verifyHardware, token);
+        refresh = Task.Run(() => RefreshCoreAsync(verifyHardware, token), token);
         return refresh;
     }
 
@@ -54,17 +54,18 @@ public sealed class ConversionService : IDisposable
 
     private void OnJobChanged(ConversionJob job)
     {
-        if (job.State != JobState.Completed || job.Result is null) return;
+        if (!job.IsTerminal || job.Result is null || job.CompletedOutputs.Count == 0) return;
         var entry = new HistoryEntry(
             DateTimeOffset.Now,
             job.Source.Path,
             job.Result.OutputPath,
             job.Format.Id,
             job.Format.DisplayName,
-            job.Source.SizeBytes,
+            job.Inputs.Sum(input => input.SizeBytes),
             job.Result.OutputBytes,
             job.Result.Elapsed.TotalSeconds,
-            job.Engine.ToString());
+            job.Engine.ToString(),
+            job.Inputs.Select(input => input.Path).ToArray(), job.CompletedOutputs, job.Operation, job.RequestedOptions, job.State);
         History.Add(entry);
         HistoryAdded?.Invoke(entry);
     }

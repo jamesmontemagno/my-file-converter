@@ -35,6 +35,7 @@ public sealed record SourceFile(
             if (Media?.Width is { } width && Media.Height is { } height) parts.Add($"{width}×{height}");
             if (Media?.DurationSeconds is { } duration && duration > 0 && Category != MediaCategory.Image) parts.Add(FormatDuration(duration));
             if (Media?.VideoCodec is { } videoCodec && Category == MediaCategory.Video) parts.Add(videoCodec.ToUpperInvariant());
+            if (Media?.IsHdr == true) parts.Add(Media.ColorTransfer == "smpte2084" ? "HDR · PQ" : "HDR · HLG");
             if (Media?.AudioCodec is { } audioCodec && Category is MediaCategory.Audio or MediaCategory.Video) parts.Add(audioCodec.ToUpperInvariant());
             if (Media?.SampleRate is { } sampleRate && Category == MediaCategory.Audio) parts.Add($"{sampleRate / 1000.0:0.#} kHz");
             if (Category == MediaCategory.Video && AudioTracks.Count > 1) parts.Add($"{AudioTracks.Count} audio tracks");

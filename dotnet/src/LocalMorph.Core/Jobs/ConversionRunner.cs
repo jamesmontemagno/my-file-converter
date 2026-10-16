@@ -9,25 +9,44 @@ public static class ConversionRunner
 {
     public static async Task RunAsync(ConversionJob job, ToolInventory tools, string workDirectory, CancellationToken externalToken = default)
     {
+        if (job.Operation.Kind == MediaOperation.Split)
+        {
+            await MediaOperations.SplitAsync(job, tools, workDirectory, externalToken);
+            return;
+        }
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(externalToken, job.Cancellation.Token);
         var token = linked.Token;
+        var stopwatch = Stopwatch.StartNew();
 
         ConversionPlan plan;
+        var stagingPath = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(job.OutputPath))!,
+            $".localmorph-{job.Id:N}{Path.GetExtension(job.OutputPath)}");
         try
         {
             Directory.CreateDirectory(workDirectory);
             Directory.CreateDirectory(Path.GetDirectoryName(job.OutputPath) ?? ".");
+            if (File.Exists(stagingPath)) throw new IOException("A working output already exists for this conversion. Retry with a new job.");
+            token.ThrowIfCancellationRequested();
+            job.MarkRunning("Preparing conversion");
+            if (job.Inputs.Count == 0 || !string.Equals(job.Inputs[0].Path, job.Source.Path, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("The first ordered input must match the job source.");
+            if (job.Inputs.Select(input => input.Path).Concat(job.ProtectedInputPaths).Any(path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(job.OutputPath), StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException("An output cannot replace an input file.");
+            if (job.OverwritePolicy == OverwritePolicy.Skip && File.Exists(job.OutputPath)) { job.MarkSkipped("Skipped · destination already exists"); return; }
+            job.WorkingOutputPath = stagingPath;
+            job.Options = await AudioAnalysis.PrepareAsync(job, tools, token);
             plan = EngineRegistry.Get(job.Engine).Plan(job, tools, workDirectory);
-            job.CommandLine = plan.Describe();
+            job.CommandLine = string.Join("\n", job.AnalysisCommands.Append(plan.Describe()));
         }
+        catch (OperationCanceledException) { job.WorkingOutputPath = job.OutputPath; job.MarkCanceled(); return; }
         catch (Exception ex)
         {
+            job.WorkingOutputPath = job.OutputPath;
             job.MarkFailed($"Could not prepare the conversion: {ex.Message}");
             return;
         }
 
-        job.MarkRunning(plan.Steps[0].Label);
-        var stopwatch = Stopwatch.StartNew();
+        job.ReportProgress(0, plan.Steps[0].Label);
         try
         {
             foreach (var step in plan.Steps)
@@ -39,7 +58,7 @@ public static class ConversionRunner
                 if (exitCode != 0)
                 {
                     // Tools often create/truncate the destination before failing; never leave a corrupt file behind.
-                    TryDelete(job.OutputPath);
+                    TryDelete(job, stagingPath);
                     job.MarkFailed(DescribeFailure(job, exitCode));
                     return;
                 }
@@ -47,28 +66,37 @@ public static class ConversionRunner
 
             if (plan.Finalize is not null) await plan.Finalize(token);
 
-            var output = new FileInfo(job.OutputPath);
+            token.ThrowIfCancellationRequested();
+            var output = new FileInfo(stagingPath);
             if (!output.Exists || output.Length == 0)
             {
                 job.MarkFailed("The tool finished but no output file was written." + LogHint(job));
                 return;
             }
 
-            job.MarkCompleted(new JobResult(job.OutputPath, output.Length, stopwatch.Elapsed, job.CommandLine ?? string.Empty));
+            if (job.Options.TargetSizeMegabytes is { } megabytes && output.Length > megabytes * 1_000_000)
+                throw new InvalidOperationException($"The result exceeds the {megabytes:0.##} MB limit. Try a lower audio bitrate or a shorter clip; the existing destination was not changed.");
+
+            File.Move(stagingPath, job.OutputPath, overwrite: job.OverwritePolicy == OverwritePolicy.Overwrite);
+            job.RecordOutput(new OutputResult(job.OutputPath, output.Length));
+            job.MarkCompleted(new JobResult(job.OutputPath, output.Length, stopwatch.Elapsed, job.CommandLine ?? string.Empty, job.CompletedOutputs));
         }
         catch (OperationCanceledException)
         {
-            TryDelete(job.OutputPath);
+            TryDelete(job, stagingPath);
             job.MarkCanceled();
         }
         catch (Exception ex)
         {
-            TryDelete(job.OutputPath);
+            TryDelete(job, stagingPath);
             job.MarkFailed(ex.Message + LogHint(job));
         }
         finally
         {
-            try { plan.Cleanup?.Invoke(); } catch { }
+            TryDelete(job, stagingPath);
+            try { plan.Cleanup?.Invoke(); }
+            catch (Exception ex) { job.AppendLog($"Could not clean up conversion work: {ex.Message}"); }
+            job.WorkingOutputPath = job.OutputPath;
         }
     }
 
@@ -178,8 +206,9 @@ public static class ConversionRunner
         _ => $"{Math.Floor(seconds / 3600):0}h {Math.Floor(seconds % 3600 / 60):00}m"
     };
 
-    private static void TryDelete(string path)
+    private static void TryDelete(ConversionJob job, string path)
     {
-        try { if (File.Exists(path)) File.Delete(path); } catch { }
+        try { if (File.Exists(path)) File.Delete(path); }
+        catch (Exception ex) { job.AppendLog($"Could not remove working output '{path}': {ex.Message}"); }
     }
 }

@@ -20,7 +20,14 @@ public enum OverwritePolicy
     Skip
 }
 
-public sealed record JobResult(string OutputPath, long OutputBytes, TimeSpan Elapsed, string Command);
+public enum MediaOperation { Convert, Join, Split }
+public enum SplitMode { Accurate, Fast }
+public sealed record OperationRequest(MediaOperation Kind = MediaOperation.Convert, double SegmentSeconds = 60, SplitMode SplitMode = SplitMode.Accurate);
+public sealed record OutputResult(string Path, long Bytes);
+public sealed record JobResult(string OutputPath, long OutputBytes, TimeSpan Elapsed, string Command, IReadOnlyList<OutputResult>? Outputs = null)
+{
+    public IReadOnlyList<OutputResult> AllOutputs => Outputs ?? [new(OutputPath, OutputBytes)];
+}
 
 /// <summary>A single conversion: one source file to one output file. Mutable state is published through <see cref="Changed"/>.</summary>
 public sealed class ConversionJob
@@ -34,22 +41,34 @@ public sealed class ConversionJob
     public ConversionJob(SourceFile source, OutputFormat format, ConversionOptions options, string outputPath, EngineKind engine)
     {
         Source = source;
+        Inputs = [source];
         Format = format;
         Options = options;
+        RequestedOptions = options;
         OutputPath = outputPath;
+        WorkingOutputPath = outputPath;
         Engine = engine;
     }
 
     public Guid Id { get; } = Guid.NewGuid();
     public SourceFile Source { get; }
+    public IReadOnlyList<SourceFile> Inputs { get; init; }
+    public IReadOnlyList<string> ProtectedInputPaths { get; init; } = [];
+    public OperationRequest Operation { get; init; } = new();
+    public IReadOnlyList<string> PlannedOutputs { get; internal set; } = [];
+    public IReadOnlyList<OutputResult> CompletedOutputs => Result?.AllOutputs ?? [];
     public OutputFormat Format { get; }
-    public ConversionOptions Options { get; }
+    public ConversionOptions Options { get; internal set; }
+    public ConversionOptions RequestedOptions { get; }
     public string OutputPath { get; internal set; }
+    public string WorkingOutputPath { get; internal set; }
+    public OverwritePolicy OverwritePolicy { get; init; } = OverwritePolicy.Rename;
     public EngineKind Engine { get; }
     public JobResult? Result { get; private set; }
     public string? Error { get; private set; }
     public string LogTail { get; private set; } = string.Empty;
     public string? CommandLine { get; internal set; }
+    internal List<string> AnalysisCommands { get; } = [];
     public TimeSpan Elapsed => stopwatch.Elapsed;
     public double? EstimatedSecondsRemaining { get; private set; }
     public string? CurrentSpeed { get; private set; }
@@ -122,7 +141,17 @@ public sealed class ConversionJob
             Result = result;
             EstimatedSecondsRemaining = null;
         }
+
         Changed?.Invoke(this);
+    }
+
+    internal void RecordOutput(OutputResult output)
+    {
+        lock (gate)
+        {
+            var outputs = CompletedOutputs.Append(output).ToArray();
+            Result = new JobResult(outputs[0].Path, outputs.Sum(file => file.Bytes), stopwatch.Elapsed, CommandLine ?? "", outputs);
+        }
     }
 
     internal void MarkFailed(string error)
@@ -144,7 +173,7 @@ public sealed class ConversionJob
         lock (gate)
         {
             state = JobState.Canceled;
-            statusMessage = "Canceled";
+            statusMessage = CompletedOutputs.Count == 0 ? "Canceled" : $"Canceled · {CompletedOutputs.Count} completed clips kept";
             EstimatedSecondsRemaining = null;
         }
         Changed?.Invoke(this);

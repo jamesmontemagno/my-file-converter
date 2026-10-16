@@ -1,0 +1,53 @@
+{
+  "locale": "en-us",
+  "productName": "LocalMorph",
+  "shortDescription": "Convert videos, audio, and images on your PC. Batch files, trim clips, choose a sharing preset, and keep your files on your device.",
+  "description": "Your files. Your computer. The format you need.\n\nLocalMorph is a desktop file converter that processes your files locally, without uploading them to a conversion server. Turn a video into a shareable MP4, extract its audio, convert a batch of photos, or prepare clips for your next project.\n\nSTART SIMPLE, GO DEEPER WHEN YOU NEED TO\nAdd files or folders, choose a quick preset or output format, and review the batch before converting. See which files are compatible with your settings. Preview images and video in an expandable inspector, with a settings panel that grows with your window.\n\nVIDEO, AUDIO, AND IMAGES\nWork with formats including MP4, MKV, MOV, WebM, MP3, AAC, FLAC, WAV, Opus, PNG, JPEG, and WebP. Choose quality, resolution, frame rate, and audio settings. Hardware video encoding is used when supported and verified on your PC. Format availability depends on the selected conversion engine and installed components.\n\nTOOLS FOR REAL MEDIA WORK\nTrim clips, grab a frame, extract audio, select audio tracks, or add subtitles. Use a two-pass target-size preset to prepare files for sharing. Join compatible video clips without re-encoding, or split a video into shorter clips. Accurate splitting re-encodes; fast stream-copy splitting follows source keyframes. Optional measured loudness normalization, audio silence trimming, and supported HDR-to-SDR tone mapping provide more control when you need it.\n\nA QUEUE YOU CAN FOLLOW\nImport up to 2,000 supported files at a time. Convert in parallel, follow progress, and cancel individual jobs or the batch. Review completed files in history and reopen their results. Existing source files are protected, and removing a history entry does not delete the converted file.\n\nLOCAL BY DESIGN\nMedia conversion runs on your PC. The Microsoft Store edition includes FFmpeg and ffprobe for video and audio processing. Document conversion and some image formats require optional external tools or Windows codecs; the Tools page shows what is available and what is missing. Installing optional tools or codecs may require internet access and acceptance of their own licenses.",
+  "productFeatures": [
+    "Convert video, audio, and images locally on your PC",
+    "Add files or folders, with up to 2,000 supported files per import",
+    "Quick presets for sharing, target file size, audio extraction, and more",
+    "Expandable media preview with per-file trim and track controls",
+    "Join compatible clips without re-encoding, or split a video by duration",
+    "Measured loudness normalization and leading/trailing audio silence trimming",
+    "Quality, resolution, frame-rate, audio, crop, and subtitle controls",
+    "Parallel conversions, cancellation, and history with access to completed results",
+    "Hardware video encoding when supported and verified on your PC",
+    "Tools page explains optional engines and codec availability"
+  ],
+  "whatsNew": "",
+  "whatsNewForExistingListing": "A roomier conversion workspace with an expandable media preview and a settings panel that grows with the window. Task-based preflight explains which files can run. New media tools include compatible-video joining, duration splitting, measured loudness normalization, audio silence trimming, and supported HDR-to-SDR conversion. File intake is cancellable, and history records multiple outputs and partial results.",
+  "suggestedCategory": "Utilities & tools",
+  "suggestedSearchTerms": [
+    "file converter",
+    "video converter",
+    "audio converter",
+    "image converter",
+    "offline conversion",
+    "batch converter",
+    "video splitter"
+  ],
+  "websiteUrl": "https://localmorph.com",
+  "supportUrl": "https://github.com/jamesmontemagno/my-file-converter/issues",
+  "privacyPolicyUrl": null,
+  "minimumHardware": [
+    "Windows 10 version 2004 (build 19041) or later",
+    "x64 or ARM64 processor; install the package matching your PC",
+    "Available disk space for source files, conversion work, and completed outputs"
+  ],
+  "recommendedHardware": [
+    "Windows 11",
+    "A GPU with a supported hardware video encoder for compatible conversion settings",
+    "Additional free disk space and memory for large files or parallel conversions"
+  ],
+  "reviewRequired": {
+    "reservedProductName": "Confirm the reserved Partner Center name is LocalMorph.",
+    "pricingAndMarkets": "Choose pricing, markets, and availability in Partner Center. No price is asserted in this copy.",
+    "privacyPolicy": "Publish and review a desktop-specific policy. The current website policy describes browser/bridge workflows, not desktop history and preferences.",
+    "supportUrl": "Confirm that GitHub Issues is the desired public support channel.",
+    "ageRatings": "Complete the Partner Center questionnaire; no age rating has been invented.",
+    "categoryAndSearchTerms": "Suggested values only. Confirm against the current Partner Center fields and category choices.",
+    "initialReleaseNotes": "Leave whatsNew blank for an initial submission; use the separate update draft only for an existing listing.",
+    "releaseReadiness": "Listing assets do not establish package certification, licensing compliance, installed Explorer behavior, or ARM64 runtime validation."
+  }
+}

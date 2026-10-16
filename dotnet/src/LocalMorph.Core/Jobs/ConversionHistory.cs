@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LocalMorph.Core.Formats;
 
 namespace LocalMorph.Core.Jobs;
 
@@ -12,11 +13,19 @@ public sealed record HistoryEntry(
     long SourceBytes,
     long OutputBytes,
     double ElapsedSeconds,
-    string Engine)
+    string Engine,
+    IReadOnlyList<string>? InputPaths = null,
+    IReadOnlyList<OutputResult>? Outputs = null,
+    OperationRequest? Operation = null,
+    ConversionOptions? Options = null,
+    JobState State = JobState.Completed)
 {
+    [JsonIgnore] public IReadOnlyList<string> AllInputs => InputPaths ?? [SourcePath];
+    [JsonIgnore] public IReadOnlyList<OutputResult> AllOutputs => Outputs ?? [new(OutputPath, OutputBytes)];
+    [JsonIgnore] public string OperationLabel => $"{(Operation?.Kind ?? MediaOperation.Convert)} · {AllInputs.Count} input(s) · {AllOutputs.Count} result(s)" + (State == JobState.Completed ? "" : $" · {State}, partial results");
     [JsonIgnore] public string SourceName => Path.GetFileName(SourcePath);
     [JsonIgnore] public string OutputName => Path.GetFileName(OutputPath);
-    [JsonIgnore] public bool OutputExists => File.Exists(OutputPath);
+    [JsonIgnore] public bool OutputExists => AllOutputs.Any(output => File.Exists(output.Path));
     [JsonIgnore] public double SizeRatio => SourceBytes > 0 ? (double)OutputBytes / SourceBytes : 1;
     [JsonIgnore] public string SizeChange => SourceBytes <= 0 ? SourceFile.FormatBytes(OutputBytes)
         : SizeRatio < 0.995 ? $"{Math.Min(99, (1 - SizeRatio) * 100):0}% smaller"
@@ -40,6 +49,8 @@ public sealed class ConversionHistory
     }
 
     public int Capacity { get; }
+    public string? PersistenceError { get; private set; }
+    public event Action<string>? PersistenceFailed;
 
     public IReadOnlyList<HistoryEntry> Entries
     {
@@ -65,6 +76,15 @@ public sealed class ConversionHistory
         }
     }
 
+    public void Remove(HistoryEntry entry)
+    {
+        lock (gate)
+        {
+            entries.Remove(entry);
+            Save();
+        }
+    }
+
     private void Load()
     {
         try
@@ -73,9 +93,9 @@ public sealed class ConversionHistory
             var loaded = JsonSerializer.Deserialize<List<HistoryEntry>>(File.ReadAllText(filePath), JsonOptions);
             if (loaded is not null) entries.AddRange(loaded);
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException or ArgumentException)
         {
-            // A corrupt history file should never block the app.
+            ReportPersistenceFailure("Could not load conversion history", ex);
         }
     }
 
@@ -88,9 +108,17 @@ public sealed class ConversionHistory
             var temp = filePath + ".tmp";
             File.WriteAllText(temp, JsonSerializer.Serialize(entries, JsonOptions));
             File.Move(temp, filePath, overwrite: true);
+            PersistenceError = null;
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException or ArgumentException)
         {
+            ReportPersistenceFailure("Conversion history could not be saved; your output files are unchanged", ex);
         }
+    }
+
+    private void ReportPersistenceFailure(string message, Exception exception)
+    {
+        PersistenceError = $"{message}: {exception.Message}";
+        PersistenceFailed?.Invoke(PersistenceError);
     }
 }

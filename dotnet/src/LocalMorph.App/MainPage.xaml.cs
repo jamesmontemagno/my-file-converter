@@ -12,6 +12,7 @@ public partial class MainPage : ContentPage
     private readonly MainViewModel viewModel;
     private FileItemViewModel? previewed;
     private bool initialized;
+    private bool previewExpanded;
 
     public MainPage(MainViewModel viewModel)
     {
@@ -26,8 +27,6 @@ public partial class MainPage : ContentPage
         base.OnAppearing();
         if (initialized) return;
         initialized = true;
-        await viewModel.InitializeAsync();
-
         // Files passed on the command line ("Open with LocalMorph", drag onto the exe, scripts) plus
         // anything the OS hands us later through file activation / a redirected second instance.
         FileActivationService.Open(Environment.GetCommandLineArgs().Skip(1));
@@ -36,6 +35,9 @@ public partial class MainPage : ContentPage
             await viewModel.AddPathsAsync(paths);
             viewModel.View = WorkspaceView.Convert;
         });
+        FileActivationService.Failed += viewModel.ReportError;
+        try { await viewModel.InitializeAsync(); }
+        catch (Exception ex) { viewModel.ReportError($"Could not discover conversion tools: {ex.Message}"); }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -47,6 +49,27 @@ public partial class MainPage : ContentPage
     }
 
     // ------------------------------------------------------------ preview
+
+    private async void OnTogglePreviewSize(object? sender, EventArgs e)
+    {
+        previewExpanded = !previewExpanded;
+        QueueRow.Height = new GridLength(previewExpanded ? 1 : 2, GridUnitType.Star);
+        PreviewRow.Height = new GridLength(previewExpanded ? 4 : 3, GridUnitType.Star);
+        PreviewSizeButton.Text = previewExpanded ? "Collapse preview" : "Expand preview";
+        await ResetPreviewScrollAsync();
+    }
+
+    private async Task ResetPreviewScrollAsync()
+    {
+        try { await PreviewInspector.ScrollToAsync(0, 0, animated: false); }
+        catch (Exception ex) { viewModel.ReportError($"Could not show the top of the preview: {ex.Message}"); }
+    }
+
+    private void OnPreviewInspectorSizeChanged(object? sender, EventArgs e)
+    {
+        if (PreviewInspector.Width <= 0 || PreviewInspector.Height <= 0) return;
+        PreviewSurface.HeightRequest = Math.Max(120, Math.Min(PreviewInspector.Width * 9 / 16, PreviewInspector.Height - 32));
+    }
 
     private void UpdatePreview()
     {
@@ -60,6 +83,7 @@ public partial class MainPage : ContentPage
         PositionLabel.Text = string.Empty;
 
         if (file is null || !File.Exists(file.Path)) return;
+        _ = ResetPreviewScrollAsync();
 
         if (file.IsImage)
         {
@@ -75,8 +99,9 @@ public partial class MainPage : ContentPage
             {
                 Player.Source = MediaSource.FromFile(file.Path);
             }
-            catch
+            catch (Exception ex)
             {
+                viewModel.ReportError($"Preview is unavailable for this file: {ex.Message}");
                 Player.IsVisible = false;
             }
         }
@@ -179,8 +204,9 @@ public partial class MainPage : ContentPage
                     .Where(path => File.Exists(path) || Directory.Exists(path)));
             }
         }
-        catch
+        catch (Exception ex)
         {
+            viewModel.ReportError($"Could not read the dropped files: {ex.Message}");
         }
 
         if (paths.Count > 0) await viewModel.AddPathsAsync(paths);

@@ -27,12 +27,24 @@ public sealed record ChoiceOption<T>(string Label, T Value)
 
 public partial class MainViewModel : ObservableObject
 {
-    private const int MaxFilesPerBatch = 2000;
     private readonly ConversionService service;
     private readonly AppSettings settings;
     private readonly UpdateService updates;
     private readonly SemaphoreSlim inspectionGate = new(4);
+    private int inspectionsPending;
     private bool applyingPreset;
+    private bool addingFiles;
+    private bool refreshingMetadata;
+    private readonly SemaphoreSlim importGate = new(1);
+    private CancellationTokenSource? importCancellation;
+    private BatchPreflight? preflight;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanConvert))]
+    public partial bool IsImporting { get; set; }
+
+    [ObservableProperty]
+    public partial string ImportSummary { get; set; } = "Drop more files here, or use Add files";
 
     public MainViewModel(ConversionService service, AppSettings settings, UpdateService updates)
     {
@@ -40,6 +52,8 @@ public partial class MainViewModel : ObservableObject
         this.settings = settings;
         this.updates = updates;
         AutomaticUpdateChecks = updates.AutomaticChecks;
+        SelectedOperation = OperationOptions[0];
+        SelectedSplitMode = SplitModeOptions[0];
 
         SelectedResolution = ResolutionOptions[0];
         SelectedFrameRate = FrameRateOptions[0];
@@ -73,10 +87,11 @@ public partial class MainViewModel : ObservableObject
         StripMetadata = !settings.KeepMetadata;
         Theme = settings.Theme;
 
-        Files.CollectionChanged += (_, _) => OnFilesChanged();
+        Files.CollectionChanged += (_, _) => { if (!addingFiles) OnFilesChanged(); };
         History.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasHistory));
         service.ToolsChanged += inventory => MainThread.BeginInvokeOnMainThread(() => ApplyTools(inventory));
         service.HistoryAdded += entry => MainThread.BeginInvokeOnMainThread(() => History.Insert(0, entry));
+        service.History.PersistenceFailed += message => MainThread.BeginInvokeOnMainThread(() => ReportError(message));
         service.Queue.Drained += () => MainThread.BeginInvokeOnMainThread(OnQueueDrained);
 
         RefreshFormats();
@@ -89,6 +104,70 @@ public partial class MainViewModel : ObservableObject
     public ObservableCollection<PresetOption> PresetOptions { get; } = [];
     public ObservableCollection<ToolItemViewModel> Tools { get; } = [];
     public ObservableCollection<HistoryEntry> History { get; } = [];
+    public IReadOnlyList<ChoiceOption<MediaOperation>> OperationOptions { get; } =
+        [new("Convert files", MediaOperation.Convert), new("Join compatible clips", MediaOperation.Join), new("Split into clips", MediaOperation.Split)];
+    public IReadOnlyList<ChoiceOption<SplitMode>> SplitModeOptions { get; } =
+        [new("Accurate · re-encode", SplitMode.Accurate), new("Fast · source keyframes / stream copy", SplitMode.Fast)];
+    [ObservableProperty] public partial ChoiceOption<MediaOperation> SelectedOperation { get; set; }
+    [ObservableProperty] public partial ChoiceOption<SplitMode> SelectedSplitMode { get; set; }
+    [ObservableProperty] public partial string SegmentSecondsText { get; set; } = "60";
+    public bool IsJoin => SelectedOperation?.Value == MediaOperation.Join;
+    public bool IsSplit => SelectedOperation?.Value == MediaOperation.Split;
+    public string OperationHint => IsJoin
+        ? "Joins pending video clips in queue order, without re-encoding. Use the row menus to change order. Streams must match; chapters are excluded."
+        : IsSplit ? "Split each pending source into duration-based clips. Accurate mode re-encodes; fast mode copies streams at source keyframes. Completed clips survive a later failure or cancellation."
+        : "One output format for the batch. Trim and track choices apply to the selected file; other settings apply to the batch.";
+    private OperationRequest Operation => new(SelectedOperation?.Value ?? MediaOperation.Convert, IsSplit ? ParseNumber(SegmentSecondsText) : 60, SelectedSplitMode?.Value ?? SplitMode.Accurate);
+    private bool IsReadingFiles => addingFiles || IsImporting || inspectionsPending > 0;
+
+    private BatchPreflight PreparedBatch => preflight ??= SelectedFormat is not { } format ? new([])
+        : BatchPlanner.Prepare(Files.Where(file => file.IsPending && file.Source is not null).Select(file => new ConversionInput(file.Source!, file.ApplyPerFileOptions(BuildSharedOptions(), format.Format))).ToArray(),
+            format.Format, Operation, Inventory, HasCustomOutputDirectory ? OutputDirectory : null, OutputSuffix, SelectedOverwritePolicy.Value, Files.Select(file => file.Path));
+
+    public string PreflightSummary
+    {
+        get
+        {
+            if (IsConverting || SelectedFormat is null) return "";
+            if (IsReadingFiles) return "Reading files before checking this batch…";
+            var plan = PreparedBatch;
+            var excluded = plan.Entries.Where(entry => !entry.CanRun).ToArray();
+            return $"{plan.RunnableCount} operation(s) ready · {excluded.Length} will be skipped"
+                + (excluded.Length == 0 ? "" : "\n" + string.Join("\n", excluded.Take(3).Select(entry => $"{entry.Inputs[0].FileName}: {entry.Issue}")));
+        }
+    }
+
+    private void InvalidatePreflight()
+    {
+        preflight = null;
+        if (addingFiles) return;
+        OnPropertyChanged(nameof(CanConvert));
+        OnPropertyChanged(nameof(ConvertButtonText));
+        OnPropertyChanged(nameof(PreflightSummary));
+    }
+
+    partial void OnIsImportingChanged(bool value) => InvalidatePreflight();
+
+    partial void OnSelectedOperationChanged(ChoiceOption<MediaOperation> value)
+    {
+        OnPropertyChanged(nameof(IsJoin));
+        OnPropertyChanged(nameof(IsSplit));
+        OnPropertyChanged(nameof(OperationHint));
+        OnPropertyChanged(nameof(HasPresets));
+        if (value.Value == MediaOperation.Join)
+            SelectedFormat = FormatGroups.SelectMany(group => group).FirstOrDefault(format => format.Id == "mkv-copy") ?? SelectedFormat;
+        RefreshOperationSurfaces();
+    }
+
+    partial void OnSelectedSplitModeChanged(ChoiceOption<SplitMode> value) => RefreshOperationSurfaces();
+    partial void OnSegmentSecondsTextChanged(string value) => SettingsTouched();
+
+    private void RefreshOperationSurfaces()
+    {
+        foreach (var name in new[] { nameof(ShowVideoSection), nameof(ShowAudioSection), nameof(ShowTracksSection), nameof(ShowFileTracks), nameof(ShowEditSection), nameof(ShowAdvancedSection), nameof(ShowTrimControls), nameof(ShowFrameControls) })
+            OnPropertyChanged(name);
+        SettingsTouched();
+    }
 
     public IReadOnlyList<ChoiceOption<int?>> ResolutionOptions { get; } =
     [
@@ -191,6 +270,7 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowFrameRate))]
     [NotifyPropertyChangedFor(nameof(ShowSpeed))]
     [NotifyPropertyChangedFor(nameof(ShowAudio))]
+    [NotifyPropertyChangedFor(nameof(ShowTrimSilence))]
     [NotifyPropertyChangedFor(nameof(ShowBitDepth))]
     [NotifyPropertyChangedFor(nameof(ShowTargetSize))]
     [NotifyPropertyChangedFor(nameof(ShowHardware))]
@@ -273,6 +353,12 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial bool Lossless { get; set; }
     [ObservableProperty] public partial bool StripMetadata { get; set; }
     [ObservableProperty] public partial bool NormalizeAudio { get; set; }
+    [ObservableProperty] public partial bool MeasureLoudness { get; set; }
+    [ObservableProperty] public partial string TargetLoudnessText { get; set; } = "-16";
+    [ObservableProperty] public partial string TruePeakText { get; set; } = "-1.5";
+    [ObservableProperty] public partial bool TrimSilence { get; set; }
+    [ObservableProperty] public partial string SilenceThresholdText { get; set; } = "-50";
+    [ObservableProperty] public partial bool ToneMapToSdr { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(OutputDirectoryLabel))]
@@ -375,7 +461,7 @@ public partial class MainViewModel : ObservableObject
         ? "No hardware encoder detected"
         : UseHardwareEncoder ? $"Using {Inventory.Ffmpeg.HardwareSummary}" : $"{Inventory.Ffmpeg.HardwareSummary} available";
 
-    private bool Supports(FormatFeatures feature) => SelectedFormat?.Format.Supports(feature) == true;
+    private bool Supports(FormatFeatures feature) => !IsJoin && SelectedFormat?.Format.Supports(feature) == true;
     public bool ShowQuality => Supports(FormatFeatures.Quality) && !(UseTargetSize && ShowTargetSize);
     public bool ShowResolution => Supports(FormatFeatures.Resolution);
     public bool ShowFrameRate => Supports(FormatFeatures.FrameRate);
@@ -402,6 +488,7 @@ public partial class MainViewModel : ObservableObject
     public bool ShowVideoFilters => Supports(FormatFeatures.VideoFilters);
     public bool ShowEffects => Supports(FormatFeatures.Effects);
     public bool ShowEditSection => ShowVideoFilters || ShowEffects;
+    public bool ShowTrimSilence => ShowAudio && SelectedFormat?.Format.Category == MediaCategory.Audio;
     public string SubtitleModeHint => SelectedSubtitleMode.Value switch
     {
         SubtitleMode.Keep => "Text subtitles become selectable tracks. MP4 and MOV skip picture-based (PGS/VobSub) tracks.",
@@ -414,14 +501,17 @@ public partial class MainViewModel : ObservableObject
     public bool ShowAdvancedSection => ShowHardware || ShowRotate || ShowRemoveAudio || ShowLossless || ShowPlaybackSpeed || ShowStripMetadata;
     public bool ShowTrimControls => SelectedFile?.HasTimeline == true && Supports(FormatFeatures.Trim);
     public bool ShowFrameControls => SelectedFile?.IsVideo == true && Supports(FormatFeatures.FrameExtract);
-    public bool CanConvert => HasFiles && HasFormat && SelectedFormat!.IsAvailable && !IsConverting && Files.Any(file => file.IsPending && file.Source is not null && Applies(SelectedFormat.Format, file));
+    public bool CanConvert => HasFiles && HasFormat && SelectedFormat!.IsAvailable && !IsConverting && !IsReadingFiles && PreparedBatch.RunnableCount > 0;
     public bool CanCancelAll => IsConverting;
     public string ConvertButtonText
     {
         get
         {
             if (IsConverting) return "Converting…";
-            var pending = Files.Count(file => file.IsPending);
+            if (IsReadingFiles) return "Reading files…";
+            var pending = PreparedBatch.RunnableCount;
+            if (IsJoin) return $"Join {PreparedBatch.Entries.FirstOrDefault()?.Inputs.Count ?? 0} clips";
+            if (IsSplit) return $"Split {pending} file(s)";
             var done = Files.Count(file => file.IsCompleted);
             if (pending == 0 && done > 0) return "All done";
             if (done > 0 && pending > 0) return pending == 1 ? "Convert 1 remaining" : $"Convert {pending} remaining";
@@ -454,6 +544,7 @@ public partial class MainViewModel : ObservableObject
             IsRefreshingTools = false;
         }
 
+        if (service.History.PersistenceError is { } historyError) ReportError(historyError);
         _ = CheckForUpdatesAsync(force: false);
     }
 
@@ -477,6 +568,8 @@ public partial class MainViewModel : ObservableObject
     public string UpdateLabel => AvailableUpdate is null ? string.Empty : $"Update available · {AvailableUpdate.DisplayVersion}";
     public string CurrentVersionLabel => $"LocalMorph {UpdateService.CurrentVersionDisplay}";
     public string UpdateInstallHint => UpdateService.InstallHint;
+    public bool IsDirectBuild => !Distribution.IsStoreBuild;
+    public bool IsStoreBuild => Distribution.IsStoreBuild;
 
     partial void OnAutomaticUpdateChecksChanged(bool value) => updates.AutomaticChecks = value;
 
@@ -484,10 +577,22 @@ public partial class MainViewModel : ObservableObject
     private async Task CheckForUpdatesAsync(bool force)
     {
         if (IsCheckingForUpdates) return;
+        if (Distribution.IsStoreBuild)
+        {
+            if (force) await Launcher.Default.OpenAsync(Distribution.StoreUpdates);
+            return;
+        }
         IsCheckingForUpdates = true;
         try
         {
-            var update = await updates.CheckAsync(force);
+            var result = await updates.CheckAsync(force);
+            if (result.Error is { } error)
+            {
+                UpdateStatus = error;
+                if (force) ReportError(error);
+                return;
+            }
+            var update = result.Update;
             AvailableUpdate = update;
             if (force)
             {
@@ -537,6 +642,7 @@ public partial class MainViewModel : ObservableObject
     private void ApplyTools(ToolInventory inventory)
     {
         Inventory = inventory;
+        InvalidatePreflight();
         foreach (var tool in Tools) tool.Apply(inventory.Get(tool.Kind));
         if (Tools.FirstOrDefault(tool => tool.Kind == ToolKind.Ffmpeg) is { } ffmpegTool)
         {
@@ -566,10 +672,42 @@ public partial class MainViewModel : ObservableObject
         UpdateCommandPreview();
         UpdateDecoderHint();
 
-        // Files added before ffprobe was found still need metadata.
-        foreach (var file in Files.Where(file => file.Source is null || file.Source.Media is null && file.Category is MediaCategory.Video or MediaCategory.Audio or MediaCategory.Image))
+        _ = RefreshMissingMetadataAsync();
+    }
+
+    private async Task RefreshMissingMetadataAsync()
+    {
+        if (refreshingMetadata || !Inventory.Has(ToolKind.Ffprobe)) return;
+        refreshingMetadata = true;
+        await importGate.WaitAsync();
+        try
         {
-            _ = InspectAsync(file);
+            var files = Files.Where(file => file.IsPending && (file.Source is null ||
+                file.Source.Media is null && file.Category is MediaCategory.Video or MediaCategory.Audio or MediaCategory.Image)).ToArray();
+            if (files.Length == 0) return;
+            using var cancellation = new CancellationTokenSource();
+            importCancellation = cancellation;
+            IsImporting = true;
+            var summary = ImportSummary;
+            ImportSummary = "Reading media details…";
+            try
+            {
+                await Task.WhenAll(files.Select(file => InspectAsync(file, cancellation.Token)));
+                ImportSummary = summary;
+            }
+            catch (OperationCanceledException) { ImportSummary = "Inspection canceled. Use Retry on files without details."; }
+            catch (Exception ex) { ReportError($"Could not refresh file details: {ex.Message}"); }
+            finally
+            {
+                importCancellation = null;
+                OnFilesChanged();
+                IsImporting = false;
+            }
+        }
+        finally
+        {
+            refreshingMetadata = false;
+            importGate.Release();
         }
     }
 
@@ -581,7 +719,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             var results = await FilePicker.Default.PickMultipleAsync(new PickOptions { PickerTitle = "Choose files to convert" });
-            await AddPathsAsync(results.Select(result => result.FullPath));
+            if (results is not null) await AddPathsAsync(results.Select(result => result.FullPath));
         }
         catch (Exception ex)
         {
@@ -606,89 +744,105 @@ public partial class MainViewModel : ObservableObject
 
     public async Task AddPathsAsync(IEnumerable<string> paths)
     {
-        var expanded = new List<string>();
-        foreach (var path in paths)
-        {
-            if (Directory.Exists(path))
-            {
-                try
-                {
-                    var found = Directory.EnumerateFiles(path, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, MaxRecursionDepth = 8 })
-                        .Select(file => (Path: file, Category: SourceClassifier.Classify(file)))
-                        .Where(file => file.Category != MediaCategory.Unknown)
-                        .ToList();
-                    // Sidecar subtitles next to videos are attachments, not conversions; only queue them when the folder holds nothing else.
-                    var onlySubtitles = found.All(file => file.Category == MediaCategory.Subtitle);
-                    expanded.AddRange(found.Where(file => onlySubtitles || file.Category != MediaCategory.Subtitle).Select(file => file.Path));
-                }
-                catch (Exception ex)
-                {
-                    ShowToast($"Could not read {Path.GetFileName(path)}: {ex.Message}");
-                }
-            }
-            else if (File.Exists(path))
-            {
-                expanded.Add(path);
-            }
-        }
-
-        var distinct = expanded.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var truncated = Math.Max(0, distinct.Count - MaxFilesPerBatch);
-        var existing = Files.Select(file => file.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var requested = paths.ToArray();
+        await importGate.WaitAsync();
+        using var cancellation = new CancellationTokenSource();
+        importCancellation = cancellation;
+        IsImporting = true;
+        ImportSummary = "Scanning files…";
         var added = new List<FileItemViewModel>();
-        var alreadyQueued = 0;
-        foreach (var path in distinct.Take(MaxFilesPerBatch))
-        {
-            if (!existing.Add(path))
-            {
-                // Re-adding a finished/failed file is a request to run it again.
-                var existingItem = Files.FirstOrDefault(file => string.Equals(file.Path, path, StringComparison.OrdinalIgnoreCase));
-                if (existingItem is { IsTerminal: true }) existingItem.ResetForRetry();
-                else alreadyQueued++;
-                continue;
-            }
-            var item = new FileItemViewModel(path);
-            item.RemoveRequested += RemoveFile;
-            item.SelectRequested += file => SelectedFile = file;
-            item.PropertyChanged += OnFilePropertyChanged;
-            Files.Add(item);
-            added.Add(item);
-        }
-
-        if (truncated > 0) ShowToast($"Added the first {MaxFilesPerBatch:N0} files; {truncated:N0} more were left out. Convert this batch, then add the rest.");
-        else if (added.Count == 0 && alreadyQueued > 0) ShowToast(alreadyQueued == 1 ? "That file is already in the queue." : "Those files are already in the queue.");
-
-        OnPropertyChanged(nameof(CanConvert));
-        OnPropertyChanged(nameof(ConvertButtonText));
-        if (added.Count == 0) return;
-
-        SelectedFile ??= added[0];
-        View = WorkspaceView.Convert;
-        await Task.WhenAll(added.Select(InspectAsync));
-    }
-
-    private async Task InspectAsync(FileItemViewModel item)
-    {
-        await inspectionGate.WaitAsync();
         try
         {
-            var source = await SourceInspector.InspectAsync(item.Path, Inventory);
-            MainThread.BeginInvokeOnMainThread(() =>
+            var imported = await FileImport.ScanAsync(requested, Files.Select(file => file.Path), cancellation.Token);
+            addingFiles = true;
+            foreach (var path in imported.AlreadyQueued)
+                if (Files.FirstOrDefault(file => string.Equals(file.Path, path, StringComparison.OrdinalIgnoreCase)) is { IsTerminal: true } previous)
+                    previous.ResetForRetry();
+            foreach (var path in imported.Paths)
             {
+                cancellation.Token.ThrowIfCancellationRequested();
+                var item = new FileItemViewModel(path);
+                item.RemoveRequested += RemoveFile;
+                item.SelectRequested += file => SelectedFile = file;
+                item.RetryRequested += file => InspectAsync(file);
+                item.MoveRequested += MoveFile;
+                item.FeedbackRequested += ReportError;
+                item.PropertyChanged += OnFilePropertyChanged;
+                Files.Add(item);
+                added.Add(item);
+                SelectedFile ??= item;
+                if (added.Count % 50 == 0) await Task.Yield();
+            }
+            addingFiles = false;
+            OnFilesChanged();
+            ImportSummary = imported.Summary;
+            View = WorkspaceView.Convert;
+            await Task.WhenAll(added.Select(file => InspectAsync(file, cancellation.Token)));
+        }
+        catch (OperationCanceledException)
+        {
+            foreach (var file in added.Where(file => file.Source is null && file.IsInspecting))
+                file.MarkInspectionFailed("Import canceled. Use Retry to inspect this file.");
+            ImportSummary = "Import canceled. Files already added remain in the queue.";
+        }
+        catch (Exception ex) { ReportError($"Could not import files: {ex.Message}"); }
+        finally
+        {
+            addingFiles = false;
+            OnFilesChanged();
+            IsImporting = false;
+            OnPropertyChanged(nameof(CanConvert));
+            importCancellation = null;
+            importGate.Release();
+        }
+    }
+
+    [RelayCommand]
+    private void CancelImport() => importCancellation?.Cancel();
+
+    public void ReportError(string message)
+    {
+        ValidationMessage = message;
+        ShowToast(message);
+    }
+
+    private async Task InspectAsync(FileItemViewModel item, CancellationToken token = default)
+    {
+        inspectionsPending++;
+        InvalidatePreflight();
+        var acquired = false;
+        try
+        {
+            await inspectionGate.WaitAsync(token);
+            acquired = true;
+            item.IsInspecting = true;
+            var source = await SourceInspector.InspectAsync(item.Path, Inventory, token);
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                if (!Files.Contains(item)) return;
                 item.ApplySource(source);
-                RefreshFormats();
                 if (ReferenceEquals(item, SelectedFile)) UpdateCommandPreview();
-                OnPropertyChanged(nameof(FilesSummary));
-                OnPropertyChanged(nameof(CanConvert));
             });
+        }
+        catch (OperationCanceledException)
+        {
+            await MainThread.InvokeOnMainThreadAsync(() => item.MarkInspectionFailed("Inspection canceled. Use Retry to inspect this file."));
+            throw;
         }
         catch (Exception ex)
         {
-            MainThread.BeginInvokeOnMainThread(() => item.MarkInspectionFailed($"Could not inspect: {ex.Message}"));
+            await MainThread.InvokeOnMainThreadAsync(() => item.MarkInspectionFailed($"Could not inspect: {ex.Message}"));
         }
         finally
         {
-            inspectionGate.Release();
+            if (acquired) inspectionGate.Release();
+            inspectionsPending--;
+            if (!IsReadingFiles)
+            {
+                RefreshFormats();
+                InvalidatePreflight();
+                OnPropertyChanged(nameof(FilesSummary));
+            }
         }
     }
 
@@ -700,35 +854,51 @@ public partial class MainViewModel : ObservableObject
         Files.Remove(item);
         if (ReferenceEquals(SelectedFile, item))
         {
-            SelectedFile = Files.Count == 0 ? null : Files[Math.Clamp(index, 0, Files.Count - 1)];
+            SelectedFile = addingFiles || Files.Count == 0 ? null : Files[Math.Clamp(index, 0, Files.Count - 1)];
+        }
+    }
+
+    private void BatchFileChanges(Action update)
+    {
+        addingFiles = true;
+        try { update(); }
+        finally
+        {
+            addingFiles = false;
+            SelectedFile ??= Files.FirstOrDefault();
+            OnFilesChanged();
         }
     }
 
     [RelayCommand]
     private void ClearCompleted()
     {
-        foreach (var item in Files.Where(file => file.IsCompleted).ToList()) RemoveFile(item);
+        if (IsReadingFiles) { ReportError("Wait for file inspection or cancel the import before clearing files."); return; }
+        BatchFileChanges(() => { foreach (var item in Files.Where(file => file.IsCompleted).ToArray()) RemoveFile(item); });
         service.Queue.ClearFinished();
     }
 
     [RelayCommand]
-    private void ClearAll()
+    private async Task ClearAllAsync()
     {
+        if (IsConverting && !await Shell.Current.DisplayAlertAsync("Cancel and clear queue?", "Running conversions will be canceled. Source files and completed results will not be deleted.", "Cancel and clear", "Keep converting")) return;
+        if (IsReadingFiles) { ReportError("Wait for file inspection or cancel the import before clearing files."); return; }
         service.Queue.CancelAll();
-        foreach (var item in Files.ToList()) RemoveFile(item);
+        BatchFileChanges(() => { foreach (var item in Files.ToArray()) RemoveFile(item); });
         service.Queue.ClearFinished();
     }
 
     [RelayCommand]
     private void RetryFailed()
     {
-        foreach (var item in Files.Where(file => file.IsFailed || file.IsCanceled)) item.ResetForRetry();
-        OnPropertyChanged(nameof(CanConvert));
-        OnPropertyChanged(nameof(ConvertButtonText));
+        if (IsReadingFiles) { ReportError("Wait for file inspection or cancel the import before retrying files."); return; }
+        BatchFileChanges(() => { foreach (var item in Files.Where(file => file.IsFailed || file.IsCanceled)) item.ResetForRetry(); });
     }
 
     private void OnFilesChanged()
     {
+        InvalidatePreflight();
+        for (var index = 0; index < Files.Count; index++) { Files[index].QueueIndex = index; Files[index].QueueCount = Files.Count; }
         OnPropertyChanged(nameof(HasFiles));
         OnPropertyChanged(nameof(HasNoFiles));
         OnPropertyChanged(nameof(TitleSubtitle));
@@ -786,6 +956,10 @@ public partial class MainViewModel : ObservableObject
 
     private void OnFilePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(FileItemViewModel.State) or nameof(FileItemViewModel.Source) or nameof(FileItemViewModel.TrimStartSeconds)
+            or nameof(FileItemViewModel.TrimEndSeconds) or nameof(FileItemViewModel.SelectedAudioTrack) or nameof(FileItemViewModel.SelectedSubtitleTrack)
+            or nameof(FileItemViewModel.ReplacementAudioPath) or nameof(FileItemViewModel.ExternalSubtitlePath))
+            InvalidatePreflight();
         switch (e.PropertyName)
         {
             case nameof(FileItemViewModel.State):
@@ -827,24 +1001,27 @@ public partial class MainViewModel : ObservableObject
 
     private void UpdateBatchStatus()
     {
-        var total = Files.Count(file => file.State is not null);
+        var jobs = Files.Select(file => file.Job).OfType<ConversionJob>().Distinct().ToArray();
+        var total = jobs.Length;
         if (total == 0)
         {
             BatchStatus = string.Empty;
             return;
         }
 
-        var done = Files.Count(file => file.IsCompleted);
-        var failed = Files.Count(file => file.IsFailed);
-        var running = Files.Where(file => file.IsRunning).ToList();
+        var done = jobs.Count(job => job.State == JobState.Completed);
+        var failed = jobs.Count(job => job.State == JobState.Failed);
+        var running = jobs.Count(job => job.IsActive);
         if (IsConverting)
         {
-            var overall = Files.Where(file => file.State is not null).Average(file => file.IsCompleted ? 1 : file.Progress);
-            BatchStatus = $"{done} of {total} done · {overall * 100:0}% overall · {running.Count} running";
+            var overall = jobs.Average(job => job.State == JobState.Completed ? 1 : job.Progress);
+            BatchStatus = $"{done} of {total} done · {overall * 100:0}% overall · {running} running";
         }
         else
         {
-            BatchStatus = failed > 0 ? $"{done} converted · {failed} failed" : done > 0 ? $"{done} converted" : string.Empty;
+            var canceled = jobs.Count(job => job.State == JobState.Canceled);
+            var skipped = jobs.Count(job => job.State == JobState.Skipped);
+            BatchStatus = $"{done} completed · {failed} failed · {canceled} canceled · {skipped} skipped · {jobs.Sum(job => job.CompletedOutputs.Count)} result(s)";
         }
     }
 
@@ -855,8 +1032,7 @@ public partial class MainViewModel : ObservableObject
         UpdateBatchStatus();
         var done = Files.Count(file => file.IsCompleted);
         var failed = Files.Count(file => file.IsFailed);
-        if (done > 0 && failed == 0) ShowToast(done == 1 ? "Conversion finished." : $"All {done} conversions finished.");
-        else if (failed > 0) ShowToast($"{done} finished, {failed} failed. Select a file to see why.");
+        ShowToast(BatchStatus);
 
         if (OpenFolderWhenDone && Files.FirstOrDefault(file => file.IsCompleted && file.OutputPath is not null) is { OutputPath: { } output })
         {
@@ -909,7 +1085,7 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(ApplicabilityLabel));
     }
 
-    public bool HasPresets => PresetOptions.Count > 0;
+    public bool HasPresets => !IsJoin && PresetOptions.Count > 0;
 
     [ObservableProperty]
     public partial bool IsMixedBatch { get; set; }
@@ -1002,6 +1178,7 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSelectedFormatChanged(FormatOption? value)
     {
+        InvalidatePreflight();
         if (value is null) return;
         if (!applyingPreset)
         {
@@ -1047,33 +1224,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             SelectedFormat = format;
-            var o = preset.Options;
-            Quality = o.Quality;
-            SelectedResolution = ResolutionOptions.FirstOrDefault(choice => choice.Value == o.TargetHeight) ?? ResolutionOptions[0];
-            SelectedFrameRate = FrameRateOptions.FirstOrDefault(choice => choice.Value == o.FrameRate) ?? FrameRateOptions[0];
-            SelectedSpeed = SpeedOptions.First(choice => choice.Value == o.Speed);
-            SelectedAudioBitrate = AudioBitrateOptions.FirstOrDefault(choice => choice.Value == o.AudioBitrateKbps) ?? AudioBitrateOptions[0];
-            SelectedSampleRate = SampleRateOptions.FirstOrDefault(choice => choice.Value == o.SampleRate) ?? SampleRateOptions[0];
-            SelectedChannels = ChannelOptions.First(choice => choice.Value == o.Channels);
-            SelectedBitDepth = BitDepthOptions.FirstOrDefault(choice => choice.Value == o.WavBitDepth) ?? BitDepthOptions[0];
-            SelectedRotation = RotationOptions[0];
-            SelectedPlaybackSpeed = PlaybackSpeedOptions[2];
-            UseTargetSize = o.TargetSizeMegabytes is not null;
-            if (o.TargetSizeMegabytes is { } megabytes) TargetSizeText = megabytes.ToString("0.#", CultureInfo.InvariantCulture);
-            RemoveAudio = o.RemoveAudio;
-            Lossless = o.Lossless;
-            SelectedCrop = CropOptions.FirstOrDefault(choice => choice.Value == (o.CropAspect ?? CropAspects.None)) ?? CropOptions[0];
-            SelectedSubtitleMode = SubtitleModeOptions.First(choice => choice.Value == o.Subtitles);
-            SelectedFadeIn = FadeOptions.FirstOrDefault(choice => choice.Value == o.FadeInSeconds) ?? FadeOptions[0];
-            SelectedFadeOut = FadeOptions.FirstOrDefault(choice => choice.Value == o.FadeOutSeconds) ?? FadeOptions[0];
-            SelectedVolume = VolumeOptions.FirstOrDefault(choice => choice.Value == o.VolumePercent) ?? VolumeOptions[DefaultVolumeIndex];
-            SelectedAudioDelay = AudioDelayOptions.FirstOrDefault(choice => choice.Value == o.AudioDelayMilliseconds) ?? AudioDelayOptions[DefaultAudioDelayIndex];
-            KeepAllAudioTracks = o.KeepAllAudioTracks;
-            FlipHorizontal = o.FlipHorizontal;
-            FlipVertical = o.FlipVertical;
-            Deinterlace = o.Deinterlace;
-            Denoise = o.Denoise;
-            Reverse = o.Reverse;
+            ApplyOptions(preset.Options);
             foreach (var candidate in PresetOptions) candidate.IsActive = ReferenceEquals(candidate, option);
         }
         finally
@@ -1083,6 +1234,45 @@ public partial class MainViewModel : ObservableObject
 
         UpdateCommandPreview();
         ShowToast($"Preset applied: {preset.Name}");
+    }
+
+    private void ApplyOptions(ConversionOptions options)
+    {
+        Quality = options.Quality;
+        SelectedResolution = ResolutionOptions.FirstOrDefault(choice => choice.Value == options.TargetHeight) ?? ResolutionOptions[0];
+        SelectedFrameRate = FrameRateOptions.FirstOrDefault(choice => choice.Value == options.FrameRate) ?? FrameRateOptions[0];
+        SelectedSpeed = SpeedOptions.First(choice => choice.Value == options.Speed);
+        SelectedAudioBitrate = AudioBitrateOptions.FirstOrDefault(choice => choice.Value == options.AudioBitrateKbps) ?? AudioBitrateOptions[0];
+        SelectedSampleRate = SampleRateOptions.FirstOrDefault(choice => choice.Value == options.SampleRate) ?? SampleRateOptions[0];
+        SelectedChannels = ChannelOptions.First(choice => choice.Value == options.Channels);
+        SelectedBitDepth = BitDepthOptions.First(choice => choice.Value == options.WavBitDepth);
+        SelectedRotation = RotationOptions.First(choice => choice.Value == options.Rotation);
+        SelectedPlaybackSpeed = PlaybackSpeedOptions.First(choice => choice.Value == options.PlaybackSpeed);
+        UseTargetSize = options.TargetSizeMegabytes is not null;
+        if (options.TargetSizeMegabytes is { } megabytes) TargetSizeText = megabytes.ToString("0.###", CultureInfo.InvariantCulture);
+        UseHardwareEncoder = options.UseHardwareEncoder;
+        RemoveAudio = options.RemoveAudio;
+        StripMetadata = options.StripMetadata;
+        Lossless = options.Lossless;
+        NormalizeAudio = options.NormalizeAudio;
+        MeasureLoudness = options.MeasureLoudness;
+        TargetLoudnessText = options.TargetLoudness.ToString(CultureInfo.InvariantCulture);
+        TruePeakText = options.TruePeak.ToString(CultureInfo.InvariantCulture);
+        TrimSilence = options.TrimSilence;
+        SilenceThresholdText = options.SilenceThresholdDb.ToString(CultureInfo.InvariantCulture);
+        ToneMapToSdr = options.ToneMapToSdr;
+        SelectedCrop = CropOptions.FirstOrDefault(choice => choice.Value == (options.CropAspect ?? CropAspects.None)) ?? CropOptions[0];
+        SelectedSubtitleMode = SubtitleModeOptions.First(choice => choice.Value == options.Subtitles);
+        SelectedFadeIn = FadeOptions.First(choice => choice.Value == options.FadeInSeconds);
+        SelectedFadeOut = FadeOptions.First(choice => choice.Value == options.FadeOutSeconds);
+        SelectedVolume = VolumeOptions.First(choice => choice.Value == options.VolumePercent);
+        SelectedAudioDelay = AudioDelayOptions.First(choice => choice.Value == options.AudioDelayMilliseconds);
+        KeepAllAudioTracks = options.KeepAllAudioTracks;
+        FlipHorizontal = options.FlipHorizontal;
+        FlipVertical = options.FlipVertical;
+        Deinterlace = options.Deinterlace;
+        Denoise = options.Denoise;
+        Reverse = options.Reverse;
     }
 
     // ---------------------------------------------------------------- settings reactions
@@ -1100,6 +1290,12 @@ public partial class MainViewModel : ObservableObject
     partial void OnTargetSizeTextChanged(string value) => SettingsTouched();
     partial void OnLosslessChanged(bool value) => SettingsTouched();
     partial void OnNormalizeAudioChanged(bool value) => SettingsTouched();
+    partial void OnMeasureLoudnessChanged(bool value) => SettingsTouched();
+    partial void OnTargetLoudnessTextChanged(string value) => SettingsTouched();
+    partial void OnTruePeakTextChanged(string value) => SettingsTouched();
+    partial void OnTrimSilenceChanged(bool value) => SettingsTouched();
+    partial void OnSilenceThresholdTextChanged(string value) => SettingsTouched();
+    partial void OnToneMapToSdrChanged(bool value) => SettingsTouched();
     partial void OnSelectedSubtitleModeChanged(ChoiceOption<SubtitleMode> value) => SettingsTouched();
     partial void OnSelectedCropChanged(ChoiceOption<string> value) => SettingsTouched();
     partial void OnSelectedFadeInChanged(ChoiceOption<double> value) => SettingsTouched();
@@ -1144,7 +1340,12 @@ public partial class MainViewModel : ObservableObject
         SettingsTouched();
     }
 
-    partial void OnSelectedOverwritePolicyChanged(ChoiceOption<OverwritePolicy> value) => settings.OverwritePolicy = value.Value;
+    partial void OnSelectedOverwritePolicyChanged(ChoiceOption<OverwritePolicy> value)
+    {
+        settings.OverwritePolicy = value.Value;
+        InvalidatePreflight();
+    }
+    partial void OnOutputDirectoryChanged(string value) => InvalidatePreflight();
 
     partial void OnMaxParallelChanged(int value)
     {
@@ -1156,6 +1357,7 @@ public partial class MainViewModel : ObservableObject
 
     private void SettingsTouched()
     {
+        InvalidatePreflight();
         if (!applyingPreset)
         {
             foreach (var preset in PresetOptions) preset.IsActive = false;
@@ -1166,6 +1368,7 @@ public partial class MainViewModel : ObservableObject
 
     private ConversionOptions BuildSharedOptions()
     {
+        if (IsJoin) return new ConversionOptions { StripMetadata = StripMetadata };
         // An enabled-but-unparseable target size becomes a negative sentinel so Validate() rejects it
         // instead of silently falling back to quality mode.
         double? targetSize = !(UseTargetSize && ShowTargetSize) ? null
@@ -1190,6 +1393,12 @@ public partial class MainViewModel : ObservableObject
             Lossless = Lossless,
             PlaybackSpeed = SelectedPlaybackSpeed.Value,
             NormalizeAudio = NormalizeAudio,
+            MeasureLoudness = MeasureLoudness && ShowAudio,
+            TargetLoudness = MeasureLoudness && ShowAudio ? ParseNumber(TargetLoudnessText) : -16,
+            TruePeak = MeasureLoudness && ShowAudio ? ParseNumber(TruePeakText) : -1.5,
+            TrimSilence = TrimSilence && ShowTrimSilence,
+            SilenceThresholdDb = TrimSilence && ShowTrimSilence ? ParseNumber(SilenceThresholdText) : -50,
+            ToneMapToSdr = ToneMapToSdr && ShowVideoFilters,
             KeepAllAudioTracks = KeepAllAudioTracks,
             Subtitles = SelectedSubtitleMode.Value,
             CropAspect = string.IsNullOrEmpty(SelectedCrop.Value) ? null : SelectedCrop.Value,
@@ -1204,6 +1413,9 @@ public partial class MainViewModel : ObservableObject
             AudioDelayMilliseconds = SelectedAudioDelay.Value
         };
     }
+
+    private static double ParseNumber(string text) =>
+        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : double.NaN;
 
     private void UpdateCommandPreview()
     {
@@ -1223,6 +1435,23 @@ public partial class MainViewModel : ObservableObject
         try
         {
             var options = SelectedFile.ApplyPerFileOptions(BuildSharedOptions(), format.Format);
+            if (IsJoin)
+            {
+                CommandPreview = "Check all pending clips for matching stream signatures, write their queue order to a private concat list, then copy the streams into one result. Chapters are excluded.";
+                return;
+            }
+            if (IsSplit)
+            {
+                CommandPreview = $"Plan {Operation.SegmentSeconds:0.###}-second clips in {Operation.SplitMode} mode, then commit each completed clip separately. Fast boundaries come from source keyframes; resolved commands appear in diagnostics.";
+                return;
+            }
+            if (options.MeasureLoudness || options.TrimSilence)
+            {
+                CommandPreview = (options.TrimSilence ? "1. Detect leading/trailing silence (internal pauses are kept).\n" : "")
+                    + (options.MeasureLoudness ? $"Measure each retained audio track at {options.TargetLoudness:0.#} LUFS / {options.TruePeak:0.#} dBTP.\n" : "")
+                    + "Render using the measured values, then safely commit the result. Copy diagnostics after conversion for the resolved commands.";
+                return;
+            }
             var outputPath = Path.Combine(HasCustomOutputDirectory ? OutputDirectory : Path.GetDirectoryName(source.Path) ?? string.Empty, OutputNaming.Sanitize(Path.GetFileNameWithoutExtension(source.Path) + OutputSuffix) + format.Extension);
             var job = new ConversionJob(source, format.Format, options, outputPath, engine.Value);
             var plan = EngineRegistry.Get(engine.Value).Plan(job, Inventory, Path.Combine(FileSystem.Current.CacheDirectory, "work"));
@@ -1274,75 +1503,32 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ConvertAll()
     {
-        if (SelectedFormat is not { } format) return;
-        if (!format.IsAvailable)
-        {
-            ValidationMessage = $"{format.DisplayName} needs {string.Join(" or ", format.MissingTools.Select(kind => ToolCatalog.Get(kind).DisplayName))}. Open Tools to install it.";
-            return;
-        }
-
-        var shared = BuildSharedOptions();
-        if (shared.Validate(format.Format) is { } problem)
-        {
-            ValidationMessage = problem;
-            return;
-        }
-
+        if (IsReadingFiles || IsConverting) return;
+        if (SelectedFormat is not { } format) { ReportError("Choose an output format first."); return; }
         if (HasCustomOutputDirectory && !Directory.Exists(OutputDirectory))
         {
-            ValidationMessage = "The output folder no longer exists. Choose another one.";
+            ReportError("The output folder no longer exists. Choose another one.");
             return;
         }
-
+        preflight = null;
+        var plan = PreparedBatch;
+        var protectedPaths = Files.Select(file => file.Path).ToArray();
         ValidationMessage = null;
-        var pendingItems = Files.Where(file => file.IsPending && file.Source is not null).ToList();
-        // Protect every source in the batch so an Overwrite policy can never clobber another job's input.
-        var reserved = new HashSet<string>(pendingItems.Select(file => Path.GetFullPath(file.Path)), StringComparer.OrdinalIgnoreCase);
-        var policy = SelectedOverwritePolicy.Value;
         var queued = 0;
-
-        foreach (var item in pendingItems)
+        foreach (var entry in plan.Entries)
         {
-            var source = item.Source!;
-            if (!Applies(format.Format, item))
-            {
-                var notApplicable = new ConversionJob(source, format.Format, shared, source.Path, EngineKind.Ffmpeg);
-                item.AttachJob(notApplicable);
-                notApplicable.Skip($"Skipped · {format.DisplayName} doesn't apply to {item.CategoryLabel.ToLowerInvariant()} files");
-                continue;
-            }
-
-            var engine = FormatCatalog.ResolveEngine(format.Format, source.Path, Inventory);
-            if (engine is null)
-            {
-                var placeholder = new ConversionJob(source, format.Format, shared, source.Path, EngineKind.Ffmpeg);
-                item.AttachJob(placeholder);
-                placeholder.Skip($"Needs {string.Join(" or ", format.MissingTools.Select(kind => ToolCatalog.Get(kind).DisplayName))}");
-                continue;
-            }
-
-            var options = item.ApplyPerFileOptions(shared, format.Format);
-            var outputDirectory = HasCustomOutputDirectory ? OutputDirectory : null;
-            var preferred = OutputNaming.PreferredOutputPath(source.Path, format.Format, outputDirectory, OutputSuffix, source, options.AudioTrack);
-            if (policy == OverwritePolicy.Skip && File.Exists(preferred))
-            {
-                var skipped = new ConversionJob(source, format.Format, shared, preferred, engine.Value);
-                item.AttachJob(skipped);
-                skipped.Skip($"Skipped · {Path.GetFileName(preferred)} already exists");
-                continue;
-            }
-
-            var job = new ConversionJob(source, format.Format, options,
-                OutputNaming.BuildOutputPath(source.Path, format.Format, outputDirectory, OutputSuffix, policy, reserved, source, options.AudioTrack), engine.Value);
-
-            item.AttachJob(job);
+            var job = new ConversionJob(entry.Inputs[0], format.Format, entry.Options, entry.OutputPath, entry.Engine)
+            { Inputs = entry.Inputs, Operation = Operation, OverwritePolicy = SelectedOverwritePolicy.Value, ProtectedInputPaths = protectedPaths };
+            foreach (var source in entry.Inputs)
+                Files.First(file => string.Equals(file.Path, source.Path, StringComparison.OrdinalIgnoreCase)).AttachJob(job);
+            if (entry.Issue is { } issue) { job.Skip("Skipped · " + issue); continue; }
             service.Queue.Enqueue(job);
             queued++;
         }
 
         if (queued == 0)
         {
-            ShowToast("Nothing to convert.");
+            ReportError("Nothing is ready to run. Review the preflight summary.");
             return;
         }
 
@@ -1350,6 +1536,14 @@ public partial class MainViewModel : ObservableObject
         service.Queue.Start();
         IsConverting = true;
         UpdateBatchStatus();
+    }
+
+    private void MoveFile(FileItemViewModel item, int offset)
+    {
+        if (IsConverting) { ReportError("Wait for the current batch before reordering inputs."); return; }
+        var index = Files.IndexOf(item);
+        var target = index + offset;
+        if (index >= 0 && target >= 0 && target < Files.Count) Files.Move(index, target);
     }
 
     [RelayCommand]
@@ -1435,30 +1629,66 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task OpenHistoryOutputAsync(HistoryEntry entry)
     {
-        if (!await PlatformActions.OpenAsync(entry.OutputPath)) ShowToast("That file no longer exists.");
+        var path = await PlatformActions.ChooseOutputAsync(entry.AllOutputs);
+        if (path is not null && !await PlatformActions.OpenAsync(path)) ReportError("That result no longer exists or could not be opened.");
     }
 
     [RelayCommand]
-    private void RevealHistoryOutput(HistoryEntry entry)
+    private async Task RevealHistoryOutputAsync(HistoryEntry entry)
     {
-        if (!File.Exists(entry.OutputPath) || !PlatformActions.RevealInFolder(entry.OutputPath)) ShowToast("That file no longer exists.");
+        var path = await PlatformActions.ChooseOutputAsync(entry.AllOutputs);
+        if (path is not null && (!File.Exists(path) || !PlatformActions.RevealInFolder(path))) ReportError("That result no longer exists or could not be revealed.");
+    }
+
+    [RelayCommand] private async Task CopyHistoryOutputsAsync(HistoryEntry entry) => await Clipboard.Default.SetTextAsync(string.Join(Environment.NewLine, entry.AllOutputs.Select(output => output.Path)));
+    [RelayCommand] private async Task CopyHistorySourcesAsync(HistoryEntry entry) => await Clipboard.Default.SetTextAsync(string.Join(Environment.NewLine, entry.AllInputs));
+    [RelayCommand]
+    private void RemoveHistoryEntry(HistoryEntry entry)
+    {
+        service.History.Remove(entry);
+        History.Remove(entry);
     }
 
     [RelayCommand]
     private async Task ReconvertFromHistoryAsync(HistoryEntry entry)
     {
-        if (!File.Exists(entry.SourcePath))
+        if (IsConverting || IsReadingFiles) { ReportError("Wait for the current batch or file inspection before loading a previous operation."); return; }
+        var operation = entry.Operation ?? new();
+        if (!Enum.IsDefined(operation.Kind) || !Enum.IsDefined(operation.SplitMode))
         {
-            ShowToast("The original file no longer exists.");
+            ReportError("This history entry uses an unsupported operation. Add the source files manually.");
             return;
         }
-        await AddPathsAsync([entry.SourcePath]);
+        if (entry.AllInputs.Any(path => !File.Exists(path)))
+        {
+            ReportError("One or more original files no longer exist. This operation cannot be reconstructed.");
+            return;
+        }
+        if (Files.Count > 0 && !await Shell.Current.DisplayAlertAsync("Load previous operation?", "Replace the current queue with the original inputs, in their saved order? Source and output files will not be deleted.", "Load", "Cancel")) return;
+        if (IsConverting || IsReadingFiles) { ReportError("The queue changed while confirming. Wait for the current work before loading history."); return; }
+        BatchFileChanges(() => { foreach (var file in Files.ToArray()) RemoveFile(file); });
+        service.Queue.ClearFinished();
+        await AddPathsAsync(entry.AllInputs);
+        SelectedOperation = OperationOptions.First(choice => choice.Value == operation.Kind);
+        SelectedSplitMode = SplitModeOptions.First(choice => choice.Value == operation.SplitMode);
+        SegmentSecondsText = operation.SegmentSeconds.ToString(CultureInfo.InvariantCulture);
         var row = Files.FirstOrDefault(file => string.Equals(file.Path, entry.SourcePath, StringComparison.OrdinalIgnoreCase));
         if (row is not null) SelectedFile = row;
         View = WorkspaceView.Convert;
         var format = FormatGroups.SelectMany(group => group).FirstOrDefault(option => option.Id == entry.FormatId);
         if (format is not null) SelectedFormat = format;
         else ShowToast($"{entry.FormatName} isn't available right now; pick another format.");
+        var options = entry.Options ?? ConversionOptions.Default;
+        ApplyOptions(options);
+        foreach (var file in Files)
+        {
+            file.TrimStartSeconds = options.TrimStartSeconds ?? 0;
+            file.TrimEndSeconds = options.TrimEndSeconds ?? file.DurationSeconds;
+            file.SelectedAudioTrack = file.AudioTrackChoices.FirstOrDefault(choice => choice.Value == (options.AudioTrack ?? 0));
+            file.SelectedSubtitleTrack = file.SubtitleTrackChoices.FirstOrDefault(choice => choice.Value == (options.SubtitleTrack ?? 0));
+            file.ReplacementAudioPath = options.ReplacementAudioPath;
+            file.ExternalSubtitlePath = options.ExternalSubtitlePath;
+        }
     }
 
     [RelayCommand]
