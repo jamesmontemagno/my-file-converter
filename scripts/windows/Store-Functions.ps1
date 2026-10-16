@@ -37,6 +37,14 @@ function Assert-FileHash {
     }
 }
 
+function Assert-PdbMatchesBinary {
+    param([Parameter(Mandatory)][string]$Binary, [Parameter(Mandatory)][string]$Pdb)
+    if (-not ('LocalMorph.Packaging.StoreSymbols' -as [type])) {
+        Add-Type -Path (Join-Path $PSScriptRoot 'Store-Symbols.cs')
+    }
+    [LocalMorph.Packaging.StoreSymbols]::AssertMatch($Binary, $Pdb)
+}
+
 function New-StoreManifest {
     param([string]$DirectPath, [string]$TemplatePath, [string]$DestinationPath, [string]$Name, [string]$Publisher, [string]$PublisherDisplayName, [string]$Version)
     foreach ($value in @($Name, $Publisher, $PublisherDisplayName)) {

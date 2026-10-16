@@ -14,7 +14,7 @@ function New-TestPe([string]$Path, [string]$Architecture) {
     }
     finally { $writer.Dispose() }
 }
-function New-TestStoreUpload([string]$Directory, [string]$Scenario, [string]$Commit) {
+function New-TestStoreUpload([string]$Directory, [string]$Scenario, [string]$Commit, [string]$Fixtures) {
     $bundle = Join-Path $Directory 'bundle'
     New-Item -ItemType Directory -Path (Join-Path $bundle 'AppxMetadata') -Force | Out-Null
     $packages = @()
@@ -30,10 +30,14 @@ function New-TestStoreUpload([string]$Directory, [string]$Scenario, [string]$Com
 <Dependencies><PackageDependency Name="Microsoft.WindowsAppRuntime.2.0" /></Dependencies>
 <Applications><Verb Clsid="761079A6-3C8C-4781-AF52-FB07D1C43C0A" /></Applications></Package>
 "@ | Set-Content -LiteralPath (Join-Path $package 'AppxManifest.xml')
-        foreach ($relative in @('coreclr.dll', 'tools\ffmpeg.exe', 'tools\ffprobe.exe', 'LocalMorph.Shell.dll')) {
+        foreach ($relative in @('coreclr.dll', 'tools\ffmpeg.exe', 'tools\ffprobe.exe')) {
             $machine = if (($Scenario -eq 'wrong-runtime' -and $relative -eq 'coreclr.dll') -or ($Scenario -eq 'wrong-tool' -and $relative -eq 'tools\ffprobe.exe')) { 'x64' } else { $architecture }
             New-TestPe (Join-Path $package $relative) $machine
         }
+        foreach ($module in @('LocalMorph.App', 'LocalMorph.Core', 'LocalMorph.Shell')) {
+            Copy-Item -LiteralPath (Join-Path $Fixtures "$architecture\$module.dll") -Destination $package
+        }
+        if ($Scenario -eq 'installed-pdb') { Copy-Item -LiteralPath (Join-Path $Fixtures "$architecture\LocalMorph.App.pdb") -Destination $package }
         if ($Scenario -ne 'missing-notices') { 'Synthetic fixture, not redistribution material.' | Set-Content -LiteralPath (Join-Path $licenses 'NOTICE.txt') }
         'Synthetic fixture, not a corresponding-source distribution.' | Set-Content -LiteralPath (Join-Path $licenses 'ffmpeg-corresponding-source.zip')
         $sourceHash = (Get-FileHash -LiteralPath (Join-Path $licenses 'ffmpeg-corresponding-source.zip')).Hash
@@ -54,6 +58,38 @@ function New-TestStoreUpload([string]$Directory, [string]$Scenario, [string]$Com
     $upload = Join-Path $Directory 'upload'
     New-Item -ItemType Directory -Path $upload | Out-Null
     [IO.Compression.ZipFile]::CreateFromDirectory($bundle, (Join-Path $upload 'test.msixbundle'))
+    foreach ($architecture in @('x64', 'arm64')) {
+        if ($Scenario -eq 'no-symbols' -or ($Scenario -eq 'missing-architecture-symbols' -and $architecture -eq 'arm64')) { continue }
+        $symbols = Join-Path $Directory "symbols-$architecture"
+        New-Item -ItemType Directory -Path $symbols | Out-Null
+        if ($Scenario -ne 'empty-symbols') {
+            Copy-Item -LiteralPath (Join-Path $Fixtures "$architecture\LocalMorph.App.pdb"), (Join-Path $Fixtures "$architecture\LocalMorph.Core.pdb"), (Join-Path $Fixtures "$architecture\LocalMorph.Shell.pdb") -Destination $symbols
+        }
+        switch ($Scenario) {
+            'missing-app-pdb' { Remove-Item -LiteralPath (Join-Path $symbols 'LocalMorph.App.pdb') }
+            'missing-core-pdb' { Remove-Item -LiteralPath (Join-Path $symbols 'LocalMorph.Core.pdb') }
+            'missing-shell-pdb' { Remove-Item -LiteralPath (Join-Path $symbols 'LocalMorph.Shell.pdb') }
+            'empty-pdb' { [IO.File]::WriteAllBytes((Join-Path $symbols 'LocalMorph.App.pdb'), [byte[]]@()) }
+            'invalid-pdb' { 'Invalid PDB fixture.' | Set-Content -LiteralPath (Join-Path $symbols 'LocalMorph.App.pdb') }
+            'wrong-managed-symbols' {
+                $other = if ($architecture -eq 'x64') { 'arm64' } else { 'x64' }
+                Copy-Item -LiteralPath (Join-Path $Fixtures "$other\LocalMorph.App.pdb") -Destination $symbols -Force
+            }
+            'wrong-shell-symbols' {
+                $other = if ($architecture -eq 'x64') { 'arm64' } else { 'x64' }
+                Copy-Item -LiteralPath (Join-Path $Fixtures "$other\LocalMorph.Shell.pdb") -Destination $symbols -Force
+            }
+            'duplicate-pdb' {
+                $duplicate = Join-Path $symbols 'duplicate'
+                New-Item -ItemType Directory -Path $duplicate | Out-Null
+                Copy-Item -LiteralPath (Join-Path $symbols 'LocalMorph.App.pdb') -Destination $duplicate
+            }
+        }
+        $symbolVersion = if ($Scenario -eq 'wrong-symbol-version') { '1.2.2.0' } else { '1.2.3.0' }
+        $symbolPackage = Join-Path $upload "LocalMorph-$symbolVersion-win-$architecture.appxsym"
+        if ($Scenario -eq 'invalid-symbol-archive') { 'Invalid ZIP fixture.' | Set-Content -LiteralPath $symbolPackage }
+        else { [IO.Compression.ZipFile]::CreateFromDirectory($symbols, $symbolPackage) }
+    }
     $path = Join-Path $Directory 'test.msixupload'
     [IO.Compression.ZipFile]::CreateFromDirectory($upload, $path)
     return $path
@@ -87,9 +123,41 @@ try {
     }
     $shell = Join-Path $root 'artifacts\native-shell\x64\LocalMorph.Shell.dll'
     if (Test-Path -LiteralPath $shell) { Assert-Equal (Get-PeArchitecture $shell) 'x64' }
+    $fixtures = Join-Path $temporary 'symbol-fixtures'
+    foreach ($architecture in @('x64', 'arm64')) {
+        foreach ($module in @('LocalMorph.App', 'LocalMorph.Core', 'LocalMorph.Shell')) {
+            $fixtureProject = Join-Path $fixtures "$architecture\$module\Fixture.csproj"
+            New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($fixtureProject)) -Force | Out-Null
+            '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework><DebugSymbols>true</DebugSymbols><DebugType>portable</DebugType></PropertyGroup></Project>' |
+                Set-Content -LiteralPath $fixtureProject
+            'public static class SymbolFixture { public static int Value => 1; }' |
+                Set-Content -LiteralPath (Join-Path ([IO.Path]::GetDirectoryName($fixtureProject)) 'SymbolFixture.cs')
+            $buildOutput = & dotnet build $fixtureProject -c Release "-p:AssemblyName=$module" "-p:PlatformTarget=$architecture" --output (Join-Path $fixtures $architecture) -v:quiet 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Symbol fixture build failed: $buildOutput" }
+            if (-not (Test-Path -LiteralPath (Join-Path $fixtures "$architecture\$module.dll")) -or -not (Test-Path -LiteralPath (Join-Path $fixtures "$architecture\$module.pdb"))) {
+                throw "Symbol fixture build did not produce $architecture $module DLL/PDB: $buildOutput"
+            }
+        }
+    }
+    $symbolFailures = [ordered]@{
+        'no-symbols' = '*must contain x64 and ARM64 crash-symbol archives*'
+        'missing-architecture-symbols' = '*must contain x64 and ARM64 crash-symbol archives*'
+        'wrong-symbol-version' = '*Missing * crash-symbol archive for version*'
+        'empty-symbols' = '*Expected exactly one * LocalMorph.App PDB*'
+        'missing-app-pdb' = '*Expected exactly one * LocalMorph.App PDB*'
+        'missing-core-pdb' = '*Expected exactly one * LocalMorph.Core PDB*'
+        'missing-shell-pdb' = '*Expected exactly one * LocalMorph.Shell PDB*'
+        'empty-pdb' = '*Empty or truncated symbols*'
+        'invalid-pdb' = '*Cannot read native symbols*'
+        'wrong-managed-symbols' = '*Portable symbols do not match LocalMorph.App.dll*'
+        'wrong-shell-symbols' = '*Portable symbols do not match LocalMorph.Shell.dll*'
+        'duplicate-pdb' = '*Expected exactly one * LocalMorph.App PDB*'
+        'invalid-symbol-archive' = '*Central Directory*'
+        'installed-pdb' = '*not the installed application*'
+    }
     $commit = '1' * 40
-    foreach ($scenario in @('valid', 'missing-architecture', 'wrong-identity', 'wrong-bundle', 'wrong-runtime', 'wrong-tool', 'missing-notices', 'wrong-commit', 'source-hash', 'signed')) {
-        $upload = New-TestStoreUpload (Join-Path $temporary $scenario) $scenario $commit
+    foreach ($scenario in (@('valid', 'missing-architecture', 'wrong-identity', 'wrong-bundle', 'wrong-runtime', 'wrong-tool', 'missing-notices', 'wrong-commit', 'source-hash', 'signed') + @($symbolFailures.Keys))) {
+        $upload = New-TestStoreUpload (Join-Path $temporary $scenario) $scenario $commit $fixtures
         $failure = $null
         try {
             & (Join-Path $PSScriptRoot 'Test-StoreUpload.ps1') -Upload $upload -IdentityName 'Test.StoreIdentity' -Publisher 'CN=TestPublisher' -Version '1.2.3.0' -SourceCommit $commit
@@ -97,6 +165,8 @@ try {
         catch { $failure = $_.Exception.Message }
         if ($scenario -eq 'valid' -and $failure) { throw "Valid synthetic upload rejected: $failure" }
         if ($scenario -ne 'valid' -and -not $failure) { throw "Invalid synthetic upload accepted: $scenario" }
+        if ($symbolFailures.Contains($scenario) -and $failure -notlike $symbolFailures[$scenario]) { throw "Unexpected $scenario rejection: $failure" }
+        Write-Host "Store artifact scenario passed: $scenario"
     }
     $originalToken = $env:GH_TOKEN
     $originalRepository = $env:GITHUB_REPOSITORY
@@ -127,6 +197,6 @@ try {
         $env:GH_TOKEN = $originalToken
         $env:GITHUB_REPOSITORY = $originalRepository
     }
-    Write-Host 'Store version, identity, activation, provenance, approval, and synthetic artifact failure-path tests passed. Synthetic fixtures do not replace real SDK packaging, WACK, or installation tests.'
+    Write-Host 'Store version, identity, activation, provenance, approval, and 24 artifact scenarios passed, including matching crash symbols and symbol rejection paths. Synthetic packages do not replace real SDK packaging, native symbol generation, WACK, or installation tests.'
 }
 finally { [IO.Directory]::Delete($temporary, $true) }

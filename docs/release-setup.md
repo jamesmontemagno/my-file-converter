@@ -116,9 +116,22 @@ workflow defaults for it.
 - The package carries notices, corresponding sources, tool provenance, and application commit/version
   provenance. [`Test-StoreUpload.ps1`](../scripts/windows/Test-StoreUpload.ps1) checks bundle/application
   identities, both architectures, .NET/tools/native DLLs, dependencies, source hashes, commit metadata,
-  Explorer registration, and absence of direct-release signatures.
+  Explorer registration, absence of direct-release signatures, and matching crash symbols.
+- Each architecture produces an SDK-generated `.appxsym` archive containing PDBs for
+  `LocalMorph.App`, `LocalMorph.Core`, and the native `LocalMorph.Shell` Explorer command. The final
+  `.msixupload` contains the bundle **and both architecture-specific symbol archives**. Package
+  validation checks each PDB against its binary's CodeView identity (portable PDB GUID/stamp or native
+  PDB GUID/age), rejects missing/corrupt/stale symbols, and rejects PDBs inside installed MSIX payloads.
+  Publication revalidates the downloaded artifact, then sends that same upload, including symbols,
+  to Partner Center; there is no separate symbol-upload command or credential.
+- The build resolves `mspdbcmf.exe` from the installed Visual C++ x64 tools explicitly; `dotnet`
+  MSBuild's default lookup can otherwise point inside the .NET SDK instead of Visual Studio.
+- These are full first-party symbols, retained in the Store upload rather than the installed app.
+  Third-party FFmpeg and Microsoft runtime PDBs are not supplied by this pipeline. Store crash
+  analytics still depend on Windows diagnostic-data availability and Partner Center processing;
+  uploading symbols does not enable application telemetry or guarantee crash reports.
 
-Local package build after configuration (identity values supplied through the named environment
+Local package build using PowerShell 7 after configuration (identity values supplied through the named environment
 variables, never committed):
 
 ```powershell
@@ -126,8 +139,9 @@ variables, never committed):
 .\scripts\windows\Build-Store.ps1 -Tag v1.0.0-windows
 ```
 
-Helper tests use synthetic ZIP/PE fixtures to check rejection paths. They do not replace a real
-SDK-produced `.msixupload`, WACK, or installation testing.
+Helper tests compile managed PDB fixtures for both architectures and use synthetic ZIP/PE fixtures
+to check rejection paths. Windows CI also builds and verifies real native x64/ARM64 DLL/PDB pairs.
+These checks do not replace a real SDK-produced `.msixupload`, WACK, or installation testing.
 
 ### Workflow modes
 

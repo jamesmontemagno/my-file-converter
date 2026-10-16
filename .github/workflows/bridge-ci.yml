@@ -59,8 +59,11 @@ jobs:
       - name: Compile architecture-matched Explorer commands
         shell: pwsh
         run: |
+          . .\scripts\windows\Store-Functions.ps1
           .\scripts\windows\Build-Shell.ps1 -Architecture x64 -OutputDirectory artifacts\native-shell\x64
+          Assert-PdbMatchesBinary -Binary artifacts\native-shell\x64\LocalMorph.Shell.dll -Pdb artifacts\native-shell\x64\LocalMorph.Shell.pdb
           .\scripts\windows\Build-Shell.ps1 -Architecture ARM64 -OutputDirectory artifacts\native-shell\ARM64
+          Assert-PdbMatchesBinary -Binary artifacts\native-shell\ARM64\LocalMorph.Shell.dll -Pdb artifacts\native-shell\ARM64\LocalMorph.Shell.pdb
 
   desktop-app-mac:
     runs-on: macos-26

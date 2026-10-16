@@ -284,6 +284,10 @@ before dispatching the new workflow:
   proof of ARM64 compilation or runtime behavior.
 - [ ] Build package-only from an exact valid Store tag (`v1.0.0-windows`, fourth component zero).
   Verify the real `.msixupload`, architecture-matched payloads and source-commit provenance.
+- [ ] Confirm the upload includes both x64 and ARM64 `.appxsym` archives with matching App, Core,
+  and native Explorer PDBs. Run the artifact validator and confirm no PDBs are installed in the MSIXs.
+  After an authorized submission, verify Partner Center received the symbols; symbol upload alone
+  does not guarantee diagnostic-data collection or crash-report availability.
 - [ ] Run WACK and clean-install/conversion checks on native x64 and ARM64 without system .NET or
   FFmpeg. Confirm Store-resolved Windows App SDK frameworks.
 - [ ] Verify the installed Explorer command with multi-selection, spaces/Unicode, cold/warm/minimized

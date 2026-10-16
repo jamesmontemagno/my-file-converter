@@ -16,6 +16,8 @@ try {
     [IO.Compression.ZipFile]::ExtractToDirectory([IO.Path]::GetFullPath($Upload), $uploadDirectory)
     $bundles = @(Get-ChildItem -LiteralPath $uploadDirectory -File -Filter *.msixbundle)
     if ($bundles.Count -ne 1) { throw 'Store upload must contain exactly one MSIX bundle.' }
+    $symbolPackages = @(Get-ChildItem -LiteralPath $uploadDirectory -File -Filter *.appxsym)
+    if ($symbolPackages.Count -ne 2) { throw 'Store upload must contain x64 and ARM64 crash-symbol archives.' }
     $bundleDirectory = Join-Path $temporary 'bundle'
     [IO.Compression.ZipFile]::ExtractToDirectory($bundles[0].FullName, $bundleDirectory)
     [xml]$bundle = Get-Content -LiteralPath (Join-Path $bundleDirectory 'AppxMetadata\AppxBundleManifest.xml') -Raw
@@ -47,7 +49,18 @@ try {
         if ($build.sourceCommit -ne $SourceCommit -or $build.version -ne $Version -or $build.runtimeIdentifier -ne "win-$architecture") { throw 'Store application provenance does not match the approved source commit, version, or architecture.' }
         if (-not $manifest.SelectSingleNode("//*[local-name()='Verb' and @Clsid='761079A6-3C8C-4781-AF52-FB07D1C43C0A']")) { throw 'Explorer command registration is missing.' }
         if (Test-Path -LiteralPath (Join-Path $unpacked 'AppxSignature.p7x')) { throw 'Store upload unexpectedly contains a direct-release signature.' }
+        if (Get-ChildItem -LiteralPath $unpacked -Recurse -File -Filter *.pdb) { throw 'Debug symbols belong in the Store symbol archive, not the installed application.' }
+        $symbolPackage = Join-Path $uploadDirectory "LocalMorph-$Version-win-$architecture.appxsym"
+        if (-not (Test-Path -LiteralPath $symbolPackage)) { throw "Missing $architecture crash-symbol archive for version $Version." }
+        $symbolDirectory = Join-Path $temporary "symbols-$architecture"
+        New-Item -ItemType Directory -Path $symbolDirectory | Out-Null
+        [IO.Compression.ZipFile]::ExtractToDirectory($symbolPackage, $symbolDirectory)
+        foreach ($module in @('LocalMorph.App', 'LocalMorph.Core', 'LocalMorph.Shell')) {
+            $pdb = @(Get-ChildItem -LiteralPath $symbolDirectory -Recurse -File -Filter "$module.pdb")
+            if ($pdb.Count -ne 1) { throw "Expected exactly one $architecture $module PDB." }
+            Assert-PdbMatchesBinary -Binary (Join-Path $unpacked "$module.dll") -Pdb $pdb[0].FullName
+        }
     }
-    Write-Host 'Store artifact structure, identities, runtime, FFmpeg payloads, and native DLL architectures verified. Native ARM64 launch still requires an ARM64 device.'
+    Write-Host 'Store identities, runtime, FFmpeg payloads, native architectures, and matching managed/native crash symbols verified. Native ARM64 launch still requires an ARM64 device.'
 }
 finally { [IO.Directory]::Delete($temporary, $true) }

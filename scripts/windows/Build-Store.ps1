@@ -9,6 +9,11 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Store-Functions.ps1')
 $version = Get-StoreVersion $Tag
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+if (-not (Test-Path -LiteralPath $vswhere)) { throw 'Store symbol packaging requires Visual Studio Build Tools with Desktop development with C++.' }
+$pdbTool = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\mspdbcmf.exe' |
+    Sort-Object -Descending | Select-Object -First 1
+if ($LASTEXITCODE -ne 0 -or -not $pdbTool -or -not (Test-Path -LiteralPath $pdbTool)) { throw 'mspdbcmf.exe was not found. Install the Visual C++ x64 tools required for Store symbol packaging.' }
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $sourceCommit = git -C $root rev-parse HEAD
 if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the Store application source commit.' }
@@ -24,6 +29,7 @@ $manifestPath = Join-Path $root 'dotnet\src\LocalMorph.App\Platforms\Windows\Pac
 $originalManifest = [IO.File]::ReadAllBytes($manifestPath)
 $bundleInputs = Join-Path $output ('bundle-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $bundleInputs | Out-Null
+$symbolPackages = @()
 try {
     New-StoreManifest -DirectPath $manifestPath -TemplatePath (Join-Path ([IO.Path]::GetDirectoryName($manifestPath)) 'Package.Store.appxmanifest') -DestinationPath $manifestPath -Name $IdentityName -Publisher $Publisher -PublisherDisplayName $PublisherDisplayName -Version $version
     foreach ($architecture in @('x64', 'ARM64')) {
@@ -35,12 +41,24 @@ try {
             -p:LocalMorphStoreBuild=true "-p:StorePayloadRoot=$payload" -p:SelfContained=true -p:WindowsAppSDKSelfContained=false `
             -p:PublishTrimmed=false -p:PublishAot=false -p:WindowsPackageType=MSIX -p:GenerateAppxPackageOnBuild=true `
             "-p:AppxPackageDir=$packageDirectory\" -p:AppxBundle=Never -p:UapAppxPackageBuildMode=StoreUpload `
-            -p:AppxPackageSigningEnabled=false -p:AppxSymbolPackageEnabled=false `
+            -p:AppxPackageSigningEnabled=false -p:AppxSymbolPackageEnabled=true -p:DebugSymbols=true -p:DebugType=portable `
+            "-p:MsPdbCmfExeFullpath=$pdbTool" `
             "-p:ApplicationDisplayVersion=$($version.Substring(0, $version.LastIndexOf('.')))" -p:ApplicationVersion=0 -v:minimal
         if ($LASTEXITCODE -ne 0) { throw "Store build failed for $architecture." }
         $packages = @(Get-ChildItem -LiteralPath $packageDirectory -Recurse -File -Filter *.msix | Where-Object { $_.FullName -notmatch '\\Dependencies\\' })
         if ($packages.Count -ne 1) { throw "Expected one $architecture Store application MSIX." }
         Copy-Item -LiteralPath $packages[0].FullName -Destination (Join-Path $bundleInputs "LocalMorph-$rid.msix")
+        $sdkUploads = @(Get-ChildItem -LiteralPath $packageDirectory -Recurse -File -Filter *.msixupload)
+        if ($sdkUploads.Count -ne 1) { throw "Expected one SDK-generated $architecture upload containing crash symbols." }
+        $sdkUpload = [IO.Compression.ZipFile]::OpenRead($sdkUploads[0].FullName)
+        try {
+            $symbols = @($sdkUpload.Entries | Where-Object { $_.Name -like '*.appxsym' })
+            if ($symbols.Count -ne 1) { throw "Expected one $architecture symbol archive in the SDK upload." }
+            $symbolPath = Join-Path $output "LocalMorph-$version-$rid.appxsym"
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($symbols[0], $symbolPath, $true)
+            $symbolPackages += $symbolPath
+        }
+        finally { $sdkUpload.Dispose() }
     }
     $makeappx = Get-ChildItem -LiteralPath (Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin') -Recurse -File -Filter makeappx.exe |
         Where-Object { $_.FullName -match '\\x64\\makeappx.exe\z' } | Sort-Object FullName -Descending | Select-Object -First 1
@@ -49,7 +67,7 @@ try {
     & $makeappx.FullName bundle /d $bundleInputs /p $bundlePath /bv $version /o
     if ($LASTEXITCODE -ne 0) { throw 'Store bundle creation failed.' }
     $upload = Join-Path $output "LocalMorph-$version.msixupload"
-    Compress-Archive -LiteralPath $bundlePath -DestinationPath "$upload.zip" -Force
+    Compress-Archive -LiteralPath (@($bundlePath) + $symbolPackages) -DestinationPath "$upload.zip" -Force
     Move-Item -LiteralPath "$upload.zip" -Destination $upload -Force
     & (Join-Path $PSScriptRoot 'Test-StoreUpload.ps1') -Upload $upload -IdentityName $IdentityName -Publisher $Publisher -Version $version -SourceCommit $sourceCommit
     Write-Host "Verified Store upload: $([IO.Path]::GetFileName($upload))"

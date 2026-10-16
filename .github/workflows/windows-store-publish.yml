@@ -65,7 +65,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'MAUI workload installation failed.' }
       - name: Test packaging helpers
         run: .\scripts\windows\Test-StoreScripts.ps1
-      - name: Build unsigned x64 and ARM64 Store upload
+      - name: Build unsigned x64 and ARM64 Store upload with crash symbols
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           MICROSOFT_STORE_IDENTITY_NAME: ${{ secrets.MICROSOFT_STORE_IDENTITY_NAME }}

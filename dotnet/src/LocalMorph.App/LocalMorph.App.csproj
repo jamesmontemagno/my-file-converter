@@ -67,6 +67,9 @@
 		<WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
 		<PublishTrimmed>false</PublishTrimmed>
 		<PublishAot>false</PublishAot>
+		<DebugSymbols>true</DebugSymbols>
+		<DebugType>portable</DebugType>
+		<AppxSymbolPackageEnabled>true</AppxSymbolPackageEnabled>
 	</PropertyGroup>
 
 	<!-- Release-only: macOS direct-download bundle (universal, not sandboxed). -->
@@ -117,6 +120,9 @@
 	</PropertyGroup>
 	<ItemGroup Condition="'$(IncludeExplorerIntegration)' == 'true'">
 		<Content Include="$(ExplorerBuildDirectory)LocalMorph.Shell.dll" Link="LocalMorph.Shell.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+	</ItemGroup>
+	<ItemGroup Condition="'$(IncludeExplorerIntegration)' == 'true' and '$(LocalMorphStoreBuild)' == 'true'">
+		<Content Include="$(ExplorerBuildDirectory)LocalMorph.Shell.pdb" Link="LocalMorph.Shell.pdb" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
 	<Target Name="BuildExplorerCommand" BeforeTargets="PrepareForBuild" Condition="'$(IncludeExplorerIntegration)' == 'true'">
 		<Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\..\scripts\windows\Build-Shell.ps1&quot; -Architecture &quot;$(Platform)&quot; -OutputDirectory &quot;$(ExplorerBuildDirectory).&quot;" />

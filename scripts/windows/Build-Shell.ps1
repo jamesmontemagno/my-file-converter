@@ -15,3 +15,4 @@ $output = [IO.Path]::GetFullPath($OutputDirectory).TrimEnd('\') + '\'
 & $msbuild $project /nologo /m:1 /v:minimal /p:Configuration=Release "/p:Platform=$Architecture" "/p:OutDir=$output"
 if ($LASTEXITCODE -ne 0) { throw "Explorer command build failed for $Architecture." }
 if (-not (Test-Path -LiteralPath (Join-Path $output 'LocalMorph.Shell.dll'))) { throw 'Explorer command DLL was not produced.' }
+if (-not (Test-Path -LiteralPath (Join-Path $output 'LocalMorph.Shell.pdb'))) { throw 'Explorer command debug symbols were not produced.' }
