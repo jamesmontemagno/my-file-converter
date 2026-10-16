@@ -119,6 +119,37 @@ public sealed class FfmpegEngineTests
         Assert.Contains("-c:a libmp3lame -q:a 2", text);
     }
 
+    [Theory]
+    [InlineData(false, 48000, null, 48000)]
+    [InlineData(true, 48000, null, 48000)]
+    [InlineData(false, 44100, null, 44100)]
+    [InlineData(true, 44100, null, 44100)]
+    [InlineData(false, null, null, 48000)]
+    [InlineData(true, null, null, 48000)]
+    [InlineData(false, 48000, 32000, 32000)]
+    [InlineData(true, 48000, 32000, 32000)]
+    public void Normalized_audio_sets_a_supported_output_rate_for_audiotoolbox(bool measured, int? sourceRate, int? requestedRate, int expectedRate)
+    {
+        var source = TestData.Video();
+        source = source with { Media = source.Media! with { SampleRate = sourceRate } };
+        var capabilities = new FfmpegCapabilities(TestData.SoftwareOnly.Encoders.Concat(["aac_at"]).ToHashSet(), new HashSet<string>(), [], "ffmpeg");
+        var options = new ConversionOptions
+        {
+            NormalizeAudio = !measured, MeasureLoudness = measured, SampleRate = requestedRate,
+            LoudnessMeasurements = measured ? [new LoudnessMeasurement(0, -20, -8, 1, -30, 0)] : null
+        };
+        var args = Build(source, "mkv-h264", options, capabilities);
+        Assert.Contains("-c:a aac_at", Joined(args));
+        Assert.Single(args, argument => argument == "-ar");
+        Assert.Equal(expectedRate.ToString(), args[args.IndexOf("-ar") + 1]);
+    }
+
+    [Fact]
+    public void Audio_without_normalization_or_a_requested_rate_leaves_resampling_to_ffmpeg()
+    {
+        Assert.DoesNotContain("-ar", Build(TestData.Video(), "mp4-h264"));
+    }
+
     [Fact]
     public void Opus_coerces_unsupported_sample_rates_to_48k()
     {

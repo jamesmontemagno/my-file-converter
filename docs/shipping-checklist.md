@@ -280,7 +280,7 @@ before dispatching the new workflow:
 - [ ] Review the exact pinned GPL FFmpeg redistribution and corresponding sources/build instructions/
   third-party notices; configure the public archive URL and SHA256. Do not treat a nonempty ZIP as
   legal approval.
-- [ ] Ensure native C++ v143 and SDK tools exist for x64 **and** ARM64. Local x64 compilation is not
+- [ ] Ensure Visual Studio 2022 or newer C++ and SDK tools exist for x64 **and** ARM64. Local x64 compilation is not
   proof of ARM64 compilation or runtime behavior.
 - [ ] Build package-only from an exact valid Store tag (`v1.0.0-windows`, fourth component zero).
   Verify the real `.msixupload`, architecture-matched payloads and source-commit provenance.

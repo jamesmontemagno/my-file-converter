@@ -40,15 +40,15 @@ jobs:
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: '26.6'
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: '10.0.401'
 
       - name: Install MAUI workload
-        run: dotnet workload install maui
+        run: dotnet workload install maui-maccatalyst --version 10.0.401
 
       - name: Set release version
         run: |

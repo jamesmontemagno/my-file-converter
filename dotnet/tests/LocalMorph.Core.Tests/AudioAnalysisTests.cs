@@ -27,6 +27,8 @@ public sealed class AudioAnalysisTests : IDisposable
         var source = await Fixture.MakeAudioAsync(root, seconds: 5);
         var job = await Fixture.ConvertAsync(source, "flac", new ConversionOptions { MeasureLoudness = true });
         Assert.Equal(JobState.Completed, job.State);
+        var output = await SourceInspector.InspectAsync(job.OutputPath, Fixture.Inventory.Value);
+        Assert.Equal(44100, output.Media!.SampleRate);
         var log = await RunAsync(["-hide_banner", "-i", job.OutputPath, "-af", "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json", "-f", "null", CommandLine.NullDevice]);
         var measured = AudioAnalysis.ParseMeasurement(log, 0);
         Assert.InRange(measured.Integrated, -16.5, -15.5);
@@ -44,6 +46,7 @@ public sealed class AudioAnalysisTests : IDisposable
         Assert.Equal([1, 0], job.Options.LoudnessMeasurements!.Select(measurement => measurement.Track));
         for (var index = 0; index < 2; index++)
         {
+            Assert.Equal("48000", await Fixture.ProbeAsync(job.OutputPath, "-select_streams", $"a:{index}", "-show_entries", "stream=sample_rate", "-of", "default=noprint_wrappers=1:nokey=1"));
             var log = await RunAsync(["-hide_banner", "-i", job.OutputPath, "-map", $"0:a:{index}", "-af", "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json", "-f", "null", CommandLine.NullDevice]);
             var measured = AudioAnalysis.ParseMeasurement(log, index);
             Assert.InRange(measured.Integrated, -16.5, -15.5);
@@ -96,6 +99,7 @@ public sealed class AudioAnalysisTests : IDisposable
         Assert.True(job.State == JobState.Completed, job.Error + "\n" + job.LogTail);
         var output = await SourceInspector.InspectAsync(job.OutputPath, Fixture.Inventory.Value);
         Assert.InRange(output.DurationSeconds!.Value, 2.98, 3.06);
+        Assert.Equal(48000, output.Media!.SampleRate);
         var measured = AudioAnalysis.ParseMeasurement(await RunAsync(["-hide_banner", "-i", job.OutputPath, "-af", "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json", "-f", "null", CommandLine.NullDevice]), 0);
         Assert.InRange(measured.Integrated, -16.5, -15.5);
         Assert.True(measured.Peak <= -1.3);

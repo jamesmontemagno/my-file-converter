@@ -143,9 +143,13 @@ dotnet test .\dotnet\tests\LocalMorph.Core.Tests   # unit + real-FFmpeg integrat
 Direct/development builds need FFmpeg for media conversion (`winget install Gyan.FFmpeg` /
 `brew install ffmpeg`), or platform binaries under
 [`Resources/ffmpeg`](dotnet/src/LocalMorph.App/Resources/ffmpeg). Packaged Windows builds also need
-Visual Studio C++ v143 tools for each target architecture to build the native Explorer DLL;
+Visual Studio 2022 or newer C++ tools for each target architecture to build the native Explorer DLL;
 unpackaged development builds do not. Store builds instead require a pinned, reviewed FFmpeg
 redistribution payload and bundle .NET.
+
+On macOS, HDR tone mapping and the full Core integration suite require `brew install ffmpeg-full`.
+Its keg-only binaries must be on PATH: `export PATH="$(brew --prefix ffmpeg-full)/bin:$PATH"`.
+The standard Homebrew `ffmpeg` build does not include the required `zscale` filter.
 
 ### Install the desktop app
 

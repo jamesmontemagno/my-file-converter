@@ -632,10 +632,14 @@ public sealed class FfmpegEngine : IConversionEngine
                 break;
         }
 
-        if (options.SampleRate is { } sampleRate)
+        var sampleRate = options.SampleRate;
+        // loudnorm can output 192 kHz, which AudioToolbox AAC cannot encode.
+        if (sampleRate is null && (options.NormalizeAudio || options.MeasureLoudness))
+            sampleRate = context.Source.Media?.SampleRate ?? 48000;
+        if (sampleRate is { } outputRate)
         {
             // Opus only supports a fixed set of rates; anything else is resampled to 48 kHz.
-            var effectiveRate = codec == "libopus" && sampleRate is not (8000 or 12000 or 16000 or 24000 or 48000) ? 48000 : sampleRate;
+            var effectiveRate = codec == "libopus" && outputRate is not (8000 or 12000 or 16000 or 24000 or 48000) ? 48000 : outputRate;
             args.AddRange(["-ar", Num(effectiveRate)]);
         }
         if (options.Channels == ChannelMode.Mono) args.AddRange(["-ac", "1"]);

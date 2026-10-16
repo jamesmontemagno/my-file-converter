@@ -65,9 +65,11 @@ dotnet publish dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-window
 winget validate --manifest dotnet/packaging/winget
 ```
 
-Both packaged Windows channels compile the native Explorer COM DLL using Visual Studio C++ v143,
-Windows SDK, and the C++ tools for **each** target architecture. An x64-only MSVC installation cannot
-produce the ARM64 package. Unpackaged MAUI builds do not require the shell DLL.
+Both packaged Windows channels compile the native Explorer COM DLL using Visual Studio 2022 or newer,
+Windows SDK, and the C++ tools for **each** target architecture. The project uses the selected Visual
+Studio installation's default platform toolset, rather than forcing v143 on newer installations.
+An x64-only MSVC installation cannot produce the ARM64 package. Unpackaged MAUI builds do not require
+the shell DLL.
 
 ## Microsoft Store: separate identity, payload, and approval
 
@@ -161,6 +163,15 @@ separate website/social promotional graphics, tile icons, text-free hero art, li
 and a desktop privacy-policy review draft. Its upload guide identifies the required publisher
 confirmations. These assets do not replace the packaging, licensing, approval, installation,
 and certification gates above.
+
+## macOS toolchain
+
+Mac Catalyst CI and releases pin .NET SDK **10.0.401**, workload set **10.0.401**, and
+Xcode **26.6**, following the [official compatibility notes](https://github.com/dotnet/macios/releases/tag/dotnet-10.0.1xx-xcode26.5-10318).
+Update the three pins together in `bridge-ci.yml` and `mac-release.yml`; an unversioned workload
+install can advance to a Mac Catalyst SDK that requires an Xcode version not yet on the runner.
+Only the `maui-maccatalyst` workload is needed. macOS integration tests use Homebrew's keg-only
+`ffmpeg-full` on PATH so HDR tests exercise the real `zscale`/`tonemap` filters rather than skipping.
 
 ## macOS secrets (environment `macos-release`)
 
