@@ -1,0 +1,215 @@
+{
+  "requirementsChecked": "2026-10-16",
+  "sourceImage": "Original AI-generated coastal demo photograph; no application UI was generated.",
+  "screenshots": "Actual Windows app captures; promotional versions are not Store screenshots.",
+  "captureNormalization": {
+    "03-preview-trim-tracks.png": "Extracted the intact 2560x1440 main-window capture from winapp's multi-window diagnostic composition; removed only its 28px label strip and adjacent tooltip panel."
+  },
+  "metadataCharacters": {
+    "description": 2122,
+    "shortDescription": 131,
+    "features": [
+      51,
+      65,
+      71,
+      62,
+      71,
+      75,
+      67,
+      80,
+      62,
+      59
+    ],
+    "captions": [
+      101,
+      113,
+      112,
+      114,
+      114,
+      110,
+      116
+    ]
+  },
+  "images": [
+    {
+      "file": "contact-sheet.png",
+      "dimensions": [
+        1920,
+        2360
+      ],
+      "bytes": 975496,
+      "sha256": "98c998d96cec1f016d5b16e242170b75195320acbdca0e946c43e03b04635151"
+    },
+    {
+      "file": "en-us\\screenshots\\01-batch-conversion.png",
+      "dimensions": [
+        2560,
+        1440
+      ],
+      "bytes": 830336,
+      "sha256": "6093a89c34739960d097917ed66fb27df5dc47da7a6ba97e2c91e387804712dc"
+    },
+    {
+      "file": "en-us\\screenshots\\02-sharing-presets.png",
+      "dimensions": [
+        2560,
+        1440
+      ],
+      "bytes": 832646,
+      "sha256": "4c59363c96f6ca92ab2d30c28b6d2fa7951704d9e5be070fee1fd66ba46b6130"
+    },
+    {
+      "file": "en-us\\screenshots\\03-preview-trim-tracks.png",
+      "dimensions": [
+        2560,
+        1440
+      ],
+      "bytes": 603738,
+      "sha256": "3399e87743b75b4b8f17ca0f1343163376153f07921683430d682a3ee58ad28d"
+    },
+    {
+      "file": "en-us\\screenshots\\04-join-compatible-clips.png",
+      "dimensions": [
+        2560,
+        1440
+      ],
+      "bytes": 789044,
+      "sha256": "dd7369acaa7da819ae443beba73f2f325d1ce97d7069b261559c859707ab5663"
+    },
+    {
+      "file": "en-us\\screenshots\\05-split-into-clips.png",
+      "dimensions": [
+        2560,
+        1440
+      ],
+      "bytes": 840800,
+      "sha256": "0e886ff41222ba2cccac08de5d2b7ce4f46b4c44cdc69c835d0778f36c5e0510"
+    },
+    {
+      "file": "en-us\\screenshots\\06-image-conversion.png",
+      "dimensions": [
+        2560,
+        1440
+      ],
+      "bytes": 1112430,
+      "sha256": "439ec7831b8e08b732263cf44d247d48955fe7231faa2c1e93a87096d70a9fd5"
+    },
+    {
+      "file": "en-us\\screenshots\\07-completed-history.png",
+      "dimensions": [
+        2560,
+        1440
+      ],
+      "bytes": 164423,
+      "sha256": "a78c1afa6d2c332181c2c4dd2c7b748580a0caf0541046d8afd2ca3822308457"
+    },
+    {
+      "file": "logos\\app-tile-1024.png",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "bytes": 20352,
+      "sha256": "989b3e0a8772fc283ae4ddfef3ffbed787ea626cd021e146922943f045280635"
+    },
+    {
+      "file": "logos\\app-tile-300.png",
+      "dimensions": [
+        300,
+        300
+      ],
+      "bytes": 5617,
+      "sha256": "1dfb02a4c7984616bf7ffce5423b1c305fad33341f9c56583508c0c5e791d504"
+    },
+    {
+      "file": "logos\\app-tile-512.png",
+      "dimensions": [
+        512,
+        512
+      ],
+      "bytes": 9514,
+      "sha256": "819dd558646d6cd80f98945b818b4a5fecf56286660ae135a2e1cce37cfd82b8"
+    },
+    {
+      "file": "logos\\super-hero-1920x1080.png",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "bytes": 40759,
+      "sha256": "a1e98e157ee8e9fe84268c2712dc4a74b18dd545914dcf3ddca3b3df7b558ed4"
+    },
+    {
+      "file": "promotional\\01-batch-conversion.png",
+      "dimensions": [
+        2560,
+        1800
+      ],
+      "bytes": 865289,
+      "sha256": "3438c668a22de479794aad4f3942003bc51d4b31c012d4ef327f1c916bcce6cb"
+    },
+    {
+      "file": "promotional\\02-sharing-presets.png",
+      "dimensions": [
+        2560,
+        1800
+      ],
+      "bytes": 873324,
+      "sha256": "ecf139c4b981d4f0ff33a3a3e2fd600277b78166cb53a3176665e4c1c4c752c5"
+    },
+    {
+      "file": "promotional\\03-preview-trim-tracks.png",
+      "dimensions": [
+        2560,
+        1800
+      ],
+      "bytes": 696388,
+      "sha256": "2652dfa418938075a0e78a1a79ebf83e587b7536f200c4df6ba2bb64392dc4a1"
+    },
+    {
+      "file": "promotional\\04-join-compatible-clips.png",
+      "dimensions": [
+        2560,
+        1800
+      ],
+      "bytes": 790623,
+      "sha256": "0c319035f830e871228d0a6a10e278c9d1c87eefa78e17f845e06b9707df3a79"
+    },
+    {
+      "file": "promotional\\05-split-into-clips.png",
+      "dimensions": [
+        2560,
+        1800
+      ],
+      "bytes": 878676,
+      "sha256": "bcc070d8ac38faeb77eae9b73fdd8920024d6f644b4ff6e5e76f7a966bef3b76"
+    },
+    {
+      "file": "promotional\\06-image-conversion.png",
+      "dimensions": [
+        2560,
+        1800
+      ],
+      "bytes": 1023415,
+      "sha256": "b5191d7ef085fd3c321884fe0a8b44b0159bcd9578775017487a171a3d8178ec"
+    },
+    {
+      "file": "promotional\\07-completed-history.png",
+      "dimensions": [
+        2560,
+        1800
+      ],
+      "bytes": 305310,
+      "sha256": "f999b537422563a73a342063d27b33ce26a515249f1e1b98ed7cc6e48da2bd28"
+    },
+    {
+      "file": "source\\coastline.png",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "bytes": 3090729,
+      "sha256": "8faeedba98ccff88d5b7079b7fa4c6a67fd3a7e45b04b07b28eaa6e750831cee"
+    }
+  ]
+}

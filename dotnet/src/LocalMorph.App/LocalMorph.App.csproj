@@ -59,6 +59,15 @@
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
 		<DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
 	</PropertyGroup>
+	<PropertyGroup Condition="'$(LocalMorphStoreBuild)' == 'true'">
+		<DefineConstants>$(DefineConstants);LOCALMORPH_STORE_BUILD</DefineConstants>
+		<Platforms>x64;ARM64</Platforms>
+		<RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+		<SelfContained>true</SelfContained>
+		<WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+		<PublishTrimmed>false</PublishTrimmed>
+		<PublishAot>false</PublishAot>
+	</PropertyGroup>
 
 	<!-- Release-only: macOS direct-download bundle (universal, not sandboxed). -->
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst' and '$(Configuration)' == 'Release'">
@@ -98,8 +107,25 @@
 		<ProjectReference Include="..\LocalMorph.Core\LocalMorph.Core.csproj" />
 	</ItemGroup>
 
-	<ItemGroup>
+	<ItemGroup Condition="'$(LocalMorphStoreBuild)' != 'true'">
 		<None Include="Resources\ffmpeg\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
+
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows' and '$(WindowsPackageType)' == 'MSIX'">
+		<IncludeExplorerIntegration>true</IncludeExplorerIntegration>
+		<ExplorerBuildDirectory>$(MSBuildProjectDirectory)\..\..\..\artifacts\native-shell\$(Platform)\</ExplorerBuildDirectory>
+	</PropertyGroup>
+	<ItemGroup Condition="'$(IncludeExplorerIntegration)' == 'true'">
+		<Content Include="$(ExplorerBuildDirectory)LocalMorph.Shell.dll" Link="LocalMorph.Shell.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+	</ItemGroup>
+	<Target Name="BuildExplorerCommand" BeforeTargets="PrepareForBuild" Condition="'$(IncludeExplorerIntegration)' == 'true'">
+		<Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\..\scripts\windows\Build-Shell.ps1&quot; -Architecture &quot;$(Platform)&quot; -OutputDirectory &quot;$(ExplorerBuildDirectory).&quot;" />
+	</Target>
+	<ItemGroup Condition="'$(LocalMorphStoreBuild)' == 'true'">
+		<Content Include="$(StorePayloadRoot)\$(RuntimeIdentifier)\**\*" Link="tools\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+	</ItemGroup>
+	<Target Name="ValidateStorePayload" BeforeTargets="PrepareForBuild" Condition="'$(LocalMorphStoreBuild)' == 'true' and '$(WindowsPackageType)' == 'MSIX'">
+		<Error Condition="'$(StorePayloadRoot)' == '' or !Exists('$(StorePayloadRoot)\$(RuntimeIdentifier)\ffmpeg.exe') or !Exists('$(StorePayloadRoot)\$(RuntimeIdentifier)\ffprobe.exe')" Text="Store packages require a verified, architecture-specific FFmpeg payload. Run scripts\windows\Build-Store.ps1." />
+	</Target>
 
 </Project>

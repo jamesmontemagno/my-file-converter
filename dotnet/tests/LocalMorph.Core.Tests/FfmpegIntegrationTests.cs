@@ -93,7 +93,7 @@ public static class Fixture
         return output.Trim();
     }
 
-    private static async Task RunFfmpegAsync(IEnumerable<string> args)
+    public static async Task RunFfmpegAsync(IEnumerable<string> args)
     {
         var startInfo = new ProcessStartInfo(Inventory.Value.PathFor(ToolKind.Ffmpeg)!) { UseShellExecute = false, RedirectStandardError = true, CreateNoWindow = true };
         foreach (var arg in args) startInfo.ArgumentList.Add(arg);
@@ -220,7 +220,7 @@ public sealed class FfmpegIntegrationTests
 
         Assert.Equal(JobState.Completed, job.State);
         Assert.Contains("-pass 2", job.CommandLine);
-        Assert.True(job.Result!.OutputBytes < 0.6 * 1024 * 1024, $"output was {job.Result.OutputBytes} bytes");
+        Assert.True(job.Result!.OutputBytes <= 500_000, $"output was {job.Result.OutputBytes} bytes");
     }
 
     [FfmpegFact]

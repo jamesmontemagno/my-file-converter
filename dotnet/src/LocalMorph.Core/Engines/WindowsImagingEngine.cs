@@ -28,7 +28,7 @@ public sealed class WindowsImagingEngine : IConversionEngine
                     Label = "Converting with Windows Imaging",
                     IsIndeterminate = true,
                     Summary = Summarize(job),
-                    Execute = (current, token) => codec.ConvertAsync(current.Source, current.Format, current.Options, current.OutputPath, token)
+                    Execute = (current, token) => codec.ConvertAsync(current.Source, current.Format, current.Options, current.WorkingOutputPath, token)
                 }
             ]
         };
@@ -36,7 +36,7 @@ public sealed class WindowsImagingEngine : IConversionEngine
 
     public static string Summarize(ConversionJob job)
     {
-        var parts = new List<string> { "windows-imaging", CommandLine.Quote(job.Source.Path), "->", CommandLine.Quote(job.OutputPath) };
+        var parts = new List<string> { "windows-imaging", CommandLine.Quote(job.Source.Path), "->", CommandLine.Quote(job.WorkingOutputPath) };
         if (job.Format.Id is "jpg") parts.Add($"quality={job.Options.Quality}");
         if (job.Options.TargetHeight is { } height) parts.Add($"max-height={height}");
         if (job.Options.Rotation is 90 or 180 or 270) parts.Add($"rotate={job.Options.Rotation}");

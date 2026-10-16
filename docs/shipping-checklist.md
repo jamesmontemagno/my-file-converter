@@ -1,14 +1,15 @@
 # Shipping checklist: everything to configure before the first release
 
 This is the one-time setup needed so that pushing a `vX.Y.Z-windows` / `vX.Y.Z-mac` tag produces a
-signed, installable LocalMorph Desktop release on winget and Homebrew. Work through it top to bottom;
+signed, installable LocalMorph Desktop release on winget and Homebrew, with a separate protected
+Microsoft Store path. Work through it top to bottom;
 each section ends with a way to verify it. The companion `release-setup.md` explains how the
 pipeline works once this is done.
 
 > Where to set things: **Settings → Secrets and variables → Actions** (repository-level), and
-> **Settings → Environments** for the two environments below. Anything marked *environment secret*
+> **Settings → Environments** for channel-specific environments below. Anything marked *environment secret*
 > must be created **inside** that environment, not at repository level, because the workflows declare
-> `environment: windows-release` / `environment: macos-release` and only see secrets scoped there.
+> `environment: windows-release`, `macos-release`, or `microsoft-store`.
 
 ---
 
@@ -16,12 +17,15 @@ pipeline works once this is done.
 
 | Item | Where | Value / action |
 |---|---|---|
-| Environments | Settings → Environments | Create `windows-release` and `macos-release` (**not created yet** — only `copilot` and `github-pages` exist). Optionally add yourself as a required reviewer so a tag push pauses for approval before signing. |
-| Workflow permissions | Settings → Actions → General → Workflow permissions | **Read and write permissions**, and tick **Allow GitHub Actions to create and approve pull requests**. **Currently `read` / disabled**, which would make the release workflows fail at the "Create release metadata pull request" step. |
+| Direct-release environments | Settings → Environments | Create `windows-release` and `macos-release` if absent; neither was present during the configuration review. Add reviewers according to signing policy. |
+| Store environment | Settings → Environments → `microsoft-store` | Already exists with credentials/product configuration, but reviewer protection was absent. Require independent reviewers, prevent self-review, and disable administrator bypass before any diagnostic or submission. |
+| Workflow permissions | Settings → Actions → General → Workflow permissions | Keep default permissions read-only. Direct/mac jobs declare needed write permissions explicitly. Enable Actions pull-request creation only if repository policy allows the metadata PRs; the Store workflow does not create PRs and needs only read permissions. |
 | GitHub Pages | Settings → Pages | Already configured for `localmorph.com` via `deploy.yml`. The desktop app reads `https://localmorph.com/appcast.xml` and `appcast-windows.xml`; both placeholders exist in `public/`. Nothing to change. |
 | Branch protection (optional) | Settings → Branches | If `main` requires reviews, the auto-created release-metadata PRs will wait for you; merge them to publish the appcast/cask. |
 
-**Verify:** `gh api repos/jamesmontemagno/my-file-converter/environments -q '.environments[].name'` lists both environments.
+**Verify:** `gh api repos/jamesmontemagno/my-file-converter/environments -q '.environments[].name'`
+lists the intended environments. Check Store reviewer protections separately; environment existence
+alone is insufficient.
 
 ---
 
@@ -224,10 +228,14 @@ Tag format: `vMAJOR.MINOR.PATCH[-REV]-windows|mac` — the optional fourth numbe
 | env `macos-release` | `APP_PASSWORD` | mac-release.yml |
 | env `macos-release` | `APPLE_TEAM_ID` | mac-release.yml |
 | env `macos-release` | `SPARKLE_PRIVATE_KEY` | mac-release.yml |
-| (built-in) | `GITHUB_TOKEN` | all — needs *Read and write* + *create PRs* (section 0) |
+| repository | `MICROSOFT_STORE_IDENTITY_NAME`, `MICROSOFT_STORE_PUBLISHER`, `MICROSOFT_STORE_PUBLISHER_DISPLAY_NAME` | windows-store-publish.yml package identity |
+| repository (fallback) | `MICROSOFT_STORE_PRODUCT_ID` | Store product ID if the environment variable is absent |
+| env `microsoft-store` | `PARTNER_CENTER_TENANT_ID`, `PARTNER_CENTER_SELLER_ID`, `PARTNER_CENTER_CLIENT_ID`, `PARTNER_CENTER_CLIENT_SECRET` | protected Store diagnose/publish |
+| (built-in) | `GITHUB_TOKEN` | job-scoped permissions; Store uses read only, metadata PR creation is channel-specific |
 
-No Actions **variables** (`vars.*`) are required; all non-secret configuration is in the workflow `env:`
-blocks (`PACKAGE_FAMILY_NAME`, `SPARKLE_VERSION`, project paths).
+Actions **variables**: `MICROSOFT_STORE_PRODUCT_ID` in `microsoft-store`, plus repository-level
+`FFMPEG_COMPLIANCE_URL` and `FFMPEG_COMPLIANCE_SHA256`. Other direct-channel constants remain in
+workflow `env:` blocks (`PACKAGE_FAMILY_NAME`, `SPARKLE_VERSION`, project paths).
 
 Paste-ready `gh` commands once you have the values (run from the repo root):
 
@@ -254,8 +262,38 @@ Each `gh secret set` without a value prompts for it interactively so nothing lan
 
 - **Code-signing certificate files in the repo** — Windows uses Azure OIDC; macOS imports the `.p12`
   from a secret into a throwaway keychain and deletes it afterwards.
-- **Bundled FFmpeg** — winget and the cask install `Gyan.FFmpeg` / `ffmpeg` as dependencies. To ship a
-  zero-dependency build instead, drop binaries under `dotnet/src/LocalMorph.App/Resources/ffmpeg/<rid>/`
-  (see the README there) and remove the dependency lines in the workflows/cask.
-- **Microsoft Store / Mac App Store** — not wired up. The MSIX is sideload/winget only and the Mac
-  build is Developer ID (not sandboxed), so a Store variant would need a separate manifest/entitlements.
+- **Bundled FFmpeg for direct channels** — winget and the cask install `Gyan.FFmpeg` / `ffmpeg` as
+  dependencies. The Microsoft Store channel is different: it requires pinned bundled FFmpeg/ffprobe
+  with approved corresponding sources/notices, and bundles .NET.
+- **Mac App Store** — not wired up. The macOS build remains Developer ID, not sandboxed.
+
+---
+
+## Microsoft Store and native Explorer release gate
+
+Use the complete [Store release setup](release-setup.md#microsoft-store-separate-identity-payload-and-approval)
+before dispatching the new workflow:
+
+- [ ] Confirm the Store identity secrets and canonical environment Product ID match Partner Center.
+- [ ] Configure the required reviewer gate, prevent self-review, disable administrator bypass, and
+  verify protection can be read by the workflow. Do not change GitHub settings without authorization.
+- [ ] Review the exact pinned GPL FFmpeg redistribution and corresponding sources/build instructions/
+  third-party notices; configure the public archive URL and SHA256. Do not treat a nonempty ZIP as
+  legal approval.
+- [ ] Ensure native C++ v143 and SDK tools exist for x64 **and** ARM64. Local x64 compilation is not
+  proof of ARM64 compilation or runtime behavior.
+- [ ] Build package-only from an exact valid Store tag (`v1.0.0-windows`, fourth component zero).
+  Verify the real `.msixupload`, architecture-matched payloads and source-commit provenance.
+- [ ] Run WACK and clean-install/conversion checks on native x64 and ARM64 without system .NET or
+  FFmpeg. Confirm Store-resolved Windows App SDK frameworks.
+- [ ] Verify the installed Explorer command with multi-selection, spaces/Unicode, cold/warm/minimized
+  activation, unsupported selections and uninstall. It must queue only, not convert or change defaults.
+- [ ] Verify keyboard/foreground queue and history menus, join ordering, split output selection,
+  partial outputs, saved-settings restoration, scaled layouts, and accessibility.
+- [ ] Validate Mac Catalyst compilation/runtime separately on macOS.
+- [ ] Only after package/install validation, run protected **diagnose** for read-only account/app access.
+- [ ] Obtain explicit submission intent and independent environment approval before manual **publish**.
+  Review processing/certification status in Partner Center; upload success is not Store availability.
+
+No actual Store upload, WACK pass, ARM64 runtime pass, or submission is implied by the helper tests
+or a successful unpackaged Windows build.

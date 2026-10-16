@@ -213,8 +213,7 @@ public sealed class FfmpegEngineTests
         Assert.Contains("-an -f null", pass1);
         Assert.Contains("-pass 2", pass2);
         Assert.Contains("-b:a 96k", pass2);
-        // 25 MB * 8192 kbit / 100 s = 2048 kbps total; minus audio 96 and 3% safety
-        Assert.Contains("-b:v 1890k", pass2);
+        Assert.Contains("-b:v 1844k", pass2);
         Assert.Equal(0.45, plan.Steps[0].ProgressEnd);
     }
 

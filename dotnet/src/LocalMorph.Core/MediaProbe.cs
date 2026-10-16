@@ -26,8 +26,14 @@ public sealed record SourceMediaInfo(
     string? ContainerName = null,
     double? Rotation = null,
     IReadOnlyList<MediaStreamInfo>? Streams = null,
-    int ChapterCount = 0)
+    int ChapterCount = 0,
+    string? PixelFormat = null,
+    string? ColorTransfer = null,
+    string? ColorPrimaries = null,
+    string? ColorSpace = null,
+    string? ColorRange = null)
 {
+    public bool IsHdr => ColorTransfer is "smpte2084" or "arib-std-b67";
     public IReadOnlyList<MediaStreamInfo> AudioStreams => Streams?.Where(stream => stream.Type == MediaStreamType.Audio).ToList() ?? [];
     public IReadOnlyList<MediaStreamInfo> SubtitleStreams => Streams?.Where(stream => stream.Type == MediaStreamType.Subtitle).ToList() ?? [];
 }
@@ -52,7 +58,8 @@ public sealed record MediaStreamInfo(
     string? ChannelLayout = null,
     bool IsDefault = false,
     bool IsForced = false,
-    bool IsAttachedPicture = false)
+    bool IsAttachedPicture = false,
+    StreamSignature? Signature = null)
 {
     private static readonly HashSet<string> PictureSubtitleCodecs = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -137,6 +144,12 @@ public sealed record MediaStreamInfo(
     }
 }
 
+public sealed record StreamSignature(
+    string? CodecTag, string? Profile, int? Level, string? ExtraDataHash, int? ExtraDataSize,
+    int? Width, int? Height, string? PixelFormat, string? FrameRate, string? TimeBase,
+    int? SampleRate, string? SampleFormat, string? ColorTransfer, string? ColorPrimaries,
+    string? ColorSpace, string? ColorRange, double? Rotation);
+
 public static class MediaProbe
 {
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -169,7 +182,8 @@ public static class MediaProbe
         foreach (var argument in new[]
         {
             "-v", "error", "-print_format", "json", "-show_entries",
-            "format=duration,bit_rate,format_name:stream=index,codec_type,codec_name,width,height,avg_frame_rate,sample_rate,channels,channel_layout:stream_side_data=rotation:stream_tags=rotate,language,title:stream_disposition=default,forced,attached_pic:chapter=id", inputPath
+            "format=duration,bit_rate,format_name:stream=index,codec_type,codec_name,codec_tag_string,profile,level,extradata_hash,extradata_size,width,height,pix_fmt,color_transfer,color_primaries,color_space,color_range,avg_frame_rate,time_base,sample_fmt,sample_rate,channels,channel_layout:stream_side_data=rotation:stream_tags=rotate,language,title:stream_disposition=default,forced,attached_pic:chapter=id",
+            "-show_data_hash", "sha256", inputPath
         })
         {
             process.StartInfo.ArgumentList.Add(argument);
@@ -245,7 +259,13 @@ public static class MediaProbe
                     GetString(stream, "channel_layout"),
                     GetDisposition(stream, "default"),
                     GetDisposition(stream, "forced"),
-                    attachedPicture));
+                    attachedPicture,
+                    new StreamSignature(GetString(stream, "codec_tag_string"), GetString(stream, "profile"),
+                        GetInt(stream, "level"), GetString(stream, "extradata_hash"), GetInt(stream, "extradata_size"),
+                        GetInt(stream, "width"), GetInt(stream, "height"), GetString(stream, "pix_fmt"),
+                        GetString(stream, "avg_frame_rate"), GetString(stream, "time_base"), GetInt(stream, "sample_rate"),
+                        GetString(stream, "sample_fmt"), GetString(stream, "color_transfer"), GetString(stream, "color_primaries"),
+                        GetString(stream, "color_space"), GetString(stream, "color_range"), GetRotation(stream))));
                 position++;
             }
         }
@@ -277,7 +297,12 @@ public static class MediaProbe
             container,
             GetRotation(videoStream),
             streamInfos,
-            chapterCount);
+            chapterCount,
+            GetString(videoStream, "pix_fmt"),
+            GetString(videoStream, "color_transfer"),
+            GetString(videoStream, "color_primaries"),
+            GetString(videoStream, "color_space"),
+            GetString(videoStream, "color_range"));
     }
 
     private static bool GetDisposition(JsonElement stream, string name) =>

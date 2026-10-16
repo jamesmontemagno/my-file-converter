@@ -5,11 +5,13 @@ on:
     paths:
       - 'dotnet/**'
       - 'README.md'
+      - 'scripts/windows/**'
       - '.github/workflows/bridge-ci.yml'
   pull_request:
     paths:
       - 'dotnet/**'
       - 'README.md'
+      - 'scripts/windows/**'
       - '.github/workflows/bridge-ci.yml'
 
 permissions:
@@ -49,6 +51,14 @@ jobs:
           dotnet-version: 10.0.x
       - run: dotnet workload install maui-windows
       - run: dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-windows10.0.19041.0 --configuration Release -p:WindowsOnly=true
+      - name: Test Store helpers
+        shell: pwsh
+        run: .\scripts\windows\Test-StoreScripts.ps1
+      - name: Compile architecture-matched Explorer commands
+        shell: pwsh
+        run: |
+          .\scripts\windows\Build-Shell.ps1 -Architecture x64 -OutputDirectory artifacts\native-shell\x64
+          .\scripts\windows\Build-Shell.ps1 -Architecture ARM64 -OutputDirectory artifacts\native-shell\ARM64
 
   desktop-app-mac:
     runs-on: macos-26

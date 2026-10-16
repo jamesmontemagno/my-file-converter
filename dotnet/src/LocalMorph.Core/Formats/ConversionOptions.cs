@@ -67,6 +67,15 @@ public sealed record ConversionOptions
     public double PlaybackSpeed { get; init; } = 1.0;
     public int VolumePercent { get; init; } = 100;
     public bool NormalizeAudio { get; init; }
+    public bool MeasureLoudness { get; init; }
+    public double TargetLoudness { get; init; } = -16;
+    public double TruePeak { get; init; } = -1.5;
+    public bool TrimSilence { get; init; }
+    public double SilenceThresholdDb { get; init; } = -50;
+    public double MinimumSilenceSeconds { get; init; } = 0.5;
+    public bool ToneMapToSdr { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<LoudnessMeasurement>? LoudnessMeasurements { get; init; }
     public bool FastStart { get; init; } = true;
 
     // ---- tracks ----
@@ -107,6 +116,13 @@ public sealed record ConversionOptions
 
     public string? Validate(OutputFormat format)
     {
+        if (!double.IsFinite(TargetLoudness) || TargetLoudness is < -70 or > -5) return "Loudness must be between -70 and -5 LUFS.";
+        if (!double.IsFinite(TruePeak) || TruePeak is < -9 or > 0) return "True peak must be between -9 and 0 dBTP.";
+        if (!double.IsFinite(SilenceThresholdDb) || SilenceThresholdDb is < -90 or > -10) return "Silence threshold must be between -90 and -10 dB.";
+        if (!double.IsFinite(MinimumSilenceSeconds) || MinimumSilenceSeconds is < 0.05 or > 10) return "Minimum silence must be between 0.05 and 10 seconds.";
+        if (TrimSilence && format.Category != MediaCategory.Audio) return "Edge-silence trimming requires an audio output format.";
+        if ((MeasureLoudness || TrimSilence) && (!format.Supports(FormatFeatures.AudioTuning) || format.AudioCodec is null or "copy")) return "Audio analysis requires an encoded audio track, not stream copy.";
+        if (ToneMapToSdr && !format.Supports(FormatFeatures.VideoFilters)) return "HDR-to-SDR requires a video format that re-encodes the picture.";
         if (Quality is < 1 or > 100) return "Quality must be between 1 and 100.";
         if (TargetHeight is { } height && (height < 16 || height > 8192)) return "Resolution must be between 16 and 8192 pixels tall.";
         if (FrameRate is { } fps && (fps < 1 || fps > 240)) return "Frame rate must be between 1 and 240.";
@@ -131,5 +147,15 @@ public sealed record ConversionOptions
         if (!string.IsNullOrWhiteSpace(ExternalSubtitlePath) && !File.Exists(ExternalSubtitlePath)) return $"The subtitle file {Path.GetFileName(ExternalSubtitlePath)} no longer exists.";
         if (!string.IsNullOrWhiteSpace(ExternalSubtitlePath) && SourceClassifier.Classify(ExternalSubtitlePath) != MediaCategory.Subtitle) return "Subtitle files must be .srt, .vtt, .ass, or .ssa.";
         return null;
+    }
+
+}
+
+public sealed record LoudnessMeasurement(int Track, double Integrated, double Peak, double Range, double Threshold, double Offset)
+{
+    public string Filter(double target, double peak)
+    {
+        static string N(double value) => value.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture);
+        return $"loudnorm=I={N(target)}:TP={N(peak)}:LRA=11:measured_I={N(Integrated)}:measured_TP={N(Peak)}:measured_LRA={N(Range)}:measured_thresh={N(Threshold)}:offset={N(Offset)}:linear=true";
     }
 }

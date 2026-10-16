@@ -15,12 +15,12 @@ public static class FileActivationService
     private static Func<IReadOnlyList<string>, Task>? handler;
 
     public static event Action? Activated;
+    public static event Action<string>? Failed;
 
     public static void Open(IEnumerable<string> paths)
     {
         var list = paths
             .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Where(path => Directory.Exists(path) || File.Exists(path) && SourceClassifier.Classify(path) != MediaCategory.Unknown)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         Func<IReadOnlyList<string>, Task>? current;
@@ -55,7 +55,7 @@ public static class FileActivationService
         MainThread.BeginInvokeOnMainThread(async () =>
         {
             try { await target(paths); }
-            catch { }
+            catch (Exception ex) { Failed?.Invoke($"Could not open activated files: {ex.Message}"); }
         });
 
     /// <summary>Extensions the desktop app registers as a handler for, grouped as the OS manifests want them.</summary>
@@ -64,6 +64,7 @@ public static class FileActivationService
         ["video"] = [".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi", ".wmv", ".flv", ".mpg", ".mpeg", ".ts", ".m2ts", ".mts", ".3gp", ".ogv", ".vob", ".mxf"],
         ["audio"] = [".mp3", ".wav", ".aac", ".m4a", ".flac", ".ogg", ".oga", ".opus", ".wma", ".aiff", ".aif", ".amr", ".ac3", ".mka", ".caf"],
         ["image"] = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".heic", ".heif", ".avif", ".jxl", ".svg", ".psd", ".ico", ".tga", ".dds", ".exr"],
-        ["document"] = [".pdf", ".docx", ".doc", ".odt", ".rtf", ".md", ".markdown", ".html", ".htm", ".epub", ".xlsx", ".xls", ".ods", ".csv", ".pptx", ".ppt", ".odp"]
+        ["document"] = [".pdf", ".docx", ".doc", ".odt", ".rtf", ".md", ".markdown", ".html", ".htm", ".epub", ".xlsx", ".xls", ".ods", ".csv", ".pptx", ".ppt", ".odp"],
+        ["subtitle"] = [".srt", ".vtt", ".ass", ".ssa"]
     };
 }

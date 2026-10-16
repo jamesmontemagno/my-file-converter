@@ -3,6 +3,8 @@ using LocalMorph.Core.Updates;
 
 namespace LocalMorph.App.Services;
 
+public sealed record UpdateCheckResult(UpdateInfo? Update, string? Error = null);
+
 /// <summary>Checks localmorph.com for a newer release once a day and remembers what the user skipped.</summary>
 public sealed class UpdateService
 {
@@ -38,7 +40,7 @@ public sealed class UpdateService
 
     public bool AutomaticChecks
     {
-        get => preferences.Get("update-auto-check", true);
+        get => !Distribution.IsStoreBuild && preferences.Get("update-auto-check", true);
         set => preferences.Set("update-auto-check", value);
     }
 
@@ -56,27 +58,29 @@ public sealed class UpdateService
 
     public bool IsDue => AutomaticChecks && DateTimeOffset.UtcNow - LastCheck > CheckInterval;
 
-    /// <summary>Returns an update newer than the running build, or null. Never throws.</summary>
-    public async Task<UpdateInfo?> CheckAsync(bool force = false, CancellationToken token = default)
+    public async Task<UpdateCheckResult> CheckAsync(bool force = false, CancellationToken token = default)
     {
-        if (!force && !IsDue) return null;
+        if (Distribution.IsStoreBuild || !force && !IsDue) return new(null);
         try
         {
             var xml = await Http.GetStringAsync(FeedUrl, token);
-            LastCheck = DateTimeOffset.UtcNow;
+            System.Xml.Linq.XDocument.Parse(xml);
             var arch = RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "arm64" : "x64";
             var update = AppcastReader.Parse(xml, arch);
-            if (update is null || !AppcastReader.IsNewer(update, CurrentVersion)) return null;
-            if (!force && string.Equals(SkippedVersion, update.DisplayVersion, StringComparison.OrdinalIgnoreCase)) return null;
-            return update;
+            if (update is null) return new(null, "The update feed contains no usable releases. Try again later.");
+            LastCheck = DateTimeOffset.UtcNow;
+            if (!AppcastReader.IsNewer(update, CurrentVersion)) return new(null);
+            if (!force && string.Equals(SkippedVersion, update.DisplayVersion, StringComparison.OrdinalIgnoreCase)) return new(null);
+            return new(update);
         }
-        catch
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or System.Xml.XmlException)
         {
-            return null;
+            return new(null, $"Could not check for updates: {ex.Message}");
         }
     }
 
-    public static string InstallHint => OperatingSystem.IsWindows()
+    public static string InstallHint => Distribution.IsStoreBuild ? "Updates are managed by Microsoft Store." : OperatingSystem.IsWindows()
         ? "winget upgrade Refractored.LocalMorph"
         : "brew upgrade --cask localmorph";
 }

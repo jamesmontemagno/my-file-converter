@@ -7,6 +7,7 @@
              xmlns:conv="clr-namespace:LocalMorph.App.Converters"
              xmlns:jobs="clr-namespace:LocalMorph.Core.Jobs;assembly=LocalMorph.Core"
              x:Class="LocalMorph.App.MainPage"
+             x:Name="DesktopPage"
              x:DataType="vm:MainViewModel"
              Title="LocalMorph"
              Background="{OnPlatform WinUI=Transparent, Default={AppThemeBinding Light={StaticResource PageLight}, Dark={StaticResource PageDark}}}">
@@ -23,6 +24,25 @@
         <!-- ============ Queue row ============ -->
         <DataTemplate x:Key="FileRowTemplate" x:DataType="vm:FileItemViewModel">
             <Border Style="{StaticResource Card}" Padding="14,12" Margin="0,0,0,8" AutomationId="FileRow">
+                <FlyoutBase.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Preview this file" Command="{Binding SelectCommand}" />
+                        <MenuFlyoutItem Text="Show original in folder" Command="{Binding RevealSourceCommand}" />
+                        <MenuFlyoutItem Text="Copy original path" Command="{Binding CopyPathCommand}" />
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="Open result" Command="{Binding OpenOutputCommand}" IsEnabled="{Binding HasOutput}" />
+                        <MenuFlyoutItem Text="Show result in folder" Command="{Binding RevealOutputCommand}" IsEnabled="{Binding HasOutput}" />
+                        <MenuFlyoutItem Text="Retry / convert again" Command="{Binding RetryCommand}" IsEnabled="{Binding CanRetry}" />
+                        <MenuFlyoutItem Text="Copy diagnostics" Command="{Binding CopyDiagnosticsCommand}" />
+                        <MenuFlyoutItem Text="Copy all result paths" Command="{Binding CopyOutputPathsCommand}" IsEnabled="{Binding HasOutput}" />
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="Move earlier in join order" Command="{Binding MoveUpCommand}" IsEnabled="{Binding CanMoveUp}" />
+                        <MenuFlyoutItem Text="Move later in join order" Command="{Binding MoveDownCommand}" IsEnabled="{Binding CanMoveDown}" />
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="Cancel conversion" Command="{Binding CancelCommand}" IsEnabled="{Binding CanCancel}" />
+                        <MenuFlyoutItem Text="Remove from queue" Command="{Binding RemoveCommand}" IsEnabled="{Binding CanRemove}" />
+                    </MenuFlyout>
+                </FlyoutBase.ContextFlyout>
                 <Border.Triggers>
                     <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
                         <Setter Property="Stroke" Value="{StaticResource Accent}" />
@@ -155,7 +175,18 @@
         <!-- ============ History row ============ -->
         <DataTemplate x:Key="HistoryTemplate" x:DataType="jobs:HistoryEntry">
             <Border Style="{StaticResource Card}" Padding="14,12" Margin="0,0,0,8">
-                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="4">
+                <FlyoutBase.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Open result / choose clip" Command="{Binding Source={x:Reference DesktopPage}, Path=BindingContext.OpenHistoryOutputCommand}" CommandParameter="{Binding .}" IsEnabled="{Binding OutputExists}" />
+                        <MenuFlyoutItem Text="Show result in folder" Command="{Binding Source={x:Reference DesktopPage}, Path=BindingContext.RevealHistoryOutputCommand}" CommandParameter="{Binding .}" IsEnabled="{Binding OutputExists}" />
+                        <MenuFlyoutItem Text="Copy all result paths" Command="{Binding Source={x:Reference DesktopPage}, Path=BindingContext.CopyHistoryOutputsCommand}" CommandParameter="{Binding .}" />
+                        <MenuFlyoutItem Text="Copy original paths" Command="{Binding Source={x:Reference DesktopPage}, Path=BindingContext.CopyHistorySourcesCommand}" CommandParameter="{Binding .}" />
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="Load original operation again" Command="{Binding Source={x:Reference DesktopPage}, Path=BindingContext.ReconvertFromHistoryCommand}" CommandParameter="{Binding .}" />
+                        <MenuFlyoutItem Text="Remove history entry (keep files)" Command="{Binding Source={x:Reference DesktopPage}, Path=BindingContext.RemoveHistoryEntryCommand}" CommandParameter="{Binding .}" />
+                    </MenuFlyout>
+                </FlyoutBase.ContextFlyout>
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="4">
                     <Label Text="{Binding OutputName}" Style="{StaticResource BodyStrong}" LineBreakMode="MiddleTruncation" />
                     <HorizontalStackLayout Grid.Row="1" Spacing="10">
                         <Label Text="{Binding CompletedAt, Converter={StaticResource Relative}}" Style="{StaticResource Muted}" />
@@ -164,6 +195,7 @@
                         <Label Text="{Binding SizeChange}" Style="{StaticResource Muted}" TextColor="{StaticResource Success}" />
                         <Label Text="{Binding SourceName, StringFormat='from {0}'}" Style="{StaticResource Muted}" LineBreakMode="MiddleTruncation" />
                     </HorizontalStackLayout>
+                    <Label Grid.Row="2" Text="{Binding OperationLabel}" Style="{StaticResource Muted}" />
                     <HorizontalStackLayout Grid.Column="1" Grid.RowSpan="2" Spacing="2" VerticalOptions="Center">
                         <Button Style="{StaticResource IconButton}" Text="{x:Static local:Icons.Open}" ToolTipProperties.Text="Open" Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=OpenHistoryOutputCommand}" CommandParameter="{Binding .}" />
                         <Button Style="{StaticResource IconButton}" Text="{x:Static local:Icons.FolderOpen}" ToolTipProperties.Text="Show in folder" Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=RevealHistoryOutputCommand}" CommandParameter="{Binding .}" />
@@ -277,11 +309,16 @@
         </Grid>
 
         <!-- ===================== Convert workspace ===================== -->
-        <Grid Grid.Row="1" x:Name="Workspace" IsVisible="{Binding IsConvertView}" ColumnDefinitions="*,440" ColumnSpacing="16" Padding="24,8,24,16">
+        <Grid Grid.Row="1" x:Name="Workspace" IsVisible="{Binding IsConvertView}" ColumnDefinitions="3*,2*" RowDefinitions="*,Auto" ColumnSpacing="16" Padding="24,8,24,16">
 
             <!-- Left: queue + preview -->
-            <ScrollView Grid.Column="0">
-                <VerticalStackLayout Spacing="14">
+            <Grid Grid.Column="0" Grid.RowSpan="2" RowSpacing="14">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition x:Name="QueueRow" Height="2*" />
+                    <RowDefinition x:Name="PreviewRow" Height="3*" />
+                </Grid.RowDefinitions>
                     <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" ColumnSpacing="8">
                         <Button Style="{StaticResource PrimaryButton}" HeightRequest="40" Text="Add files" Command="{Binding AddFilesCommand}" AutomationId="AddFilesButton">
                             <Button.ImageSource>
@@ -299,7 +336,7 @@
                     </Grid>
 
                     <!-- Empty state / drop zone -->
-                    <Border IsVisible="{Binding HasNoFiles}" Padding="36" StrokeThickness="1.5" StrokeDashArray="6,4" StrokeShape="RoundRectangle 12" MinimumHeightRequest="300"
+                    <Border Grid.Row="2" Grid.RowSpan="2" IsVisible="{Binding HasNoFiles}" Padding="36" StrokeThickness="1.5" StrokeDashArray="6,4" StrokeShape="RoundRectangle 12"
                             Stroke="{AppThemeBinding Light=#B8C4D6, Dark=#3A4656}"
                             Background="{AppThemeBinding Light={StaticResource CardLight}, Dark={StaticResource CardDark}}" AutomationId="DropZone">
                         <Border.Triggers>
@@ -314,7 +351,7 @@
                         <VerticalStackLayout Spacing="10" VerticalOptions="Center" HorizontalOptions="Center">
                             <Image Source="localmorph_logo.png" WidthRequest="72" HeightRequest="72" HorizontalOptions="Center" Margin="0,0,0,6" />
                             <Label Text="Drop files here" Style="{StaticResource Title}" HorizontalTextAlignment="Center" />
-                            <Label Text="or click to browse. Add as many as you like — they'll convert in parallel." Style="{StaticResource Muted}" HorizontalTextAlignment="Center" />
+                            <Label Text="or click to browse. Add up to 2,000 files per import; they'll convert in parallel." Style="{StaticResource Muted}" HorizontalTextAlignment="Center" />
                             <FlexLayout Wrap="Wrap" JustifyContent="Center" Margin="0,10,0,0">
                                 <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Video · MP4, MKV, MOV, WebM, AVI" FontSize="11" TextColor="{StaticResource Accent}" FontFamily="OpenSansSemibold" /></Border>
                                 <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Audio · MP3, FLAC, WAV, M4A, Opus" FontSize="11" TextColor="{StaticResource Accent}" FontFamily="OpenSansSemibold" /></Border>
@@ -326,11 +363,11 @@
                     </Border>
 
                     <!-- Queue -->
-                    <CollectionView ItemsSource="{Binding Files}" ItemTemplate="{StaticResource FileRowTemplate}" IsVisible="{Binding HasFiles}"
+                    <CollectionView Grid.Row="2" ItemsSource="{Binding Files}" ItemTemplate="{StaticResource FileRowTemplate}" IsVisible="{Binding HasFiles}"
                                     SelectionMode="None" AutomationId="FileList" />
 
                     <!-- Drop hint when list has items -->
-                    <Border IsVisible="{Binding HasFiles}" Padding="12" StrokeThickness="1" StrokeDashArray="5,4" StrokeShape="RoundRectangle 10"
+                    <Border Grid.Row="1" Padding="12" StrokeThickness="1" StrokeDashArray="5,4" StrokeShape="RoundRectangle 10"
                             Stroke="{AppThemeBinding Light=#C7D2E2, Dark=#334054}" Background="Transparent">
                         <Border.Triggers>
                             <DataTrigger TargetType="Border" Binding="{Binding IsDragOver}" Value="True">
@@ -338,28 +375,30 @@
                                 <Setter Property="Background" Value="{AppThemeBinding Light={StaticResource AccentSoftLight}, Dark={StaticResource AccentSoftDark}}" />
                             </DataTrigger>
                         </Border.Triggers>
-                        <Border.GestureRecognizers>
-                            <TapGestureRecognizer Command="{Binding AddFilesCommand}" />
-                        </Border.GestureRecognizers>
-                        <HorizontalStackLayout Spacing="8" HorizontalOptions="Center">
-                            <Label Style="{StaticResource IconMuted}" Text="{x:Static local:Icons.Add}" FontSize="16" />
-                            <Label Text="Drop more files here, or click to browse" Style="{StaticResource Muted}" VerticalOptions="Center" />
-                        </HorizontalStackLayout>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <Label Text="{Binding ImportSummary}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="WordWrap" AutomationId="ImportSummary" />
+                            <Button Grid.Column="1" Text="Cancel import" Style="{StaticResource GhostButton}" Command="{Binding CancelImportCommand}" IsVisible="{Binding IsImporting}" AutomationId="CancelImportButton" />
+                        </Grid>
                     </Border>
 
                     <!-- Preview & per-file controls -->
-                    <Border Style="{StaticResource Card}" IsVisible="{Binding HasSelectedFile}" AutomationId="PreviewPanel">
-                        <VerticalStackLayout Spacing="12" BindingContext="{Binding SelectedFile}" x:DataType="vm:FileItemViewModel">
-                            <Grid ColumnDefinitions="*,Auto">
+                    <Border Grid.Row="3" IsVisible="{Binding HasSelectedFile}" Style="{StaticResource Card}" AutomationId="PreviewPanel">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="12" BindingContext="{Binding SelectedFile}" x:DataType="vm:FileItemViewModel">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                                 <VerticalStackLayout Spacing="2">
                                     <Label Text="PREVIEW" Style="{StaticResource Eyebrow}" />
                                     <Label Text="{Binding FileName}" Style="{StaticResource SectionTitle}" LineBreakMode="MiddleTruncation" />
                                 </VerticalStackLayout>
-                                <Button Grid.Column="1" Style="{StaticResource GhostButton}" Text="Show original" Command="{Binding RevealSourceCommand}" VerticalOptions="Start" />
+                                <Button Grid.Column="1" x:Name="PreviewSizeButton" Style="{StaticResource SecondaryButton}" Text="Expand preview"
+                                        Clicked="OnTogglePreviewSize" VerticalOptions="Center" AutomationId="PreviewSizeButton"
+                                        ToolTipProperties.Text="Give the preview more space while keeping the queue visible" />
+                                <Button Grid.Column="2" Style="{StaticResource GhostButton}" Text="Show original" Command="{Binding RevealSourceCommand}" VerticalOptions="Start" />
                             </Grid>
 
+                            <ScrollView Grid.Row="1" x:Name="PreviewInspector" AutomationId="PreviewInspector" SizeChanged="OnPreviewInspectorSizeChanged">
+                            <VerticalStackLayout Spacing="12">
                             <Border Padding="0" StrokeThickness="0" StrokeShape="RoundRectangle 8" Background="#0B0F16">
-                                <Grid HeightRequest="300">
+                                <Grid x:Name="PreviewSurface" HeightRequest="240">
                                     <toolkit:MediaElement x:Name="Player" AutomationId="PreviewMediaElement" ShouldAutoPlay="False" ShouldShowPlaybackControls="True" Aspect="AspectFit"
                                                           Background="#0B0F16" PositionChanged="OnPlayerPositionChanged" />
                                     <Image x:Name="PreviewImage" AutomationId="PreviewImage" Aspect="AspectFit" Background="#0B0F16" />
@@ -481,13 +520,29 @@
                                 </Grid>
                             </VerticalStackLayout>
                         </VerticalStackLayout>
+                        </ScrollView>
+                        </Grid>
                     </Border>
-                </VerticalStackLayout>
-            </ScrollView>
+            </Grid>
 
             <!-- Right: settings -->
-            <ScrollView Grid.Column="1" x:Name="SettingsColumn">
+            <ScrollView Grid.Column="1" x:Name="SettingsColumn" AutomationId="SettingsColumn">
                 <VerticalStackLayout Spacing="12">
+
+                    <Border Style="{StaticResource Card}" Padding="16,14">
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="TASK" Style="{StaticResource Eyebrow}" />
+                            <Picker Style="{StaticResource Select}" ItemsSource="{Binding OperationOptions}" SelectedItem="{Binding SelectedOperation}" AutomationId="OperationPicker" SemanticProperties.Description="Conversion task" IsEnabled="{Binding IsConverting, Converter={StaticResource Not}}" />
+                            <Label Text="{Binding OperationHint}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
+                            <VerticalStackLayout Spacing="8" IsVisible="{Binding IsSplit}">
+                                <Label Text="Clip duration (seconds on the source timeline)" Style="{StaticResource FieldLabel}" />
+                                <Entry Style="{StaticResource Input}" Text="{Binding SegmentSecondsText}" Keyboard="Numeric" AutomationId="SegmentDurationEntry" SemanticProperties.Description="Clip duration in source seconds" />
+                                <Picker Style="{StaticResource Select}" ItemsSource="{Binding SplitModeOptions}" SelectedItem="{Binding SelectedSplitMode}" AutomationId="SplitModePicker" SemanticProperties.Description="Split accuracy mode" />
+                                <Label Text="Fast mode requires a Remux / stream-copy format. Boundaries move to the next source keyframe and may be farther apart than requested." Style="{StaticResource Muted}" />
+                            </VerticalStackLayout>
+                            <Label Text="{Binding PreflightSummary}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" AutomationId="PreflightSummary" />
+                        </VerticalStackLayout>
+                    </Border>
 
                     <!-- Presets -->
                     <Border Style="{StaticResource Card}" Padding="16,14" IsVisible="{Binding HasPresets}">
@@ -595,11 +650,37 @@
                             </Grid>
                             <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding ShowAudio}">
                                 <VerticalStackLayout Spacing="0">
-                                    <Label Text="Normalize loudness" Style="{StaticResource FieldLabel}" />
-                                    <Label Text="Even out volume to a broadcast standard (-16 LUFS)." Style="{StaticResource Muted}" />
+                                    <Label Text="Quick loudness normalization" Style="{StaticResource FieldLabel}" />
+                                    <Label Text="Single-pass adjustment to -16 LUFS. Measured mode takes precedence." Style="{StaticResource Muted}" />
                                 </VerticalStackLayout>
                                 <Switch Grid.Column="1" Style="{StaticResource AccentSwitch}" IsToggled="{Binding NormalizeAudio}" />
                             </Grid>
+                            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding ShowAudio}">
+                                <VerticalStackLayout Spacing="0">
+                                    <Label Text="Measured loudness" Style="{StaticResource FieldLabel}" />
+                                    <Label Text="Analyze every retained track, then render using its measured values." Style="{StaticResource Muted}" />
+                                </VerticalStackLayout>
+                                <Switch Grid.Column="1" Style="{StaticResource AccentSwitch}" IsToggled="{Binding MeasureLoudness}" AutomationId="MeasuredLoudnessSwitch" SemanticProperties.Description="Measured loudness normalization" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="4" IsVisible="{Binding MeasureLoudness}">
+                                <Label Text="Target (LUFS)" Style="{StaticResource FieldLabel}" />
+                                <Label Grid.Column="1" Text="True peak ceiling (dBTP)" Style="{StaticResource FieldLabel}" />
+                                <Entry Grid.Row="1" Style="{StaticResource Input}" Text="{Binding TargetLoudnessText}" Keyboard="Numeric" SemanticProperties.Description="Target integrated loudness in LUFS" AutomationId="TargetLoudnessEntry" />
+                                <Entry Grid.Row="1" Grid.Column="1" Style="{StaticResource Input}" Text="{Binding TruePeakText}" Keyboard="Numeric" SemanticProperties.Description="True peak ceiling in dBTP" AutomationId="TruePeakEntry" />
+                            </Grid>
+                            <VerticalStackLayout Spacing="8" IsVisible="{Binding ShowTrimSilence}">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <VerticalStackLayout Spacing="0">
+                                        <Label Text="Trim edge silence" Style="{StaticResource FieldLabel}" />
+                                        <Label Text="Remove silent ends, keeping internal pauses. Entirely silent audio is reported, not saved as an empty file." Style="{StaticResource Muted}" />
+                                    </VerticalStackLayout>
+                                    <Switch Grid.Column="1" Style="{StaticResource AccentSwitch}" IsToggled="{Binding TrimSilence}" AutomationId="TrimSilenceSwitch" SemanticProperties.Description="Trim leading and trailing silence" />
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" IsVisible="{Binding TrimSilence}">
+                                    <Label Text="Silence threshold (dB, minimum 0.5 s)" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
+                                    <Entry Grid.Column="1" Style="{StaticResource Input}" Text="{Binding SilenceThresholdText}" Keyboard="Numeric" WidthRequest="90" SemanticProperties.Description="Edge silence threshold in decibels" AutomationId="SilenceThresholdEntry" />
+                                </Grid>
+                            </VerticalStackLayout>
                         </VerticalStackLayout>
                     </Border>
 
@@ -625,6 +706,13 @@
                     <!-- Edit & effects -->
                     <Border Style="{StaticResource Card}" Padding="16,14" IsVisible="{Binding ShowEditSection}" AutomationId="EditCard">
                         <VerticalStackLayout Spacing="12">
+                            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding ShowVideoFilters}">
+                                <VerticalStackLayout Spacing="0">
+                                    <Label Text="HDR to SDR" Style="{StaticResource FieldLabel}" />
+                                    <Label Text="Tone-map tagged PQ/HLG footage to BT.709. Known SDR stays SDR; untagged sources require a known color transfer." Style="{StaticResource Muted}" />
+                                </VerticalStackLayout>
+                                <Switch Grid.Column="1" Style="{StaticResource AccentSwitch}" IsToggled="{Binding ToneMapToSdr}" AutomationId="ToneMapSwitch" SemanticProperties.Description="Tone-map HDR to SDR BT.709" />
+                            </Grid>
                             <Label Text="EDIT &amp; EFFECTS" Style="{StaticResource Eyebrow}" />
                             <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowVideoFilters}">
                                 <VerticalStackLayout Spacing="4">
@@ -793,22 +881,6 @@
                         </HorizontalStackLayout>
                     </Border>
 
-                    <!-- Convert -->
-                    <Border Style="{StaticResource Card}" Padding="16,14">
-                        <VerticalStackLayout Spacing="10">
-                            <Button Style="{StaticResource PrimaryButton}" HeightRequest="48" FontSize="15" Text="{Binding ConvertButtonText}" Command="{Binding ConvertAllCommand}" IsEnabled="{Binding CanConvert}" AutomationId="ConvertButton">
-                                <Button.ImageSource>
-                                    <FontImageSource FontFamily="FluentIcons" Glyph="{x:Static local:Icons.Play}" Color="White" Size="18" />
-                                </Button.ImageSource>
-                            </Button>
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                <Label Text="{Binding BatchStatus}" Style="{StaticResource Muted}" VerticalOptions="Center" AutomationId="BatchStatus" />
-                                <Button Grid.Column="1" Style="{StaticResource DangerButton}" HeightRequest="34" FontSize="12" Text="Cancel all" Command="{Binding CancelAllCommand}" IsVisible="{Binding CanCancelAll}" AutomationId="CancelAllButton" />
-                                <Button Grid.Column="1" Style="{StaticResource GhostButton}" HeightRequest="34" FontSize="12" Text="Retry failed" Command="{Binding RetryFailedCommand}" IsVisible="{Binding HasFailed}" />
-                            </Grid>
-                        </VerticalStackLayout>
-                    </Border>
-
                     <!-- Command preview -->
                     <Border Style="{StaticResource Card}" Padding="16,14" IsVisible="{Binding HasFfmpeg}">
                         <VerticalStackLayout Spacing="10">
@@ -836,8 +908,19 @@
                     </Border>
                 </VerticalStackLayout>
             </ScrollView>
+            <Border Grid.Column="1" Grid.Row="1" Style="{StaticResource Card}" Padding="16,14" Margin="0,12,0,0">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Applies to the pending compatible files in this batch" Style="{StaticResource Muted}" />
+                    <Button Style="{StaticResource PrimaryButton}" HeightRequest="48" FontSize="15" Text="{Binding ConvertButtonText}" Command="{Binding ConvertAllCommand}" IsEnabled="{Binding CanConvert}" AutomationId="ConvertButton" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Label Text="{Binding BatchStatus}" Style="{StaticResource Muted}" VerticalOptions="Center" AutomationId="BatchStatus" />
+                        <Button Grid.Column="1" Style="{StaticResource DangerButton}" HeightRequest="34" FontSize="12" Text="Cancel all" Command="{Binding CancelAllCommand}" IsVisible="{Binding CanCancelAll}" AutomationId="CancelAllButton" />
+                        <Button Grid.Column="1" Style="{StaticResource GhostButton}" HeightRequest="34" FontSize="12" Text="Retry failed" Command="{Binding RetryFailedCommand}" IsVisible="{Binding HasFailed}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
             <!-- Format chooser: slides over the settings column so the long list is never clipped by the page scroller. -->
-            <Grid Grid.Column="1" IsVisible="{Binding IsFormatChooserOpen}" AutomationId="FormatChooser">
+            <Grid Grid.Column="1" Grid.RowSpan="2" IsVisible="{Binding IsFormatChooserOpen}" AutomationId="FormatChooser">
                 <Grid.GestureRecognizers>
                     <TapGestureRecognizer Command="{Binding ToggleFormatChooserCommand}" />
                 </Grid.GestureRecognizers>
@@ -944,7 +1027,8 @@
                             </Grid>
                         </Border>
 
-                        <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="Updates are managed by Microsoft Store. Check for updates opens the Store Downloads page." Style="{StaticResource Muted}" IsVisible="{Binding IsStoreBuild}" />
+                        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsDirectBuild}">
                             <VerticalStackLayout Spacing="0">
                                 <Label Text="Check for updates automatically" Style="{StaticResource FieldLabel}" />
                                 <Label Text="Looks at localmorph.com about once a day. Nothing about you or your files is sent." Style="{StaticResource Muted}" />

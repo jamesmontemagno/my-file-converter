@@ -1,0 +1,229 @@
+{
+  "capturedAt": "2026-10-16T15:38:10.1512189-07:00",
+  "build": "Windows x64 Release development build; same source UI, not a certified Store installation",
+  "generatedUi": false,
+  "operations": [
+    "3 video conversions, with first input trimmed to 1-10 seconds",
+    "1 compatible join of 3 clips",
+    "1 accurate split into 3 clips",
+    "3 JPEG-to-PNG conversions"
+  ],
+  "outputs": [
+    {
+      "name": "Coast at golden hour.png",
+      "bytes": 2401284,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "png",
+            "codec_type": "video",
+            "width": 1536,
+            "height": 864
+          }
+        ],
+        "format": {}
+      }
+    },
+    {
+      "name": "Coastal trail.png",
+      "bytes": 1988836,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "png",
+            "codec_type": "video",
+            "width": 1200,
+            "height": 900
+          }
+        ],
+        "format": {}
+      }
+    },
+    {
+      "name": "Coastal walk (2)-001.mp4",
+      "bytes": 1692249,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "4.000000"
+        }
+      }
+    },
+    {
+      "name": "Coastal walk (2)-002.mp4",
+      "bytes": 1618064,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "4.000000"
+        }
+      }
+    },
+    {
+      "name": "Coastal walk (2)-003.mp4",
+      "bytes": 1475353,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "4.000000"
+        }
+      }
+    },
+    {
+      "name": "Coastal walk-joined.mkv",
+      "bytes": 26821723,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          },
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "38.042000"
+        }
+      }
+    },
+    {
+      "name": "Coastal walk.mp4",
+      "bytes": 3465104,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "9.000000"
+        }
+      }
+    },
+    {
+      "name": "Headland sunset.mp4",
+      "bytes": 5779203,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "16.000000"
+        }
+      }
+    },
+    {
+      "name": "Ocean overlook.mp4",
+      "bytes": 3929444,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "10.000000"
+        }
+      }
+    },
+    {
+      "name": "Portrait coastline.png",
+      "bytes": 1014209,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "png",
+            "codec_type": "video",
+            "width": 640,
+            "height": 960
+          }
+        ],
+        "format": {}
+      }
+    }
+  ]
+}

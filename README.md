@@ -68,13 +68,25 @@ redistribute FFmpeg.
 
 ## LocalMorph Desktop (.NET MAUI)
 
-`dotnet/src/LocalMorph.App` is a native desktop app for Windows and macOS that converts
-**any number of files at once** with the tools already on your device — no browser limits.
+[`LocalMorph.App`](dotnet/src/LocalMorph.App) is a native .NET MAUI desktop app for Windows and
+macOS. Each import accepts up to **2,000 supported files**, with folder traversal through eight
+levels. Further imports can extend the queue; duplicates do not consume the import allowance.
 
 - **Batch queue** — add files or whole folders, drag & drop, "Open with" from Explorer/Finder, or pass
   paths on the command line (`LocalMorph.App.exe video.mov photo.heic`). The app is single-instance:
   opening more files while it's running adds them to the existing queue. Files convert in parallel
   with live progress, speed, and ETA; cancel any job or all of them.
+- **Clear batch scope** — one output format per batch, with preflight explaining ineligible files.
+  Trim and track choices belong to the selected file; other conversion settings apply to the batch.
+  Import and inspection are cancellable, and the import summary reports exclusions and errors.
+- **Join and split** — join compatible video clips in queue order using Remux, without re-encoding.
+  Mismatched streams are rejected rather than silently transcoded. Split by source-timeline duration:
+  accurate mode re-encodes; fast mode copies streams at source keyframes and may produce longer clips.
+  Completed clips remain available if a later clip fails or is canceled.
+- **Measured audio and HDR** — optional two-pass loudness normalization measures every retained
+  audio track (default -16 LUFS, -1.5 dBTP). Audio outputs can trim leading/trailing silence while
+  preserving internal pauses; entirely silent inputs report an error. PQ/HLG video can be explicitly
+  tone-mapped to BT.709 SDR when FFmpeg has the required filters.
 - **50+ output formats** — MP4 (H.264/H.265/AV1), MKV, MOV/ProRes, WebM, GIF, animated WebP/APNG,
   MP3, AAC, FLAC, ALAC, Opus, OGG, WAV/AIFF, PNG, JPEG, WebP, AVIF, JPEG XL, TIFF, BMP, ICO, HEIC,
   plus PDF/DOCX/XLSX/PPTX/ODT/EPUB/Markdown/HTML document conversion.
@@ -84,6 +96,10 @@ redistribute FFmpeg.
 - **Fine control** — quality, resolution (never upscales), frame rate, encoding speed, audio
   bitrate/sample rate/channels/bit depth, loudness normalization, trim from the media preview,
   frame grab at the current position, rotate, playback speed, strip metadata, lossless toggles.
+- **Roomier preview** — image/video previews grow with the window. Expand/collapse the bottom
+  inspector without restarting playback; the queue, preview header, and Convert action remain reachable.
+- **Adaptive settings panel** — Task, presets, output settings, and the Convert action widen together
+  with the window, while keeping the queue and preview in the larger share of the workspace.
 - **Audio tracks** — see every track with its language, channels, and title; keep just one (pick a
   language, drop the commentary), keep them all with your choice first and default, save any track as
   its own audio file, or **replace the soundtrack** with a new audio file (stream-copying the video).
@@ -105,18 +121,31 @@ redistribute FFmpeg.
   output. If the codec is missing, the Tools view and the queue show a *Get from Store* action that
   opens its Microsoft Store page. (Most iPhone photos also need the free "HEVC Video Extensions from
   Device Manufacturer"; the Tools view tells you when that decoder is absent.)
-- **History** — every finished conversion with size savings; reopen, reveal, or reconvert.
-- **Command preview** — see (and copy) the exact command that will run.
+- **Safe results** — conversions stage beside the destination and commit only after success.
+  Existing destinations survive failures/cancellation; queued source files are protected even with
+  Overwrite. Target-size limits use decimal MB (1 MB = 1,000,000 bytes) and budget retained audio tracks.
+- **Queue and history menus** — source/result actions, diagnostics, retry/cancel/remove, and queue
+  ordering. History remembers ordered inputs, requested settings, multiple outputs, and partial
+  results. Removing history never deletes result files.
+- **Windows Explorer command** — MSIX builds register **Convert with LocalMorph** for supported
+  files. Selection is queued in the existing instance, never auto-converted; default associations
+  are not changed. Installed-package activation still requires release validation.
+- **Command preview** — inspect/copy the planned conversion; analysis-dependent operations explain
+  their stages. Completed-job diagnostics retain the actual analysis and rendering commands.
 
 Build and run on Windows:
 
 ```powershell
-dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-windows10.0.19041.0
-dotnet test dotnet/tests/LocalMorph.Core.Tests   # unit + real-FFmpeg integration tests
+dotnet build .\dotnet\src\LocalMorph.App\LocalMorph.App.csproj -f net10.0-windows10.0.19041.0 -p:WindowsOnly=true
+dotnet test .\dotnet\tests\LocalMorph.Core.Tests   # unit + real-FFmpeg integration tests
 ```
 
-FFmpeg is required for media conversion (`winget install Gyan.FFmpeg` / `brew install ffmpeg`), or
-drop platform binaries under `dotnet/src/LocalMorph.App/Resources/ffmpeg/<rid>/` to bundle them.
+Direct/development builds need FFmpeg for media conversion (`winget install Gyan.FFmpeg` /
+`brew install ffmpeg`), or platform binaries under
+[`Resources/ffmpeg`](dotnet/src/LocalMorph.App/Resources/ffmpeg). Packaged Windows builds also need
+Visual Studio C++ v143 tools for each target architecture to build the native Explorer DLL;
+unpackaged development builds do not. Store builds instead require a pinned, reviewed FFmpeg
+redistribution payload and bundle .NET.
 
 ### Install the desktop app
 
@@ -126,9 +155,12 @@ brew tap jamesmontemagno/my-file-converter https://github.com/jamesmontemagno/my
 brew install --cask localmorph                                       # macOS 15+ (universal)
 ```
 
-Releases are tag-driven (`vX.Y.Z-windows`, `vX.Y.Z-mac`): signed MSIX + winget manifest on Windows,
-notarized universal `.app` + Sparkle appcast + Homebrew cask on macOS, and the app checks
-`localmorph.com/appcast*.xml` for updates. One-time setup (environments, secrets, Azure/Apple accounts):
+Direct releases are tag-driven (`vX.Y.Z-windows`, `vX.Y.Z-mac`): signed MSIX + winget manifest on
+Windows, notarized universal `.app` + Sparkle appcast + Homebrew cask on macOS. Direct builds check
+`localmorph.com/appcast*.xml`; Store builds use Microsoft Store updates, not the direct appcast.
+The separate Windows Store workflow packages on tags; publishing is manual and independently
+approved. It is not release-ready until the FFmpeg compliance, approval, package-installation,
+WACK, and native-architecture checks pass. One-time setup (environments, secrets, Azure/Apple accounts):
 [docs/shipping-checklist.md](docs/shipping-checklist.md); pipeline details: [docs/release-setup.md](docs/release-setup.md).
 
 ## Deployment

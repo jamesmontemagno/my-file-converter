@@ -14,7 +14,8 @@ public sealed class FfmpegEngine : IConversionEngine
     public ConversionPlan Plan(ConversionJob job, ToolInventory tools, string workDirectory)
     {
         var ffmpeg = tools.PathFor(ToolKind.Ffmpeg) ?? throw new InvalidOperationException("FFmpeg is not installed.");
-        var context = new BuildContext(job.Source, job.Format, job.Options, tools.Ffmpeg, job.OutputPath);
+        if (job.Operation.Kind == MediaOperation.Join) return MediaOperations.JoinPlan(job, ffmpeg, workDirectory);
+        var context = new BuildContext(job.Source, job.Format, job.Options, tools.Ffmpeg, job.WorkingOutputPath);
         if (context.TargetSizeError is { } sizeError) throw new InvalidOperationException(sizeError);
         var durationUs = EffectiveDurationMicroseconds(context);
 
@@ -71,6 +72,15 @@ public sealed class FfmpegEngine : IConversionEngine
         BuildArguments(new BuildContext(source, format, options, capabilities, outputPath), pass: 0, passLog: null);
 
     public const string ContactSheetId = "contact-sheet";
+    public static string? ValidateConfiguration(SourceFile source, OutputFormat format, ConversionOptions options, FfmpegCapabilities capabilities)
+    {
+        if (options.MeasureLoudness && !capabilities.MayHaveFilter("loudnorm")) return "This FFmpeg build lacks loudnorm.";
+        if (options.TrimSilence && !capabilities.MayHaveFilter("silencedetect")) return "This FFmpeg build lacks silencedetect.";
+        if (options.TrimSilence && source.DurationSeconds is not > 0) return "Silence trimming needs a known source duration.";
+        try { return new BuildContext(source, format, options, capabilities, "preview" + format.ExtensionWithDot).TargetSizeError; }
+        catch (InvalidOperationException ex) { return ex.Message; }
+    }
+
     public const string WaveformId = "waveform";
     private const int ContactSheetColumns = 4;
     private const int ContactSheetRows = 4;
@@ -154,7 +164,7 @@ public sealed class FfmpegEngine : IConversionEngine
         else if (options.TrimEndSeconds is { } trimEnd && format.Supports(FormatFeatures.Trim))
         {
             var length = trimEnd - (options.TrimStartSeconds ?? 0);
-            if (length > 0) args.AddRange(["-t", Num(length)]);
+            if (length > 0) args.AddRange(["-t", Num(context.OutputDurationSeconds ?? length)]);
         }
         else if (sourceIsImage && isVideoTarget && !source.IsAnimatedImage)
         {
@@ -262,6 +272,8 @@ public sealed class FfmpegEngine : IConversionEngine
         }
 
         if (remux && options.HasTrim && !args.Contains("-avoid_negative_ts")) args.AddRange(["-avoid_negative_ts", "make_zero"]);
+        if (options.ToneMapToSdr && source.Media?.IsHdr == true)
+            args.AddRange(["-color_trc", "bt709", "-color_primaries", "bt709", "-colorspace", "bt709", "-color_range", "tv"]);
 
         args.Add(context.OutputPath);
         return args;
@@ -630,6 +642,8 @@ public sealed class FfmpegEngine : IConversionEngine
         if (options.Channels == ChannelMode.Stereo) args.AddRange(["-ac", "2"]);
 
         var audioFilters = new List<string>();
+        if ((options.MeasureLoudness || options.TrimSilence) && AudioRangeFilter(context.Source, options) is { } inputRange)
+            audioFilters.Add(inputRange);
         if (context.Format.Supports(FormatFeatures.AudioTuning) && options.AudioDelayMilliseconds != 0)
         {
             audioFilters.Add(options.AudioDelayMilliseconds > 0
@@ -640,13 +654,33 @@ public sealed class FfmpegEngine : IConversionEngine
         var effects = context.Format.Supports(FormatFeatures.Effects);
         if (effects && options.Reverse) audioFilters.Add("areverse");
         if (options.VolumePercent != 100) audioFilters.Add($"volume={Num(options.VolumePercent / 100.0)}");
-        if (options.NormalizeAudio) audioFilters.Add("loudnorm=I=-16:TP=-1.5:LRA=11");
+        if (options.NormalizeAudio && !options.MeasureLoudness) audioFilters.Add("loudnorm=I=-16:TP=-1.5:LRA=11");
         if (effects && options.FadeInSeconds > 0) audioFilters.Add($"afade=t=in:st=0:d={Num(options.FadeInSeconds)}");
         if (effects && options.FadeOutSeconds > 0 && context.OutputDurationSeconds is { } audioDuration)
         {
             audioFilters.Add($"afade=t=out:st={Num(Math.Max(0, audioDuration - options.FadeOutSeconds))}:d={Num(options.FadeOutSeconds)}");
         }
-        if (audioFilters.Count > 0) args.AddRange(["-af", string.Join(",", audioFilters)]);
+        if (options.MeasureLoudness)
+        {
+            var measurements = options.LoudnessMeasurements ?? throw new InvalidOperationException("Audio is measured before rendering. The resolved commands will appear in the job diagnostics.");
+            for (var output = 0; output < measurements.Count; output++)
+            {
+                var filters = new List<string>(audioFilters);
+                if (AudioRangeFilter(context.Source, options, options.PlaybackSpeed) is { } outputRange) filters.Add(outputRange);
+                if (options.Channels != ChannelMode.Source) filters.Add($"aformat=channel_layouts={(options.Channels == ChannelMode.Mono ? "mono" : "stereo")}");
+                filters.Add(measurements[output].Filter(options.TargetLoudness, options.TruePeak));
+                args.AddRange([$"-filter:a:{output}", string.Join(",", filters)]);
+            }
+        }
+        else if (audioFilters.Count > 0) args.AddRange(["-af", string.Join(",", audioFilters)]);
+    }
+
+    internal static string? AudioRangeFilter(SourceFile source, ConversionOptions options, double playbackSpeed = 1)
+    {
+        var end = options.TrimEndSeconds ?? source.DurationSeconds;
+        return end is { } finish
+            ? $"atrim=duration={Num((finish - (options.TrimStartSeconds ?? 0)) / playbackSpeed)},asetpts=PTS-STARTPTS"
+            : null;
     }
 
     private static void AddImageEncoder(List<string> args, BuildContext context)
@@ -698,6 +732,8 @@ public sealed class FfmpegEngine : IConversionEngine
         var isVideoTarget = format.Category == MediaCategory.Video;
         var videoFilters = isVideoTarget && format.Supports(FormatFeatures.VideoFilters);
         var effects = isVideoTarget && format.Supports(FormatFeatures.Effects);
+        if (options.ToneMapToSdr && source.Media?.IsHdr == true)
+            filters.Add("zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=mobius:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p");
 
         // Clean-up filters work best on the untouched source frames.
         if (videoFilters && options.Deinterlace) filters.Add("yadif");
@@ -864,6 +900,14 @@ public sealed class FfmpegEngine : IConversionEngine
             Options = options;
             Capabilities = capabilities;
             OutputPath = outputPath;
+            if (options.ToneMapToSdr)
+            {
+                if (options.Validate(format) is { } issue) throw new InvalidOperationException(issue);
+                if (source.Media?.ColorTransfer is null or "unknown" or "unspecified")
+                    throw new InvalidOperationException("This source has no known color transfer. HDR-to-SDR cannot safely infer its color space.");
+                if (source.Media?.IsHdr == true && (!capabilities.MayHaveFilter("zscale") || !capabilities.MayHaveFilter("tonemap")))
+                    throw new InvalidOperationException("HDR-to-SDR needs FFmpeg with zscale and tonemap filters. Install a full FFmpeg build.");
+            }
 
             var wantsTargetSize = options.TargetSizeMegabytes is not null && format.Supports(FormatFeatures.TargetSize);
 
@@ -882,12 +926,13 @@ public sealed class FfmpegEngine : IConversionEngine
                 }
                 else
                 {
-                    var audioKbps = options.RemoveAudio || !source.HasAudio ? 0 : options.AudioBitrateKbps ?? 128;
-                    var totalKbps = megabytes * 8192.0 / duration;
+                    var audioTracks = options.KeepAllAudioTracks && string.IsNullOrWhiteSpace(options.ReplacementAudioPath) ? Math.Max(1, source.AudioTracks.Count) : 1;
+                    var audioKbps = options.RemoveAudio || !source.HasAudio ? 0 : (options.AudioBitrateKbps ?? 128) * audioTracks;
+                    var totalKbps = megabytes * 8000.0 / duration;
                     var videoKbps = totalKbps * 0.97 - audioKbps;
                     if (videoKbps < MinimumVideoKbps)
                     {
-                        var minimumMb = (MinimumVideoKbps + audioKbps) / 0.97 * duration / 8192.0;
+                        var minimumMb = (MinimumVideoKbps + audioKbps) / 0.97 * duration / 8000.0;
                         TargetSizeError = $"{megabytes:0.#} MB is too small for a {SourceFile.FormatDuration(duration)} clip. Use at least {Math.Ceiling(minimumMb * 10) / 10:0.#} MB, lower the audio bitrate, or trim the clip.";
                     }
                     else
