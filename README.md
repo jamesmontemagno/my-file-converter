@@ -131,6 +131,13 @@ notarized universal `.app` + Sparkle appcast + Homebrew cask on macOS, and the a
 `localmorph.com/appcast*.xml` for updates. One-time setup (environments, secrets, Azure/Apple accounts):
 [docs/shipping-checklist.md](docs/shipping-checklist.md); pipeline details: [docs/release-setup.md](docs/release-setup.md).
 
+## Continuous integration
+
+CI runs on pull requests targeting `main` and pushes to `main`, including merges.
+Feature-branch pushes do not trigger CI, avoiding duplicate push and pull-request runs.
+Bridge CI runs only when changes include `dotnet/**`, `README.md`, or
+`.github/workflows/bridge-ci.yml`; web CI runs for all changes.
+
 ## Deployment
 
 Push to `main` and GitHub Actions will build and publish `dist/` to GitHub Pages.
