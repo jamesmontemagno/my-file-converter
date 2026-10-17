@@ -11,7 +11,7 @@ on:
         type: string
         required: false
       mode:
-        description: 'Package never submits. Diagnose is read-only. Publish requires environment approval.'
+        description: 'Package never submits. Diagnose is read-only. Publish gates Internal Testing, then production.'
         type: choice
         options: [package, diagnose, publish]
         default: package
@@ -87,39 +87,45 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Verify independent approval protection
+      - name: Verify required approval protection
         env:
           GH_TOKEN: ${{ github.token }}
-        run: .\scripts\windows\Test-StoreApproval.ps1
-      - name: Check authentication and application access without creating a draft
+        run: .\scripts\windows\Test-StoreApproval.ps1 -AllowSelfReview
+      - name: Check authentication, application access and Internal Testing without creating a draft
         env:
           MICROSOFT_STORE_PRODUCT_ID: ${{ vars.MICROSOFT_STORE_PRODUCT_ID || secrets.MICROSOFT_STORE_PRODUCT_ID }}
           PARTNER_CENTER_TENANT_ID: ${{ secrets.PARTNER_CENTER_TENANT_ID }}
           PARTNER_CENTER_SELLER_ID: ${{ secrets.PARTNER_CENTER_SELLER_ID }}
           PARTNER_CENTER_CLIENT_ID: ${{ secrets.PARTNER_CENTER_CLIENT_ID }}
           PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
-        run: .\scripts\windows\Test-PartnerCenter.ps1
+        run: |
+          $flightId = .\scripts\windows\Test-PartnerCenter.ps1 -FlightName 'Internal Testing'
+          "Read-only diagnostics resolved Internal Testing flight: $flightId. No draft or submission was changed." >> $env:GITHUB_STEP_SUMMARY
 
-  publish:
-    name: Submit approved upload to Microsoft Store
+  flight:
+    name: Approve and submit Internal Testing flight
     needs: package
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'publish'
+    if: github.event_name == 'push' || inputs.mode == 'publish'
     runs-on: windows-latest
     environment: microsoft-store
+    outputs:
+      flight_id: ${{ steps.flight.outputs.flight_id }}
+      upload_sha256: ${{ steps.upload.outputs.sha256 }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Verify independent approval protection
+      - name: Verify required approval protection
         env:
           GH_TOKEN: ${{ github.token }}
-        run: .\scripts\windows\Test-StoreApproval.ps1
+        run: .\scripts\windows\Test-StoreApproval.ps1 -AllowSelfReview
       - uses: actions/download-artifact@v8
         with:
           name: windows-store-package
           path: artifacts/store
       - name: Revalidate the downloaded upload
+        id: upload
         env:
           IDENTITY_NAME: ${{ secrets.MICROSOFT_STORE_IDENTITY_NAME }}
           PUBLISHER: ${{ secrets.MICROSOFT_STORE_PUBLISHER }}
@@ -129,6 +135,83 @@ jobs:
           $uploads = @(Get-ChildItem artifacts\store -File -Filter *.msixupload)
           if ($uploads.Count -ne 1) { throw 'Expected exactly one Store upload artifact.' }
           .\scripts\windows\Test-StoreUpload.ps1 -Upload $uploads[0].FullName -IdentityName $env:IDENTITY_NAME -Publisher $env:PUBLISHER -Version $env:PACKAGE_VERSION -SourceCommit $env:SOURCE_COMMIT
+          "sha256=$((Get-FileHash -LiteralPath $uploads[0].FullName -Algorithm SHA256).Hash)" >> $env:GITHUB_OUTPUT
+      - name: Check Partner Center access and resolve Internal Testing
+        id: flight
+        env:
+          MICROSOFT_STORE_PRODUCT_ID: ${{ vars.MICROSOFT_STORE_PRODUCT_ID || secrets.MICROSOFT_STORE_PRODUCT_ID }}
+          PARTNER_CENTER_TENANT_ID: ${{ secrets.PARTNER_CENTER_TENANT_ID }}
+          PARTNER_CENTER_SELLER_ID: ${{ secrets.PARTNER_CENTER_SELLER_ID }}
+          PARTNER_CENTER_CLIENT_ID: ${{ secrets.PARTNER_CENTER_CLIENT_ID }}
+          PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+        run: |
+          $flightId = .\scripts\windows\Test-PartnerCenter.ps1 -FlightName 'Internal Testing'
+          "flight_id=$flightId" >> $env:GITHUB_OUTPUT
+      - name: Set up Microsoft Store Developer CLI
+        uses: microsoft/microsoft-store-apppublisher@v1.4
+      - name: Configure Microsoft Store Developer CLI
+        env:
+          PARTNER_CENTER_TENANT_ID: ${{ secrets.PARTNER_CENTER_TENANT_ID }}
+          PARTNER_CENTER_SELLER_ID: ${{ secrets.PARTNER_CENTER_SELLER_ID }}
+          PARTNER_CENTER_CLIENT_ID: ${{ secrets.PARTNER_CENTER_CLIENT_ID }}
+          PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+        run: |
+          msstore reconfigure --tenantId $env:PARTNER_CENTER_TENANT_ID --sellerId $env:PARTNER_CENTER_SELLER_ID --clientId $env:PARTNER_CENTER_CLIENT_ID --clientSecret $env:PARTNER_CENTER_CLIENT_SECRET
+          if ($LASTEXITCODE -ne 0) { throw 'Microsoft Store CLI configuration failed.' }
+      - name: Submit the approved package to Internal Testing only
+        env:
+          MICROSOFT_STORE_PRODUCT_ID: ${{ vars.MICROSOFT_STORE_PRODUCT_ID || secrets.MICROSOFT_STORE_PRODUCT_ID }}
+          FLIGHT_ID: ${{ steps.flight.outputs.flight_id }}
+          PACKAGE_VERSION: ${{ needs.package.outputs.version }}
+          SOURCE_COMMIT: ${{ needs.package.outputs.source_commit }}
+          UPLOAD_SHA256: ${{ steps.upload.outputs.sha256 }}
+        run: |
+          $uploads = @(Get-ChildItem artifacts\store -File -Filter *.msixupload)
+          if ($uploads.Count -ne 1) { throw 'Expected exactly one Store upload artifact.' }
+          if ([string]::IsNullOrWhiteSpace($env:FLIGHT_ID)) { throw 'Internal Testing flight ID was not resolved; refusing to submit.' }
+          msstore publish $uploads[0].FullName --appId $env:MICROSOFT_STORE_PRODUCT_ID --flightId $env:FLIGHT_ID
+          if ($LASTEXITCODE -ne 0) { throw 'Internal Testing flight submission failed. Production is blocked.' }
+          @(
+            '## Internal Testing flight submitted'
+            "- Flight ID: $env:FLIGHT_ID"
+            "- Package version: $env:PACKAGE_VERSION"
+            "- Source commit: $env:SOURCE_COMMIT"
+            "- Upload SHA256: $env:UPLOAD_SHA256"
+            ''
+            'Before approving production, confirm this flight is published in Partner Center, install it as a tester, and complete the release checks. Submission success is not certification or Store availability.'
+          ) >> $env:GITHUB_STEP_SUMMARY
+
+  publish:
+    name: Approve and submit tested upload to production
+    needs: [package, flight]
+    if: github.event_name == 'push' || inputs.mode == 'publish'
+    runs-on: windows-latest
+    environment: microsoft-store
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify required approval protection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .\scripts\windows\Test-StoreApproval.ps1 -AllowSelfReview
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-store-package
+          path: artifacts/store
+      - name: Revalidate the exact upload submitted to Internal Testing
+        env:
+          IDENTITY_NAME: ${{ secrets.MICROSOFT_STORE_IDENTITY_NAME }}
+          PUBLISHER: ${{ secrets.MICROSOFT_STORE_PUBLISHER }}
+          PACKAGE_VERSION: ${{ needs.package.outputs.version }}
+          SOURCE_COMMIT: ${{ needs.package.outputs.source_commit }}
+          FLIGHT_UPLOAD_SHA256: ${{ needs.flight.outputs.upload_sha256 }}
+        run: |
+          $uploads = @(Get-ChildItem artifacts\store -File -Filter *.msixupload)
+          if ($uploads.Count -ne 1) { throw 'Expected exactly one Store upload artifact.' }
+          .\scripts\windows\Test-StoreUpload.ps1 -Upload $uploads[0].FullName -IdentityName $env:IDENTITY_NAME -Publisher $env:PUBLISHER -Version $env:PACKAGE_VERSION -SourceCommit $env:SOURCE_COMMIT
+          if ([string]::IsNullOrWhiteSpace($env:FLIGHT_UPLOAD_SHA256) -or (Get-FileHash -LiteralPath $uploads[0].FullName -Algorithm SHA256).Hash -ne $env:FLIGHT_UPLOAD_SHA256) { throw 'Production upload does not match the Internal Testing upload.' }
       - name: Check Partner Center access
         env:
           MICROSOFT_STORE_PRODUCT_ID: ${{ vars.MICROSOFT_STORE_PRODUCT_ID || secrets.MICROSOFT_STORE_PRODUCT_ID }}
@@ -148,7 +231,7 @@ jobs:
         run: |
           msstore reconfigure --tenantId $env:PARTNER_CENTER_TENANT_ID --sellerId $env:PARTNER_CENTER_SELLER_ID --clientId $env:PARTNER_CENTER_CLIENT_ID --clientSecret $env:PARTNER_CENTER_CLIENT_SECRET
           if ($LASTEXITCODE -ne 0) { throw 'Microsoft Store CLI configuration failed.' }
-      - name: Submit the approved package
+      - name: Submit the approved package to the main listing
         env:
           MICROSOFT_STORE_PRODUCT_ID: ${{ vars.MICROSOFT_STORE_PRODUCT_ID || secrets.MICROSOFT_STORE_PRODUCT_ID }}
         run: |

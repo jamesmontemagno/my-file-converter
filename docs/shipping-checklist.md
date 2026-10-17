@@ -18,7 +18,7 @@ pipeline works once this is done.
 | Item | Where | Value / action |
 |---|---|---|
 | Direct-release environments | Settings → Environments | Create `windows-release` and `macos-release` if absent; neither was present during the configuration review. Add reviewers according to signing policy. |
-| Store environment | Settings → Environments → `microsoft-store` | Already exists with credentials/product configuration, but reviewer protection was absent. Require independent reviewers, prevent self-review, and disable administrator bypass before any diagnostic or submission. |
+| Store environment | Settings → Environments → `microsoft-store` | Require `jamesmontemagno` as reviewer and disable administrator bypass. Self-approval is explicitly allowed by the owner. Flight and production each pause for approval in sequence; credentials/product configuration stay here. |
 | Workflow permissions | Settings → Actions → General → Workflow permissions | Keep default permissions read-only. Direct/mac jobs declare needed write permissions explicitly. Enable Actions pull-request creation only if repository policy allows the metadata PRs; the Store workflow does not create PRs and needs only read permissions. |
 | GitHub Pages | Settings → Pages | Already configured for `localmorph.com` via `deploy.yml`. The desktop app reads `https://localmorph.com/appcast.xml` and `appcast-windows.xml`; both placeholders exist in `public/`. Nothing to change. |
 | Branch protection (optional) | Settings → Branches | If `main` requires reviews, the auto-created release-metadata PRs will wait for you; merge them to publish the appcast/cask. |
@@ -275,8 +275,9 @@ Use the complete [Store release setup](release-setup.md#microsoft-store-separate
 before dispatching the new workflow:
 
 - [ ] Confirm the Store identity secrets and canonical environment Product ID match Partner Center.
-- [ ] Configure the required reviewer gate, prevent self-review, disable administrator bypass, and
-  verify protection can be read by the workflow. Do not change GitHub settings without authorization.
+- [ ] Configure the required reviewer gate, keep the owner's explicit self-approval policy, disable
+  administrator bypass, and verify protection can be read by the workflow. Do not change GitHub
+  settings without authorization.
 - [ ] Put the separate FFmpeg/FFprobe requirement at the beginning of the Store listing description
   and document reviewer setup. Verify the WinGet and manual-install paths without redistributing
   media tools inside the app package.
@@ -298,7 +299,12 @@ before dispatching the new workflow:
   partial outputs, saved-settings restoration, scaled layouts, and accessibility.
 - [ ] Validate Mac Catalyst compilation/runtime separately on macOS.
 - [ ] Only after package/install validation, run protected **diagnose** for read-only account/app access.
-- [ ] Obtain explicit submission intent and independent environment approval before manual **publish**.
+- [ ] Confirm the existing package flight is named exactly **Internal Testing** and has the intended
+  tester group/membership in Partner Center. Discovery must resolve exactly one matching flight.
+- [ ] On tag pushes or manual **publish**, approve the Internal Testing job only after package checks.
+  A manual **package** run remains non-publishing.
+- [ ] Wait for flight publication, install as a tester, and verify the smoke/release checks before
+  separately approving the production job. Production must use the same upload hash as the flight.
   Review processing/certification status in Partner Center; upload success is not Store availability.
 
 No actual Store upload, WACK pass, ARM64 runtime pass, or submission is implied by the helper tests

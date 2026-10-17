@@ -9,7 +9,7 @@ LocalMorph Desktop has separate direct and Store release paths:
 | Channel | Trigger | Workflow | Output |
 |---|---|---|---|
 | Windows (winget + direct MSIX) | tag `vX.Y.Z-windows` | `.github/workflows/windows-release.yml` | Signed x64/ARM64 MSIX on the GitHub Release, `winget` manifest artifact, `public/appcast-windows.xml` PR |
-| Microsoft Store | Windows tag packages only; manual package/diagnose/publish modes | `.github/workflows/windows-store-publish.yml` | Unsigned x64/ARM64 `.msixupload`; submission only after independent approval |
+| Microsoft Store | Windows tag builds, then gates Internal Testing and production; manual package/diagnose/publish modes | `.github/workflows/windows-store-publish.yml` | Unsigned x64/ARM64 `.msixupload`; two sequential submission approvals |
 | winget community repo | manual `WinGet Submission` workflow | `.github/workflows/winget-submit.yml` | PR to `microsoft/winget-pkgs` |
 | macOS (Homebrew cask + direct .app) | tag `vX.Y.Z-mac` | `.github/workflows/mac-release.yml` | Notarized universal `.app` zip on the GitHub Release, Sparkle appcast + `Casks/localmorph.rb` PR |
 
@@ -75,8 +75,8 @@ the shell DLL.
 
 This adapts the package/diagnose/publish separation from
 [Tiny Clips](https://github.com/jamesmontemagno/tiny-clips) and manifest stamping from
-[App Fire Calculator](https://github.com/jamesmontemagno/app-fire-calculator), without publishing
-automatically on tag pushes.
+[App Fire Calculator](https://github.com/jamesmontemagno/app-fire-calculator), with submissions
+blocked until each approval is granted.
 
 The direct manifest, direct package family, Azure signing, winget dependencies, and macOS release
 path stay separate. [`Build-Store.ps1`](../scripts/windows/Build-Store.ps1) stamps the Store template
@@ -91,10 +91,14 @@ Configuration (names/scopes only; never print secret values):
 | `microsoft-store` environment variable | `MICROSOFT_STORE_PRODUCT_ID` | Canonical Partner Center product ID; repository secret of the same name is a fallback |
 | `microsoft-store` environment secrets | `PARTNER_CENTER_TENANT_ID`, `PARTNER_CENTER_SELLER_ID`, `PARTNER_CENTER_CLIENT_ID`, `PARTNER_CENTER_CLIENT_SECRET` | Protected account/application access |
 
-The environment must have required reviewers, **prevent self-review** enabled, and **administrator
-bypass disabled**. [`Test-StoreApproval.ps1`](../scripts/windows/Test-StoreApproval.ps1) fails closed
-before credential use if these protections are absent or cannot be verified. The current environment
-was observed without reviewer protection; adding secrets alone does not make publication ready.
+The `microsoft-store` environment must have required reviewers and **administrator bypass disabled**.
+The repository owner explicitly allows self-approval so `jamesmontemagno` can approve runs they
+started. The workflow passes `-AllowSelfReview` to
+[`Test-StoreApproval.ps1`](../scripts/windows/Test-StoreApproval.ps1); without that explicit switch
+the script still requires **prevent self-review**. Missing/unreadable reviewer protection or enabled
+administrator bypass always blocks credential use. Flight and production are sequential jobs using
+this environment: approve the flight job first, then separately approve production when it becomes
+pending. Existing Store credentials stay environment-scoped; no copies or flight-ID secret are needed.
 The Store workflow needs only `contents: read` and `actions: read`; do not broaden repository
 workflow defaults for it.
 
@@ -150,13 +154,35 @@ These checks do not replace a real SDK-produced `.msixupload`, WACK, or installa
 
 ### Workflow modes
 
-1. **package** (default, also the only tag-push action): builds/validates the upload artifact and
-   never calls Partner Center.
-2. **diagnose** (manual, protected environment): read-only token/application-access checks;
-   does not create a draft submission. Even diagnostics require independent approval.
-3. **publish** (manual, protected environment): packages the selected tag, revalidates the artifact
-   from that run against its source commit, checks access, then passes the actual `.msixupload`
-   and Product ID to `msstore publish`. This is a real submission, not a dry run.
+1. **package** (manual default): builds/validates the upload artifact and never calls Partner Center.
+2. **diagnose** (manual, protected environment): read-only token/application-access and Internal
+   Testing flight-discovery checks; does not create a draft submission. Even diagnostics require
+   reviewer approval.
+3. **publish** (manual) **or a Windows tag push**: packages the selected tag, then runs the rollout:
+   - **Approve and submit Internal Testing flight** pauses for environment approval. It revalidates
+     the artifact against the exact version/source commit, authenticates, and enumerates all package
+     flight pages through the Store API. Exactly one case-sensitive name `Internal Testing` must
+     match, with a valid flight ID. Missing/duplicate/malformed flights fail closed; the script never
+     falls back to the first flight or the production listing, and never creates a flight.
+   - After approval, `msstore publish <upload> --appId <product> --flightId <resolved-id>` submits
+     the actual `.msixupload`, including crash symbols, only to that existing flight. Tester groups
+     and membership remain configured in Partner Center.
+   - **Approve and submit tested upload to production** depends on successful flight submission and
+     pauses for a **second** environment approval. Before approving, check Partner Center for flight
+     publication, install through an account in the flight's tester group, and complete smoke/WACK/
+     native-architecture tests. Upload acceptance alone does not mean testers can install it yet.
+   - Production downloads the same run's artifact, repeats validation and checks its SHA256 against
+     the flight upload before calling `msstore publish` without `--flightId`. A failed/rejected flight
+     blocks production; neither gate is automatically approved.
+
+Deployment scripts are checked out from the workflow commit; the package still comes from the
+requested immutable tag. This permits manual rollout of an existing tag using current deployment
+logic without changing its source provenance. Each run is serialized with other Store operations.
+The job summary records flight ID, version, source commit and upload hash for the production reviewer.
+
+For an already-built tag, manually dispatch **publish** with that exact tag; it builds a fresh,
+verified upload before the first approval. Do not move an existing release tag. Dispatch **package**
+instead when no deployment approvals should be queued.
 
 Never use `--noCommit` as a claimed read-only test: creating/uploading a draft mutates Partner Center.
 Build success, accepted upload, submission processing, certification, and Store availability are
@@ -165,7 +191,8 @@ different milestones; review Partner Center status separately.
 ### Remaining release gates
 
 - Verify the listing starts with the FFmpeg/FFprobe dependency disclosure and document setup for reviewers.
-- Configure/verify environment reviewer protections before diagnostics or publishing.
+- Configure/verify environment reviewers and disabled administrator bypass before diagnostics or
+  publishing. Keep the explicitly authorized self-approval policy in mind when reviewing runs.
 - Produce and inspect the real bundle, run WACK, then clean-install a test-signed equivalent on native
   x64 and ARM64 machines without system .NET/FFmpeg. Verify useful missing-tool guidance, install
   FFmpeg/FFprobe through WinGet or manually, refresh, and confirm inspection and real conversions.

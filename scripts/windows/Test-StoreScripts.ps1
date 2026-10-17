@@ -195,6 +195,7 @@ try {
         $gate = @{ can_admins_bypass = $false; protection_rules = @(@{ type = 'required_reviewers'; prevent_self_review = $true; reviewers = @(@{ reviewer = @{ id = 1 } }) }) }
         $global:LocalMorphApprovalTestResponse = $gate | ConvertTo-Json -Depth 6
         & (Join-Path $PSScriptRoot 'Test-StoreApproval.ps1')
+        & (Join-Path $PSScriptRoot 'Test-StoreApproval.ps1') -AllowSelfReview
         foreach ($scenario in @('no-reviewers', 'self-review', 'admin-bypass')) {
             $invalid = $global:LocalMorphApprovalTestResponse | ConvertFrom-Json
             switch ($scenario) {
@@ -206,8 +207,20 @@ try {
             $rejected = $false
             try { & (Join-Path $PSScriptRoot 'Test-StoreApproval.ps1') } catch { $rejected = $true }
             if (-not $rejected) { throw "Unsafe approval configuration accepted: $scenario" }
+            $rejected = $false
+            try { & (Join-Path $PSScriptRoot 'Test-StoreApproval.ps1') -AllowSelfReview } catch { $rejected = $true }
+            if ($scenario -eq 'self-review' -and $rejected) { throw 'Explicit self-review approval was rejected.' }
+            if ($scenario -ne 'self-review' -and -not $rejected) { throw "Unsafe approval configuration accepted with self-review allowed: $scenario" }
             $global:LocalMorphApprovalTestResponse = $gate | ConvertTo-Json -Depth 6
         }
+        function gh { $global:LASTEXITCODE = 1; return $null }
+        $rejected = $false
+        try { & (Join-Path $PSScriptRoot 'Test-StoreApproval.ps1') -AllowSelfReview }
+        catch {
+            if ($_.Exception.Message -notlike '*Cannot verify microsoft-store environment protection*') { throw }
+            $rejected = $true
+        }
+        if (-not $rejected) { throw 'An unreadable approval environment was accepted.' }
     }
     finally {
         Remove-Item Function:\gh
@@ -215,6 +228,7 @@ try {
         $env:GH_TOKEN = $originalToken
         $env:GITHUB_REPOSITORY = $originalRepository
     }
+    & (Join-Path $PSScriptRoot 'Test-PartnerCenterScripts.ps1')
     Write-Host "Store version, identity, activation, provenance, approval, and $(1 + $packageFailures.Count + $symbolFailures.Count) artifact scenarios passed, including external media tools, matching crash symbols and symbol rejection paths. Synthetic packages do not replace real SDK packaging, native symbol generation, WACK, or installation tests."
 }
 finally { [IO.Directory]::Delete($temporary, $true) }

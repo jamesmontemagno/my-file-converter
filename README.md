@@ -165,9 +165,11 @@ brew install --cask localmorph                                       # macOS 15+
 Direct releases are tag-driven (`vX.Y.Z-windows`, `vX.Y.Z-mac`): signed MSIX + winget manifest on
 Windows, notarized universal `.app` + Sparkle appcast + Homebrew cask on macOS. Direct builds check
 `localmorph.com/appcast*.xml`; Store builds use Microsoft Store updates, not the direct appcast.
-The separate Windows Store workflow packages on tags; publishing is manual and independently
-approved. It is not release-ready until the external-tool setup, approval, package-installation,
-WACK, and native-architecture checks pass. One-time setup (environments, secrets, Azure/Apple accounts):
+The separate Windows Store workflow packages on tags, then requires approval to submit to the
+existing **Internal Testing** package flight and a second approval to submit the same upload to the
+main listing. Manual package-only builds remain available. It is not release-ready until the
+external-tool setup, approval, package-installation, WACK, and native-architecture checks pass.
+One-time setup (environments, secrets, Azure/Apple accounts):
 [docs/shipping-checklist.md](docs/shipping-checklist.md); pipeline details: [docs/release-setup.md](docs/release-setup.md).
 
 ## Continuous integration
