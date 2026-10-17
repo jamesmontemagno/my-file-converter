@@ -48,6 +48,8 @@ import {
 } from './components/converter';
 
 const APP_NAME = 'LocalMorph';
+const WINDOWS_STORE_URL = 'https://apps.microsoft.com/detail/9PM1NHPT1JR5';
+const LAUNCH_VIDEO_URL = '/media/localmorph-windows-launch.mp4';
 const MAX_ACTIVITY_HISTORY_LENGTH = 160;
 const MAX_RAW_OUTPUT_ENTRIES = 80;
 
@@ -151,7 +153,7 @@ function titleForPage(page: Page) {
   if (page === 'privacy') return `Privacy Policy | ${APP_NAME}`;
   if (page === 'terms') return `Terms of Use | ${APP_NAME}`;
   if (page === 'docs') return `File Conversion Guide | ${APP_NAME}`;
-  return `Local File Converter for Media | ${APP_NAME}`;
+  return `LocalMorph for Windows | Local File Converter`;
 }
 
 function descriptionForPage(page: Page) {
@@ -163,7 +165,7 @@ function descriptionForPage(page: Page) {
     return 'LocalMorph terms of use. Review the conditions under which you may use this browser-based file converter.';
   if (page === 'docs')
     return 'LocalMorph documentation. Learn about supported file formats and how browser-native conversion works.';
-  return 'Convert images, audio, and video on your device in three clear steps using browser tools or optional local FFmpeg, with no managed-server uploads.';
+  return 'Meet LocalMorph for Windows. Convert video, audio, and images locally, batch files, and trim clips. Get the official desktop app from the Microsoft Store or use the browser converter.';
 }
 
 function canonicalForPage(page: Page) {
@@ -500,6 +502,7 @@ function Footer() {
           <span className="footer-heading">Explore</span>
           <a href="#">Home</a>
           <a href="#/app">Converter</a>
+          <a href={WINDOWS_STORE_URL} target="_blank" rel="noreferrer">Windows app</a>
           <a href="#/docs">Documentation</a>
         </div>
         <div className="footer-links">
@@ -510,8 +513,9 @@ function Footer() {
       </div>
       <div className="footer-meta">
         <p className="muted footer-note">
-          {APP_NAME} keeps conversion on your device through browser tools or an optional local
-          bridge. Review the legal pages before using it for sensitive workflows.
+          {APP_NAME} keeps conversion on your device. Get the Windows desktop app, or use browser
+          tools with an optional local bridge. The website&apos;s legal pages cover the browser and
+          bridge workflows; see the Store listing for desktop-app information.
         </p>
         <a
           className="footer-project-link"
@@ -705,11 +709,11 @@ function InstallSection() {
   return (
     <section className="landing-section install-section">
       <div className="section-header">
-        <span className="eyebrow">Available as an app</span>
-        <h2>Install {APP_NAME} on your device</h2>
+        <h2>Install the browser version</h2>
         <p className="hero-text">
-          Pin {APP_NAME} to your home screen or desktop so it loads instantly, works offline, and
-          feels like a native app — with no app store required.
+          Pin the browser converter to your home screen or desktop for quick access. This is
+          separate from the <a href={WINDOWS_STORE_URL} target="_blank" rel="noreferrer">official Windows desktop app</a>,
+          which includes batch conversion and additional media tools.
         </p>
       </div>
       <div className="tab-bar" role="tablist">
@@ -744,6 +748,59 @@ function InstallSection() {
   );
 }
 
+function LaunchVideo() {
+  const [videoError, setVideoError] = useState(false);
+
+  return (
+    <section className="landing-launch" aria-labelledby="launch-heading">
+      <div className="landing-launch-heading">
+        <div>
+          <h2 id="launch-heading">A little less file friction.<br />A lot more desktop power.</h2>
+          <p>Meet LocalMorph for Windows in 30 seconds. A quick look at the real app, with a little room to breathe.</p>
+        </div>
+        <a href={WINDOWS_STORE_URL} target="_blank" rel="noreferrer">
+          Get it from the Microsoft Store <span aria-hidden="true">→</span>
+        </a>
+      </div>
+      <video
+        className="landing-launch-video"
+        controls
+        playsInline
+        preload="none"
+        poster="/media/localmorph-windows-poster.webp"
+        src={LAUNCH_VIDEO_URL}
+        aria-label="LocalMorph for Windows launch video"
+        aria-describedby="launch-video-description"
+        onError={() => setVideoError(true)}
+      >
+        <track kind="captions" src="/media/localmorph-windows-launch.vtt" srcLang="en" label="English" />
+        Your browser does not support this video. <a href={LAUNCH_VIDEO_URL}>Download the MP4</a>.
+      </video>
+      <div className="landing-launch-meta">
+        <p id="launch-video-description">30 seconds · Music, no voiceover · Captions available</p>
+        <a href={LAUNCH_VIDEO_URL} download>Download the launch video (MP4)</a>
+      </div>
+      {videoError && (
+        <p role="status">
+          The video could not be loaded. Try the MP4 download above, or read the transcript below.
+        </p>
+      )}
+      <details className="landing-launch-transcript">
+        <summary>Read the video transcript</summary>
+        <p>
+          LocalMorph. Your files. Your computer. Now on Windows. Convert video, audio, and images
+          locally, without uploading them to a conversion server. Add files or folders and convert
+          a batch. Use quick presets to get ready for your next share. Preview and trim clips,
+          extract audio, join compatible clips, or split a video. Get LocalMorph for Windows from
+          localmorph.com, with the official app available on the Microsoft Store. FFmpeg and FFprobe are
+          installed separately; the app&apos;s Tools page guides setup. Original instrumental music
+          plays throughout; there is no speech.
+        </p>
+      </details>
+    </section>
+  );
+}
+
 function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
   return (
     <main className="landing-page">
@@ -753,48 +810,51 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
           {APP_NAME}
         </a>
         <nav className="landing-nav" aria-label="Main navigation">
-          <a href="#/docs">How it works</a>
-          <a href="#/privacy">Privacy</a>
+          <a href={WINDOWS_STORE_URL} target="_blank" rel="noreferrer">Windows app</a>
+          <a href="#/docs">Guide</a>
           <button className="landing-nav-action" onClick={onOpenApp}>
-            Open converter
+            Open web converter
           </button>
         </nav>
       </header>
 
       <section className="landing-hero">
         <div className="landing-copy">
-          <p className="landing-kicker">Private conversion, plainly explained.</p>
-          <h1>Move your file into the format you actually need.</h1>
+          <h1>Your files.<br />Your computer.<br /><span>Now on Windows.</span></h1>
           <p>
-            Convert images, audio, and video on your device. LocalMorph shows exactly how each file
-            is handled, so there is no mystery between selection and download.
+            Meet the official LocalMorph desktop app. Convert video, audio, and images, work through
+            a whole batch, and trim clips. Your files stay on your PC, not a conversion server.
           </p>
           <div className="landing-actions">
-            <button className="landing-primary-action" onClick={onOpenApp}>
-              Open converter
-            </button>
-            <a href="#/docs">
-              Explore formats <span aria-hidden="true">→</span>
+            <a className="landing-primary-action" href={WINDOWS_STORE_URL} target="_blank" rel="noreferrer">
+              Get LocalMorph for Windows
             </a>
+            <button className="landing-browser-action" onClick={onOpenApp}>
+              Use in your browser <span aria-hidden="true">→</span>
+            </button>
           </div>
+          <p className="landing-setup-note">
+            Available on the Microsoft Store. FFmpeg and FFprobe are installed separately;
+            the app&apos;s Tools page helps you get set up.
+          </p>
           <div className="landing-example">
             <span>PNG</span>
             <i aria-hidden="true" />
             <strong>WEBP</strong>
-            <small>ready to export</small>
+            <small>one of many possibilities</small>
           </div>
         </div>
 
         <figure className="route-board">
           <figcaption className="route-board-header">
-            <span>Conversion route</span>
-            <b>On this device</b>
+            <span>A desktop conversion</span>
+            <b>On your PC</b>
           </figcaption>
           <dl className="route-file route-file-source">
             <dt>Input</dt>
             <dd>
-              <strong>summer-photo.heic</strong>
-              <small>24.8 MB</small>
+              <strong>coastal-walk.mov</strong>
+              <small>Your original clip</small>
             </dd>
           </dl>
           <div className="route-line" aria-hidden="true">
@@ -805,15 +865,15 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
           <dl className="route-engine">
             <dt>Selected engine</dt>
             <dd>
-              <strong>Browser conversion</strong>
-              <small>Optional FFmpeg bridge available</small>
+              <strong>LocalMorph for Windows</strong>
+              <small>Powered by your local FFmpeg installation</small>
             </dd>
           </dl>
           <dl className="route-file route-file-output">
             <dt>Output</dt>
             <dd>
-              <strong>summer-photo.webp</strong>
-              <small>ready when you are</small>
+              <strong>coastal-walk.mp4</strong>
+              <small>The format you need, saved locally</small>
             </dd>
           </dl>
         </figure>
@@ -822,67 +882,67 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
       <section className="landing-assurances" aria-label="LocalMorph assurances">
         <div>
           <strong>Stays on your device</strong>
-          <p>No managed-server upload is needed to convert a file.</p>
+          <p>Your media is processed locally, without uploading it to a conversion server.</p>
         </div>
         <div>
-          <strong>One clear route</strong>
-          <p>See whether your browser or local FFmpeg is doing the work.</p>
+          <strong>Built for the whole batch</strong>
+          <p>Add files or folders, choose your output, and follow the queue in the Windows app.</p>
         </div>
         <div>
-          <strong>Output you can inspect</strong>
-          <p>Preview the result and download only when it looks right.</p>
+          <strong>More than a format change</strong>
+          <p>Preview, trim, extract audio, and prepare clips for whatever comes next.</p>
         </div>
       </section>
+
+      <LaunchVideo />
 
       <section className="landing-lanes">
         <div className="landing-section-intro">
           <h2>Made for the conversions that interrupt your day.</h2>
           <p>
-            Change a format, trim a clip, or pull out an audio track without handing the file to
-            another service.
+            The Windows app brings quick presets and hands-on media tools together, with
+            conversion that stays on your computer.
           </p>
         </div>
         <div className="conversion-lanes">
           <article>
             <span>01</span>
             <div>
-              <h3>Image formats</h3>
-              <p>Resize and export supported image formats through the route available on your device.</p>
+              <h3>A batch, not one file at a time</h3>
+              <p>Add photos or whole folders and convert compatible files together.</p>
             </div>
             <strong>PNG → WebP</strong>
           </article>
           <article>
             <span>02</span>
             <div>
-              <h3>Audio files</h3>
-              <p>Create supported MP3, WAV, and web-ready audio exports when the selected route allows it.</p>
+              <h3>Keep the part that matters</h3>
+              <p>Trim a clip, extract its audio, or choose the audio tracks you want to keep.</p>
             </div>
             <strong>Video → MP3</strong>
           </article>
           <article>
             <span>03</span>
             <div>
-              <h3>Video exports</h3>
-              <p>Trim source footage and choose an available browser or local route for compatibility.</p>
+              <h3>Ready for your next share</h3>
+              <p>Choose a sharing preset, join compatible clips, or split a video into shorter parts.</p>
             </div>
-            <strong>Video → WebM</strong>
+            <strong>MOV → MP4</strong>
           </article>
         </div>
       </section>
 
       <section className="landing-bridge">
         <div>
-          <p className="landing-kicker">When browser support is not enough</p>
-          <h2>Bring your own FFmpeg, keep the same private workflow.</h2>
+          <h2>Prefer a browser tab? You&apos;re already here.</h2>
         </div>
         <div>
           <p>
-            LocalMorph Bridge is a small, user-started companion that can use an FFmpeg installation
-            already on your computer. Pair it only when you need broader local conversion support.
+            The browser converter is still here, with no installation needed for supported formats.
+            For broader format support, optionally pair LocalMorph Bridge with FFmpeg on the same device.
           </p>
-          <a className="landing-secondary-action" href="#/docs">
-            Set up LocalMorph Bridge
-          </a>
+          <button className="landing-secondary-action" onClick={onOpenApp}>Open web converter</button>
+          <a href="#/docs">Explore browser formats and bridge setup <span aria-hidden="true">→</span></a>
         </div>
       </section>
 
@@ -1211,8 +1271,22 @@ function DocsPage() {
   return (
       <LegalLayout
         title="Documentation"
-        summary={`${APP_NAME} converts images, audio, and video on your device. This page explains browser-native formats and the optional Local FFmpeg Bridge.`}
+        summary={`${APP_NAME} converts images, audio, and video on your device. Choose the Windows desktop app or the browser converter.`}
       >
+      <section>
+        <h2>Get the Windows desktop app</h2>
+        <p>
+          The <a href={WINDOWS_STORE_URL} target="_blank" rel="noreferrer">official LocalMorph app on the Microsoft Store</a>{' '}
+          supports batch conversion, quick presets, media previews, trimming, audio extraction,
+          compatible-clip joining, and video splitting. Conversion runs on your PC.
+        </p>
+        <p>
+          FFmpeg and FFprobe are not included in the Store package. Open the desktop app&apos;s
+          Tools page for WinGet installation or manual setup guidance. Some formats need additional
+          tools or Windows codecs. The browser and optional bridge workflow is documented below;
+          installing the desktop app does not require setting up the browser bridge.
+        </p>
+      </section>
       <section>
         <h2>1. Supported formats</h2>
         <p>

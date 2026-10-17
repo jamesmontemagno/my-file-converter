@@ -2,6 +2,11 @@
 
 A React + TypeScript + Vite client-side file converter for GitHub Pages.
 
+[Get the official LocalMorph desktop app for Windows on the Microsoft Store](https://apps.microsoft.com/detail/9PM1NHPT1JR5).
+Convert media locally, batch files, use quick presets, and trim clips. FFmpeg and FFprobe are
+installed separately; the desktop app's Tools page provides WinGet and manual setup guidance.
+The browser converter remains available at [localmorph.com](https://localmorph.com).
+
 ![alt text](image.png)
 
 ## Stack
@@ -33,6 +38,29 @@ npm run dev
 ```bash
 npm run build
 ```
+
+## Windows launch video
+
+The landing page includes a click-to-play, 30-second 1080p launch film:
+[`public/media/localmorph-windows-launch.mp4`](public/media/localmorph-windows-launch.mp4).
+It uses two actual Windows app screenshots, animated local-conversion routes, a moving batch queue,
+trim/split and waveform graphics, and an original,
+procedurally composed 80 BPM instrumental; no stock music or external media services are used.
+The end card points to **localmorph.com**. The poster, English WebVTT captions, and an inline
+transcript ship with the website. The video
+does not autoplay or enter the PWA precache, so opening the converter does not download the film.
+
+To regenerate it on Windows, install Python's Pillow and NumPy packages and put FFmpeg and
+FFprobe on PATH, then run:
+
+```powershell
+python .\scripts\render-launch-video.py
+```
+
+The renderer uses the existing Store screenshot assets, the desktop app's Open Sans font files,
+and Windows Bahnschrift. It writes the MP4 and poster into `public/media`, verifies the media
+format and duration, and saves a storyboard and probe report under ignored
+`artifacts/desktop-launch`. Keep the captions and on-page transcript in sync if changing the film.
 
 ## Optional LocalMorph Bridge
 
