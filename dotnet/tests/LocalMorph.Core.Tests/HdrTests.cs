@@ -9,6 +9,7 @@ using Xunit;
 
 namespace LocalMorph.Core.Tests;
 
+[Collection(nameof(FfmpegIntegrationCollection))]
 public sealed class HdrTests : IDisposable
 {
     private readonly string root = Fixture.Root;

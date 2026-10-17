@@ -188,6 +188,7 @@ try {
     }
     $originalToken = $env:GH_TOKEN
     $originalRepository = $env:GITHUB_REPOSITORY
+    $originalLastExitCode = $global:LASTEXITCODE
     try {
         $env:GH_TOKEN = 'local-test-not-a-token'
         $env:GITHUB_REPOSITORY = 'local-test/repo'
@@ -227,6 +228,7 @@ try {
         Remove-Variable -Name LocalMorphApprovalTestResponse -Scope Global
         $env:GH_TOKEN = $originalToken
         $env:GITHUB_REPOSITORY = $originalRepository
+        $global:LASTEXITCODE = $originalLastExitCode
     }
     & (Join-Path $PSScriptRoot 'Test-PartnerCenterScripts.ps1')
     Write-Host "Store version, identity, activation, provenance, approval, and $(1 + $packageFailures.Count + $symbolFailures.Count) artifact scenarios passed, including external media tools, matching crash symbols and symbol rejection paths. Synthetic packages do not replace real SDK packaging, native symbol generation, WACK, or installation tests."

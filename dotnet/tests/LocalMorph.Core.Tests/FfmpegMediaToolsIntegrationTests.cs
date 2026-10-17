@@ -5,6 +5,7 @@ using Xunit;
 namespace LocalMorph.Core.Tests;
 
 /// <summary>Runs the track, subtitle, edit, and effect tools through a real FFmpeg.</summary>
+[Collection(nameof(FfmpegIntegrationCollection))]
 public sealed class FfmpegMediaToolsIntegrationTests
 {
     private static void AssertCompleted(ConversionJob job) =>
