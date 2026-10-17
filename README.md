@@ -168,6 +168,10 @@ dotnet build .\dotnet\src\LocalMorph.App\LocalMorph.App.csproj -f net10.0-window
 dotnet test .\dotnet\tests\LocalMorph.Core.Tests   # unit + real-FFmpeg integration tests
 ```
 
+Real-FFmpeg integration tests share one xUnit collection so concurrent encoders do not starve media
+probes on smaller CI runners. Other test collections remain parallel; production probe timeouts and
+conversion concurrency are unchanged.
+
 Direct/development builds need FFmpeg for media conversion (`winget install Gyan.FFmpeg` /
 `brew install ffmpeg`), or platform binaries under
 [`Resources/ffmpeg`](dotnet/src/LocalMorph.App/Resources/ffmpeg). Packaged Windows builds also need

@@ -4,6 +4,7 @@ using Xunit;
 
 namespace LocalMorph.Core.Tests;
 
+[Collection(nameof(FfmpegIntegrationCollection))]
 public sealed class OutputSafetyTests
 {
     [FfmpegFact]

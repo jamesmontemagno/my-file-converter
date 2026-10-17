@@ -121,6 +121,11 @@ public static class Fixture
     }
 }
 
+// Concurrent encoders can starve the five-second probes on small CI runners.
+[CollectionDefinition(nameof(FfmpegIntegrationCollection))]
+public sealed class FfmpegIntegrationCollection { }
+
+[Collection(nameof(FfmpegIntegrationCollection))]
 public sealed class FfmpegIntegrationTests
 {
     [FfmpegFact]
