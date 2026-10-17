@@ -19,11 +19,12 @@ $sourceCommit = git -C $root rev-parse HEAD
 if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the Store application source commit.' }
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $output -Force | Out-Null
-$payload = Join-Path $output 'payload'
-& (Join-Path $PSScriptRoot 'Get-StoreFfmpeg.ps1') -PayloadRoot $payload
+$metadata = Join-Path $output 'metadata'
 foreach ($rid in @('win-x64', 'win-arm64')) {
-    @{ sourceCommit = $sourceCommit; version = $version; runtimeIdentifier = $rid } |
-        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $payload "$rid\licenses\localmorph-build.json") -Encoding utf8
+    $directory = Join-Path $metadata $rid
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    @{ sourceCommit = $sourceCommit; version = $version; runtimeIdentifier = $rid; mediaTools = 'external' } |
+        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $directory 'localmorph-build.json') -Encoding utf8
 }
 $manifestPath = Join-Path $root 'dotnet\src\LocalMorph.App\Platforms\Windows\Package.appxmanifest'
 $originalManifest = [IO.File]::ReadAllBytes($manifestPath)
@@ -38,11 +39,11 @@ try {
         New-Item -ItemType Directory -Path $packageDirectory | Out-Null
         dotnet publish (Join-Path $root 'dotnet\src\LocalMorph.App\LocalMorph.App.csproj') `
             -f net10.0-windows10.0.19041.0 -c Release -p:WindowsOnly=true "-p:Platform=$architecture" "-p:RuntimeIdentifier=$rid" `
-            -p:LocalMorphStoreBuild=true "-p:StorePayloadRoot=$payload" -p:SelfContained=true -p:WindowsAppSDKSelfContained=false `
+            -p:LocalMorphStoreBuild=true "-p:StoreMetadataRoot=$metadata" -p:SelfContained=true -p:WindowsAppSDKSelfContained=false `
             -p:PublishTrimmed=false -p:PublishAot=false -p:WindowsPackageType=MSIX -p:GenerateAppxPackageOnBuild=true `
             "-p:AppxPackageDir=$packageDirectory\" -p:AppxBundle=Never -p:UapAppxPackageBuildMode=StoreUpload `
             -p:AppxPackageSigningEnabled=false -p:AppxSymbolPackageEnabled=true -p:DebugSymbols=true -p:DebugType=portable `
-            "-p:MsPdbCmfExeFullpath=$pdbTool" `
+            "-p:MsPdbCmfExeFullpath=$pdbTool" "-p:PdbCmfx64ExeFullPath=$pdbTool" "-p:PdbCmfx86ExeFullPath=$pdbTool" `
             "-p:ApplicationDisplayVersion=$($version.Substring(0, $version.LastIndexOf('.')))" -p:ApplicationVersion=0 -v:minimal
         if ($LASTEXITCODE -ne 0) { throw "Store build failed for $architecture." }
         $packages = @(Get-ChildItem -LiteralPath $packageDirectory -Recurse -File -Filter *.msix | Where-Object { $_.FullName -notmatch '\\Dependencies\\' })

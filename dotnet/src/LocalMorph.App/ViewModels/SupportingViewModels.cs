@@ -76,7 +76,7 @@ public sealed partial class ToolItemViewModel : ObservableObject
     public string InstallCommand => ToolCatalog.InstallCommand(Kind);
     /// <summary>Mono text under a missing tool: the package-manager command, or where the codec comes from.</summary>
     public string InstallHint => IsStoreCodec ? "Free from the Microsoft Store" : InstallCommand;
-    public string InstallActionLabel => IsStoreCodec ? "Get from Store" : "Install";
+    public string InstallActionLabel => IsStoreCodec ? "Get from Store" : OperatingSystem.IsWindows() ? "Install with WinGet" : "Install";
     public string WebsiteUrl => Descriptor.WebsiteUrl;
     public bool CanLaunchInstaller => PlatformActions.CanLaunchInstaller;
     public bool CanCopyCommand => !IsStoreCodec;
@@ -126,7 +126,14 @@ public sealed partial class ToolItemViewModel : ObservableObject
     private async Task CopyInstallCommandAsync() => await Clipboard.Default.SetTextAsync(InstallCommand);
 
     [RelayCommand]
-    private void LaunchInstaller() => PlatformActions.LaunchInstaller(Kind);
+    private async Task LaunchInstallerAsync()
+    {
+        if (!PlatformActions.LaunchInstaller(Kind))
+        {
+            await Shell.Current.DisplayAlertAsync("Could not open installer",
+                $"Open Website to install {Name} manually, then select Refresh.", "OK");
+        }
+    }
 
     [RelayCommand]
     private async Task OpenWebsiteAsync() => await Launcher.Default.OpenAsync(WebsiteUrl);

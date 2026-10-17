@@ -5,6 +5,8 @@ the git tag (`## v1.2.3-windows` / `## v1.2.3-mac`) into the GitHub Release note
 
 ## Unreleased
 
+## v1.0.1-windows
+
 ### Added
 - Task-oriented batch preflight, persistent conversion action, bounded queue view, cancellable import/inspection, and durable intake summaries. Each import accepts 2,000 supported files, traversing folders through depth eight.
 - Responsive image/video preview with expand/collapse controls, a persistent preview header, and scrollable per-file settings without replacing the active player.
@@ -13,7 +15,7 @@ the git tag (`## v1.2.3-windows` / `## v1.2.3-mac`) into the GitHub Release note
 - Explicit PQ/HLG HDR-to-BT.709 SDR tone mapping, gated by FFmpeg filter availability.
 - Ordered compatible-video joining without transcoding, and duration splitting with accurate re-encoding or explicitly keyframe-aligned stream copy. Multiple/partial results are retained and recorded in backward-compatible history.
 - Native queue/history context menus and a packaged Windows Explorer "Convert with LocalMorph" command. Explorer queues files without converting or changing default associations.
-- Separate Store build flavor and package/diagnose/publish workflow, using the configured Store identity and protected Partner Center credentials. Store packages bundle pinned FFmpeg/ffprobe and .NET, require reviewed corresponding sources/notices, and disable direct appcast updates. Real package certification and native-architecture installation checks remain release gates.
+- Separate Store build flavor and package/diagnose/publish workflow, using the configured Store identity and protected Partner Center credentials. Store packages bundle .NET, use separately installed FFmpeg/FFprobe, and disable direct appcast updates. The Tools page supports user-initiated WinGet or manual installation. Real package certification, missing-tool setup, and native-architecture installation checks remain release gates.
 - Audio tracks: every track is listed with language, channels, and title. Choose which track to keep or extract, keep all tracks with the chosen one first and default, or replace the soundtrack with another audio file.
 - Subtitles: keep, remove, add an SRT/VTT/ASS file as a track, or burn a track/file into the picture (text and PGS/VobSub). Extract subtitle tracks and convert between SRT, WebVTT, and ASS; subtitle files can now be queued directly.
 - Edit & effects: crop to common aspect ratios (9:16, 1:1, 4:5, …), mirror/flip, deinterlace, denoise, fade in/out, reverse, volume, and audio-sync offset.

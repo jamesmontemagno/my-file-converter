@@ -90,7 +90,6 @@ Configuration (names/scopes only; never print secret values):
 | Repository secrets | `MICROSOFT_STORE_IDENTITY_NAME`, `MICROSOFT_STORE_PUBLISHER`, `MICROSOFT_STORE_PUBLISHER_DISPLAY_NAME` | Partner Center package identity, not the Azure direct-signing identity |
 | `microsoft-store` environment variable | `MICROSOFT_STORE_PRODUCT_ID` | Canonical Partner Center product ID; repository secret of the same name is a fallback |
 | `microsoft-store` environment secrets | `PARTNER_CENTER_TENANT_ID`, `PARTNER_CENTER_SELLER_ID`, `PARTNER_CENTER_CLIENT_ID`, `PARTNER_CENTER_CLIENT_SECRET` | Protected account/application access |
-| Repository variables | `FFMPEG_COMPLIANCE_URL`, `FFMPEG_COMPLIANCE_SHA256` | Approved, publicly downloadable HTTPS corresponding-source/notices ZIP and SHA256 |
 
 The environment must have required reviewers, **prevent self-review** enabled, and **administrator
 bypass disabled**. [`Test-StoreApproval.ps1`](../scripts/windows/Test-StoreApproval.ps1) fails closed
@@ -105,18 +104,22 @@ workflow defaults for it.
   most 65535. Nonzero fourth revisions remain direct-release-only and are rejected by Store builds.
 - The exact tag commit is checked out and verified, not merely used to stamp another branch's code.
 - Store packages are unsigned StoreUpload builds with self-contained .NET, Store-resolved Windows
-  App SDK frameworks, and architecture-matched FFmpeg, ffprobe, and Explorer DLLs.
-- [`ffmpeg-windows.lock.json`](../dotnet/packaging/ffmpeg-windows.lock.json) pins x64/ARM64 binary ZIP
-  URLs and hashes. No floating "latest" tool download is used.
-- `FFMPEG_COMPLIANCE_URL` must be public HTTPS without credentials, query, or fragment. Its ZIP must
-  include nonempty `NOTICE.txt`, `SOURCE-MANIFEST.json` with `binarySha256.win-x64` and
-  `binarySha256.win-arm64` matching the lock file, and corresponding source/build material under
-  `sources/`. Include all required third-party licensing/build material after an actual compliance
-  review. Structural/hash validation is **not** a legal compliance determination.
-- The package carries notices, corresponding sources, tool provenance, and application commit/version
-  provenance. [`Test-StoreUpload.ps1`](../scripts/windows/Test-StoreUpload.ps1) checks bundle/application
-  identities, both architectures, .NET/tools/native DLLs, dependencies, source hashes, commit metadata,
-  Explorer registration, absence of direct-release signatures, and matching crash symbols.
+  App SDK frameworks, and architecture-matched Explorer DLLs. They do not bundle or download FFmpeg
+  or FFprobe, and no FFmpeg compliance-archive variables are required.
+- Users install FFmpeg and FFprobe separately. The Tools page opens a user-initiated
+  `winget install --id Gyan.FFmpeg -e` terminal, or the FFmpeg website for manual installation.
+  A full Windows build can be extracted so both executables are in `C:\ffmpeg\bin`; other
+  installations can use PATH or supported WinGet locations. Select **Refresh** after installation.
+  Installing external tools may require internet access and acceptance of their licenses. Verify
+  compatible tools on native ARM64 rather than assuming the WinGet package has a native ARM64 build.
+- Disclose the external dependency at the **beginning** of the Store listing description and in
+  certification notes. See [Store policy 10.2.4](https://learn.microsoft.com/windows/apps/publish/store-policies#102-security).
+  Packaging success does not establish certification or licensing approval.
+- Each package carries `localmorph-build.json` with commit, version, runtime identifier, and
+  `mediaTools: external`. [`Test-StoreUpload.ps1`](../scripts/windows/Test-StoreUpload.ps1) checks
+  identities, both architectures, self-contained .NET, native DLLs, framework dependencies, commit
+  metadata, Explorer registration, absence of FFmpeg/FFprobe and direct-release signatures, and
+  matching crash symbols.
 - Each architecture produces an SDK-generated `.appxsym` archive containing PDBs for
   `LocalMorph.App`, `LocalMorph.Core`, and the native `LocalMorph.Shell` Explorer command. The final
   `.msixupload` contains the bundle **and both architecture-specific symbol archives**. Package
@@ -126,6 +129,8 @@ workflow defaults for it.
   to Partner Center; there is no separate symbol-upload command or credential.
 - The build resolves `mspdbcmf.exe` from the installed Visual C++ x64 tools explicitly; `dotnet`
   MSBuild's default lookup can otherwise point inside the .NET SDK instead of Visual Studio.
+  Both the normal and upload-symbol tasks receive this path, including the SDK's host-specific
+  `PdbCmfx64ExeFullPath` and `PdbCmfx86ExeFullPath` properties.
 - These are full first-party symbols, retained in the Store upload rather than the installed app.
   Third-party FFmpeg and Microsoft runtime PDBs are not supplied by this pipeline. Store crash
   analytics still depend on Windows diagnostic-data availability and Partner Center processing;
@@ -159,10 +164,12 @@ different milestones; review Partner Center status separately.
 
 ### Remaining release gates
 
-- Configure and independently review the corresponding-source/notices archive and its URL/hash.
+- Verify the listing starts with the FFmpeg/FFprobe dependency disclosure and document setup for reviewers.
 - Configure/verify environment reviewer protections before diagnostics or publishing.
 - Produce and inspect the real bundle, run WACK, then clean-install a test-signed equivalent on native
-  x64 and ARM64 machines without system .NET/FFmpeg. Verify conversions use the bundled tools.
+  x64 and ARM64 machines without system .NET/FFmpeg. Verify useful missing-tool guidance, install
+  FFmpeg/FFprobe through WinGet or manually, refresh, and confirm inspection and real conversions.
+  Also test an installation with FFmpeg but no FFprobe and a device without WinGet.
 - Verify Explorer cold/warm/minimized activation, multiple files and spaces/Unicode, unsupported
   selections, keyboard-accessible queue/history menus, multi-result actions, and uninstall cleanup.
 - Verify ARM64 on ARM64; an x64 runner building ARM64 is not runtime evidence. Validate shared

@@ -1,9 +1,11 @@
 LocalMorph
 
 SHORT DESCRIPTION
-Convert videos, audio, and images on your PC. Batch files, trim clips, choose a sharing preset, and keep your files on your device.
+Convert videos, audio, and images on your PC with separately installed FFmpeg and FFprobe. Batch files, trim clips, and keep your files on your device.
 
 DESCRIPTION
+Requires separately installed FFmpeg and FFprobe for video, audio, and most image conversions. Use the Tools page for WinGet installation or manual-install guidance.
+
 Your files. Your computer. The format you need.
 
 LocalMorph is a desktop file converter that processes your files locally, without uploading them to a conversion server. Turn a video into a shareable MP4, extract its audio, convert a batch of photos, or prepare clips for your next project.
@@ -21,7 +23,7 @@ A QUEUE YOU CAN FOLLOW
 Import up to 2,000 supported files at a time. Convert in parallel, follow progress, and cancel individual jobs or the batch. Review completed files in history and reopen their results. Existing source files are protected, and removing a history entry does not delete the converted file.
 
 LOCAL BY DESIGN
-Media conversion runs on your PC. The Microsoft Store edition includes FFmpeg and ffprobe for video and audio processing. Document conversion and some image formats require optional external tools or Windows codecs; the Tools page shows what is available and what is missing. Installing optional tools or codecs may require internet access and acceptance of their own licenses.
+Media conversion runs on your PC. FFmpeg and FFprobe are not included in the Microsoft Store package. Document conversion and some image formats require additional external tools or Windows codecs; the Tools page shows what is available and what is missing. Installing tools or codecs may require internet access and acceptance of their own licenses.
 
 FEATURES
 Convert video, audio, and images locally on your PC
@@ -33,9 +35,9 @@ Measured loudness normalization and leading/trailing audio silence trimming
 Quality, resolution, frame-rate, audio, crop, and subtitle controls
 Parallel conversions, cancellation, and history with access to completed results
 Hardware video encoding when supported and verified on your PC
-Tools page explains optional engines and codec availability
+Tools page explains required media tools, optional engines, and codecs
 
 FIRST SUBMISSION: Leave What's new blank.
 
 UPDATE DRAFT
-A roomier conversion workspace with an expandable media preview and a settings panel that grows with the window. Task-based preflight explains which files can run. New media tools include compatible-video joining, duration splitting, measured loudness normalization, audio silence trimming, and supported HDR-to-SDR conversion. File intake is cancellable, and history records multiple outputs and partial results.
+FFmpeg and FFprobe are installed separately using WinGet or manual setup. A roomier conversion workspace includes an expandable media preview and a settings panel that grows with the window. Task-based preflight explains which files can run. New media tools include compatible-video joining, duration splitting, measured loudness normalization, audio silence trimming, and supported HDR-to-SDR conversion. File intake is cancellable, and history records multiple outputs and partial results.

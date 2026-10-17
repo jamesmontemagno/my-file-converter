@@ -53,6 +53,9 @@ private Store identity values are needed for this kit.
    the app release-ready.
 6. Confirm screenshots still match the final shipping build. Optional tools and codecs are
    disclosed in the listing; do not advertise all formats as universally available.
+7. Keep the FFmpeg/FFprobe requirement at the **beginning** of the Store description. These tools
+   are not included in the package. Test the Tools page's WinGet and manual-install guidance,
+   and provide setup instructions in certification notes, including ARM64 compatibility.
 
 ## Verified Microsoft guidance
 

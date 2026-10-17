@@ -30,13 +30,6 @@ function Get-PeArchitecture {
     finally { $reader.Dispose() }
 }
 
-function Assert-FileHash {
-    param([string]$Path, [string]$Sha256)
-    if ($Sha256 -notmatch '\A[0-9a-fA-F]{64}\z' -or (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash -ne $Sha256) {
-        throw "SHA256 verification failed: $([IO.Path]::GetFileName($Path))"
-    }
-}
-
 function Assert-PdbMatchesBinary {
     param([Parameter(Mandatory)][string]$Binary, [Parameter(Mandatory)][string]$Pdb)
     if (-not ('LocalMorph.Packaging.StoreSymbols' -as [type])) {

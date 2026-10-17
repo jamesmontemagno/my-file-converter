@@ -233,8 +233,8 @@ Tag format: `vMAJOR.MINOR.PATCH[-REV]-windows|mac` — the optional fourth numbe
 | env `microsoft-store` | `PARTNER_CENTER_TENANT_ID`, `PARTNER_CENTER_SELLER_ID`, `PARTNER_CENTER_CLIENT_ID`, `PARTNER_CENTER_CLIENT_SECRET` | protected Store diagnose/publish |
 | (built-in) | `GITHUB_TOKEN` | job-scoped permissions; Store uses read only, metadata PR creation is channel-specific |
 
-Actions **variables**: `MICROSOFT_STORE_PRODUCT_ID` in `microsoft-store`, plus repository-level
-`FFMPEG_COMPLIANCE_URL` and `FFMPEG_COMPLIANCE_SHA256`. Other direct-channel constants remain in
+Actions **variables**: `MICROSOFT_STORE_PRODUCT_ID` in `microsoft-store`. No FFmpeg archive variables
+are needed because Store packages use externally installed media tools. Direct-channel constants remain in
 workflow `env:` blocks (`PACKAGE_FAMILY_NAME`, `SPARKLE_VERSION`, project paths).
 
 Paste-ready `gh` commands once you have the values (run from the repo root):
@@ -262,9 +262,9 @@ Each `gh secret set` without a value prompts for it interactively so nothing lan
 
 - **Code-signing certificate files in the repo** — Windows uses Azure OIDC; macOS imports the `.p12`
   from a secret into a throwaway keychain and deletes it afterwards.
-- **Bundled FFmpeg for direct channels** — winget and the cask install `Gyan.FFmpeg` / `ffmpeg` as
-  dependencies. The Microsoft Store channel is different: it requires pinned bundled FFmpeg/ffprobe
-  with approved corresponding sources/notices, and bundles .NET.
+- **Bundled FFmpeg** — winget and the cask install `Gyan.FFmpeg` / `ffmpeg` as dependencies.
+  Microsoft Store users install FFmpeg and FFprobe through the Tools page or manually; the Store
+  package bundles .NET but no media tools or FFmpeg source archive.
 - **Mac App Store** — not wired up. The macOS build remains Developer ID, not sandboxed.
 
 ---
@@ -277,9 +277,9 @@ before dispatching the new workflow:
 - [ ] Confirm the Store identity secrets and canonical environment Product ID match Partner Center.
 - [ ] Configure the required reviewer gate, prevent self-review, disable administrator bypass, and
   verify protection can be read by the workflow. Do not change GitHub settings without authorization.
-- [ ] Review the exact pinned GPL FFmpeg redistribution and corresponding sources/build instructions/
-  third-party notices; configure the public archive URL and SHA256. Do not treat a nonempty ZIP as
-  legal approval.
+- [ ] Put the separate FFmpeg/FFprobe requirement at the beginning of the Store listing description
+  and document reviewer setup. Verify the WinGet and manual-install paths without redistributing
+  media tools inside the app package.
 - [ ] Ensure Visual Studio 2022 or newer C++ and SDK tools exist for x64 **and** ARM64. Local x64 compilation is not
   proof of ARM64 compilation or runtime behavior.
 - [ ] Build package-only from an exact valid Store tag (`v1.0.0-windows`, fourth component zero).
@@ -288,8 +288,10 @@ before dispatching the new workflow:
   and native Explorer PDBs. Run the artifact validator and confirm no PDBs are installed in the MSIXs.
   After an authorized submission, verify Partner Center received the symbols; symbol upload alone
   does not guarantee diagnostic-data collection or crash-report availability.
-- [ ] Run WACK and clean-install/conversion checks on native x64 and ARM64 without system .NET or
-  FFmpeg. Confirm Store-resolved Windows App SDK frameworks.
+- [ ] Run WACK and clean-install checks on native x64 and ARM64 without system .NET or FFmpeg.
+  Verify missing-tool guidance, install FFmpeg/FFprobe, refresh, and test media inspection and
+  conversions. Include partial installation (missing FFprobe), no WinGet, and manual setup.
+  Confirm Store-resolved Windows App SDK frameworks and actual ARM64 tool compatibility.
 - [ ] Verify the installed Explorer command with multi-selection, spaces/Unicode, cold/warm/minimized
   activation, unsupported selections and uninstall. It must queue only, not convert or change defaults.
 - [ ] Verify keyboard/foreground queue and history menus, join ordering, split output selection,

@@ -128,10 +128,10 @@
 		<Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\..\scripts\windows\Build-Shell.ps1&quot; -Architecture &quot;$(Platform)&quot; -OutputDirectory &quot;$(ExplorerBuildDirectory).&quot;" />
 	</Target>
 	<ItemGroup Condition="'$(LocalMorphStoreBuild)' == 'true'">
-		<Content Include="$(StorePayloadRoot)\$(RuntimeIdentifier)\**\*" Link="tools\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+		<Content Include="$(StoreMetadataRoot)\$(RuntimeIdentifier)\localmorph-build.json" Link="localmorph-build.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
-	<Target Name="ValidateStorePayload" BeforeTargets="PrepareForBuild" Condition="'$(LocalMorphStoreBuild)' == 'true' and '$(WindowsPackageType)' == 'MSIX'">
-		<Error Condition="'$(StorePayloadRoot)' == '' or !Exists('$(StorePayloadRoot)\$(RuntimeIdentifier)\ffmpeg.exe') or !Exists('$(StorePayloadRoot)\$(RuntimeIdentifier)\ffprobe.exe')" Text="Store packages require a verified, architecture-specific FFmpeg payload. Run scripts\windows\Build-Store.ps1." />
+	<Target Name="ValidateStoreMetadata" BeforeTargets="PrepareForBuild" Condition="'$(LocalMorphStoreBuild)' == 'true' and '$(WindowsPackageType)' == 'MSIX'">
+		<Error Condition="'$(StoreMetadataRoot)' == '' or !Exists('$(StoreMetadataRoot)\$(RuntimeIdentifier)\localmorph-build.json')" Text="Store packages require architecture-specific build provenance. Run scripts\windows\Build-Store.ps1." />
 	</Target>
 
 </Project>

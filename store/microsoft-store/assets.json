@@ -6,8 +6,8 @@
     "03-preview-trim-tracks.png": "Extracted the intact 2560x1440 main-window capture from winapp's multi-window diagnostic composition; removed only its 28px label strip and adjacent tooltip panel."
   },
   "metadataCharacters": {
-    "description": 2122,
-    "shortDescription": 131,
+    "description": 2262,
+    "shortDescription": 151,
     "features": [
       51,
       65,
@@ -18,7 +18,7 @@
       67,
       80,
       62,
-      59
+      70
     ],
     "captions": [
       101,

@@ -71,8 +71,6 @@ jobs:
           MICROSOFT_STORE_IDENTITY_NAME: ${{ secrets.MICROSOFT_STORE_IDENTITY_NAME }}
           MICROSOFT_STORE_PUBLISHER: ${{ secrets.MICROSOFT_STORE_PUBLISHER }}
           MICROSOFT_STORE_PUBLISHER_DISPLAY_NAME: ${{ secrets.MICROSOFT_STORE_PUBLISHER_DISPLAY_NAME }}
-          FFMPEG_COMPLIANCE_URL: ${{ vars.FFMPEG_COMPLIANCE_URL }}
-          FFMPEG_COMPLIANCE_SHA256: ${{ vars.FFMPEG_COMPLIANCE_SHA256 }}
         run: .\scripts\windows\Build-Store.ps1 -Tag $env:RELEASE_TAG
       - uses: actions/upload-artifact@v7
         with:

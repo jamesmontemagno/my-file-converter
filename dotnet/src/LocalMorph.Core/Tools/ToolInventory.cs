@@ -20,6 +20,7 @@ public sealed class ToolInventory
     public ToolInfo? Get(ToolKind kind) => Tools.GetValueOrDefault(kind);
     public string? PathFor(ToolKind kind) => Get(kind)?.Path;
     public bool HasFfmpeg => Has(ToolKind.Ffmpeg);
+    public bool HasMediaTools => HasFfmpeg && Has(ToolKind.Ffprobe);
 
     public static async Task<ToolInventory> DiscoverAsync(bool verifyHardware = true, string? appBaseDirectory = null, CancellationToken token = default)
     {

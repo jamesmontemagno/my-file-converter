@@ -288,6 +288,68 @@ public sealed class ToolTests
     }
 }
 
+public sealed class ExternalMediaToolsTests
+{
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, true)]
+    public void Media_setup_requires_both_ffmpeg_and_ffprobe(bool ffmpeg, bool ffprobe, bool ready)
+    {
+        var tools = new Dictionary<ToolKind, ToolInfo>();
+        if (ffmpeg) tools[ToolKind.Ffmpeg] = new(ToolKind.Ffmpeg, "ffmpeg", null, ToolSource.Path);
+        if (ffprobe) tools[ToolKind.Ffprobe] = new(ToolKind.Ffprobe, "ffprobe", null, ToolSource.Path);
+        var inventory = new ToolInventory(tools, FfmpegCapabilities.Empty);
+
+        Assert.Equal(ffmpeg, inventory.HasFfmpeg);
+        Assert.Equal(ready, inventory.HasMediaTools);
+    }
+
+    [Theory]
+    [InlineData(ToolKind.Ffmpeg)]
+    [InlineData(ToolKind.Ffprobe)]
+    public void Both_media_tools_use_the_same_external_package(ToolKind kind)
+    {
+        var expected = OperatingSystem.IsWindows() ? "winget install --id Gyan.FFmpeg -e"
+            : OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst() ? "brew install ffmpeg"
+            : "sudo apt install ffmpeg";
+        Assert.Equal(expected, ToolCatalog.InstallCommand(kind));
+    }
+
+    [Theory]
+    [InlineData(ToolKind.Ffmpeg)]
+    [InlineData(ToolKind.Ffprobe)]
+    public void Discovery_supports_path_winget_and_manual_installation_without_a_bundle(ToolKind kind)
+    {
+        var descriptor = ToolCatalog.Get(kind);
+        var appDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var candidates = ToolLocator.EnumerateCandidates(descriptor, appDirectory).ToArray();
+        var path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            Assert.Contains(candidates, candidate => candidate.Source == ToolSource.Path &&
+                candidate.Path == Path.Combine(directory, descriptor.ExecutableNames[0]));
+        }
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Contains(candidates, candidate => candidate.Source == ToolSource.KnownLocation &&
+                candidate.Path == Path.Combine(@"C:\ffmpeg\bin", descriptor.ExecutableNames[0]));
+            Assert.Contains(candidates, candidate => candidate.Source == ToolSource.KnownLocation &&
+                candidate.Path == Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Microsoft", "WinGet", "Links", descriptor.ExecutableNames[0]));
+        }
+    }
+
+    [Fact]
+    public void Missing_ffmpeg_disables_media_formats_and_reports_the_required_tool()
+    {
+        var mp4 = TestData.Format("mp4-h264");
+        Assert.Null(FormatCatalog.ResolveEngine(mp4, "input.mp4", ToolInventory.Empty));
+        Assert.Contains(ToolKind.Ffmpeg, FormatCatalog.MissingToolsFor(mp4, ToolInventory.Empty));
+    }
+}
+
 /// <summary>Stand-in for the Windows Imaging Component: "decodes" by writing a small file.</summary>
 internal sealed class FakeImageCodec(bool installed) : IPlatformImageCodec
 {

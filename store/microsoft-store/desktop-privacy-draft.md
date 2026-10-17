@@ -32,8 +32,9 @@ update action may open the Store. Direct-download editions may request an update
 localmorph.com; web hosting services can receive ordinary network information associated with
 those requests. These update requests do not include the source media files.
 
-The Tools page can open external installation, codec, or project links. Optional tool
-installation may use Windows Package Manager or Microsoft Store. Those services have their
+The Tools page can open external installation, codec, or project links. FFmpeg and FFprobe
+must be installed separately for media processing. Tool and codec installation may use
+Windows Package Manager, Microsoft Store, or the tool publisher's website. Those services have their
 own privacy policies and licenses. Opening support or website links also contacts those
 services.
 
@@ -43,7 +44,7 @@ LocalMorph can show or copy conversion diagnostics at your request. Diagnostics 
 local file paths and tool commands. Review them before sharing. If you choose to open a
 public GitHub issue, do not attach confidential files or personal information.
 
-## Optional components
+## External components
 
 External conversion tools and Windows codecs operate under their own licenses. Review the
 components you install and use, especially when working with sensitive files.

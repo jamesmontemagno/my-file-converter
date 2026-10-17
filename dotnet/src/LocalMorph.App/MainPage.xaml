@@ -974,7 +974,7 @@
                     <VerticalStackLayout Spacing="2">
                         <Label Text="CONVERSION ENGINES" Style="{StaticResource Eyebrow}" />
                         <Label Text="Tools found on this device" Style="{StaticResource Title}" />
-                        <Label Text="LocalMorph uses FFmpeg for media and optionally ImageMagick, LibreOffice, Pandoc, and Ghostscript for more formats. Everything runs locally." Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
+                        <Label Text="Install FFmpeg and FFprobe separately for media conversion and inspection. ImageMagick, LibreOffice, Pandoc, and Ghostscript add more formats. Everything runs locally." Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
                     </VerticalStackLayout>
                     <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Text="Refresh" Command="{Binding RefreshToolsCommand}" IsEnabled="{Binding IsRefreshingTools, Converter={StaticResource Not}}" VerticalOptions="Start" AutomationId="RefreshToolsButton">
                         <Button.ImageSource>
@@ -982,12 +982,12 @@
                         </Button.ImageSource>
                     </Button>
                 </Grid>
-                <Border Style="{StaticResource Card}" Padding="14" IsVisible="{Binding HasFfmpeg, Converter={StaticResource Not}}"
+                <Border Style="{StaticResource Card}" Padding="14" IsVisible="{Binding HasMediaTools, Converter={StaticResource Not}}"
                         Stroke="{StaticResource Danger}" Background="{AppThemeBinding Light={StaticResource DangerSoftLight}, Dark={StaticResource DangerSoftDark}}">
-                    <HorizontalStackLayout Spacing="10">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                         <Label Style="{StaticResource Icon}" Text="{x:Static local:Icons.Warning}" FontSize="18" TextColor="{StaticResource Danger}" />
-                        <Label Text="FFmpeg is required for video, audio, and most image conversions. Install it below, then press Refresh." Style="{StaticResource Body}" VerticalOptions="Center" LineBreakMode="WordWrap" />
-                    </HorizontalStackLayout>
+                        <Label Grid.Column="1" Text="{Binding FfmpegSetupInstructions}" Style="{StaticResource Body}" VerticalOptions="Center" LineBreakMode="WordWrap" />
+                    </Grid>
                 </Border>
                 <CollectionView ItemsSource="{Binding Tools}" ItemTemplate="{StaticResource ToolTemplate}" SelectionMode="None" AutomationId="ToolList" />
 

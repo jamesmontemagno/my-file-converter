@@ -18,36 +18,37 @@ function New-TestStoreUpload([string]$Directory, [string]$Scenario, [string]$Com
     $bundle = Join-Path $Directory 'bundle'
     New-Item -ItemType Directory -Path (Join-Path $bundle 'AppxMetadata') -Force | Out-Null
     $packages = @()
-    $pins = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\dotnet\packaging\ffmpeg-windows.lock.json') -Raw | ConvertFrom-Json
     foreach ($architecture in @('x64', 'arm64')) {
         if ($Scenario -eq 'missing-architecture' -and $architecture -eq 'arm64') { continue }
         $package = Join-Path $Directory $architecture
-        $licenses = Join-Path $package 'tools\licenses'
-        New-Item -ItemType Directory -Path $licenses -Force | Out-Null
+        New-Item -ItemType Directory -Path $package -Force | Out-Null
         $identity = if ($Scenario -eq 'wrong-identity') { 'Wrong.Identity' } else { 'Test.StoreIdentity' }
         @"
 <Package><Identity Name="$identity" Publisher="CN=TestPublisher" Version="1.2.3.0" ProcessorArchitecture="$architecture" />
 <Dependencies><PackageDependency Name="Microsoft.WindowsAppRuntime.2.0" /></Dependencies>
 <Applications><Verb Clsid="761079A6-3C8C-4781-AF52-FB07D1C43C0A" /></Applications></Package>
 "@ | Set-Content -LiteralPath (Join-Path $package 'AppxManifest.xml')
-        foreach ($relative in @('coreclr.dll', 'tools\ffmpeg.exe', 'tools\ffprobe.exe')) {
-            $machine = if (($Scenario -eq 'wrong-runtime' -and $relative -eq 'coreclr.dll') -or ($Scenario -eq 'wrong-tool' -and $relative -eq 'tools\ffprobe.exe')) { 'x64' } else { $architecture }
-            New-TestPe (Join-Path $package $relative) $machine
-        }
+        $machine = if ($Scenario -eq 'wrong-runtime') { 'x64' } else { $architecture }
+        New-TestPe (Join-Path $package 'coreclr.dll') $machine
         foreach ($module in @('LocalMorph.App', 'LocalMorph.Core', 'LocalMorph.Shell')) {
-            Copy-Item -LiteralPath (Join-Path $Fixtures "$architecture\$module.dll") -Destination $package
+            $fixtureArchitecture = if ($Scenario -eq 'wrong-shell' -and $module -eq 'LocalMorph.Shell') { 'x64' } else { $architecture }
+            Copy-Item -LiteralPath (Join-Path $Fixtures "$fixtureArchitecture\$module.dll") -Destination $package
         }
         if ($Scenario -eq 'installed-pdb') { Copy-Item -LiteralPath (Join-Path $Fixtures "$architecture\LocalMorph.App.pdb") -Destination $package }
-        if ($Scenario -ne 'missing-notices') { 'Synthetic fixture, not redistribution material.' | Set-Content -LiteralPath (Join-Path $licenses 'NOTICE.txt') }
-        'Synthetic fixture, not a corresponding-source distribution.' | Set-Content -LiteralPath (Join-Path $licenses 'ffmpeg-corresponding-source.zip')
-        $sourceHash = (Get-FileHash -LiteralPath (Join-Path $licenses 'ffmpeg-corresponding-source.zip')).Hash
-        if ($Scenario -eq 'source-hash') { $sourceHash = '0' * 64 }
-        $pin = $pins.("win-$architecture")
-        @{ binarySha256 = $pin.sha256; binaryUrl = $pin.url; correspondingSourceSha256 = $sourceHash } |
-            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $licenses 'provenance.json')
+        if ($Scenario -in @('bundled-ffmpeg', 'bundled-ffprobe', 'nested-ffmpeg')) {
+            $toolDirectory = if ($Scenario -eq 'nested-ffmpeg') { Join-Path $package 'Resources\ffmpeg\win-x64\bin' } else { Join-Path $package 'tools' }
+            New-Item -ItemType Directory -Path $toolDirectory -Force | Out-Null
+            $tool = if ($Scenario -eq 'bundled-ffprobe') { 'ffprobe.exe' } else { 'ffmpeg.exe' }
+            New-TestPe (Join-Path $toolDirectory $tool) $architecture
+        }
         $applicationCommit = if ($Scenario -eq 'wrong-commit') { '0' * 40 } else { $Commit }
-        @{ sourceCommit = $applicationCommit; version = '1.2.3.0'; runtimeIdentifier = "win-$architecture" } |
-            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $licenses 'localmorph-build.json')
+        $applicationVersion = if ($Scenario -eq 'wrong-build-version') { '1.2.4.0' } else { '1.2.3.0' }
+        $runtimeIdentifier = if ($Scenario -eq 'wrong-build-rid') { 'win-other' } else { "win-$architecture" }
+        $mediaTools = if ($Scenario -eq 'wrong-tool-mode') { 'bundled' } else { 'external' }
+        if ($Scenario -ne 'missing-metadata') {
+            @{ sourceCommit = $applicationCommit; version = $applicationVersion; runtimeIdentifier = $runtimeIdentifier; mediaTools = $mediaTools } |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $package 'localmorph-build.json')
+        }
         if ($Scenario -eq 'signed') { 'Not a real signature.' | Set-Content -LiteralPath (Join-Path $package 'AppxSignature.p7x') }
         [IO.Compression.ZipFile]::CreateFromDirectory($package, (Join-Path $bundle "$architecture.msix"))
         $packages += "<Package Type=`"application`" Architecture=`"$architecture`" FileName=`"$architecture.msix`" />"
@@ -156,7 +157,23 @@ try {
         'installed-pdb' = '*not the installed application*'
     }
     $commit = '1' * 40
-    foreach ($scenario in (@('valid', 'missing-architecture', 'wrong-identity', 'wrong-bundle', 'wrong-runtime', 'wrong-tool', 'missing-notices', 'wrong-commit', 'source-hash', 'signed') + @($symbolFailures.Keys))) {
+    $packageFailures = [ordered]@{
+        'missing-architecture' = '*exactly x64 and ARM64 application packages*'
+        'wrong-identity' = '*Unexpected * Store identity*'
+        'wrong-bundle' = '*Unexpected Store bundle identity*'
+        'wrong-runtime' = '*not .NET self-contained*'
+        'wrong-shell' = '*LocalMorph.Shell.dll has the wrong architecture*'
+        'missing-metadata' = '*Missing Store application provenance*'
+        'wrong-commit' = '*provenance does not match*'
+        'wrong-build-version' = '*provenance does not match*'
+        'wrong-build-rid' = '*provenance does not match*'
+        'wrong-tool-mode' = '*must declare external media tools*'
+        'bundled-ffmpeg' = '*must not bundle FFmpeg or FFprobe*'
+        'bundled-ffprobe' = '*must not bundle FFmpeg or FFprobe*'
+        'nested-ffmpeg' = '*must not bundle FFmpeg or FFprobe*'
+        'signed' = '*direct-release signature*'
+    }
+    foreach ($scenario in (@('valid') + @($packageFailures.Keys) + @($symbolFailures.Keys))) {
         $upload = New-TestStoreUpload (Join-Path $temporary $scenario) $scenario $commit $fixtures
         $failure = $null
         try {
@@ -165,6 +182,7 @@ try {
         catch { $failure = $_.Exception.Message }
         if ($scenario -eq 'valid' -and $failure) { throw "Valid synthetic upload rejected: $failure" }
         if ($scenario -ne 'valid' -and -not $failure) { throw "Invalid synthetic upload accepted: $scenario" }
+        if ($packageFailures.Contains($scenario) -and $failure -notlike $packageFailures[$scenario]) { throw "Unexpected $scenario rejection: $failure" }
         if ($symbolFailures.Contains($scenario) -and $failure -notlike $symbolFailures[$scenario]) { throw "Unexpected $scenario rejection: $failure" }
         Write-Host "Store artifact scenario passed: $scenario"
     }
@@ -197,6 +215,6 @@ try {
         $env:GH_TOKEN = $originalToken
         $env:GITHUB_REPOSITORY = $originalRepository
     }
-    Write-Host 'Store version, identity, activation, provenance, approval, and 24 artifact scenarios passed, including matching crash symbols and symbol rejection paths. Synthetic packages do not replace real SDK packaging, native symbol generation, WACK, or installation tests.'
+    Write-Host "Store version, identity, activation, provenance, approval, and $(1 + $packageFailures.Count + $symbolFailures.Count) artifact scenarios passed, including external media tools, matching crash symbols and symbol rejection paths. Synthetic packages do not replace real SDK packaging, native symbol generation, WACK, or installation tests."
 }
 finally { [IO.Directory]::Delete($temporary, $true) }

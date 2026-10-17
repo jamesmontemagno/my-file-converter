@@ -407,6 +407,7 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasFfmpeg))]
+    [NotifyPropertyChangedFor(nameof(HasMediaTools))]
     public partial ToolInventory Inventory { get; set; } = ToolInventory.Empty;
 
     [ObservableProperty]
@@ -447,6 +448,10 @@ public partial class MainViewModel : ObservableObject
     public bool HasSelectedFile => SelectedFile is not null;
     public bool HasFormat => SelectedFormat is not null;
     public bool HasFfmpeg => Inventory.HasFfmpeg;
+    public bool HasMediaTools => Inventory.HasMediaTools;
+    public string FfmpegSetupInstructions => OperatingSystem.IsWindows()
+        ? @"FFmpeg and FFprobe are required for media conversion and inspection. Use Install to open WinGet, or Website for manual setup. Keep both executables in C:\ffmpeg\bin, then select Refresh."
+        : "FFmpeg and FFprobe are required for media conversion and inspection. Use Install to open your package manager, or Website for manual setup. Keep both executables on PATH, then select Refresh.";
     public bool HasHistory => History.Count > 0;
     public bool HasFailed => Files.Any(file => file.IsFailed || file.IsCanceled) && !IsConverting;
     public bool HasValidationMessage => !string.IsNullOrWhiteSpace(ValidationMessage);
@@ -651,7 +656,12 @@ public partial class MainViewModel : ObservableObject
                 : null;
         }
 
-        if (inventory.HasFfmpeg)
+        if (inventory.HasFfmpeg && !inventory.HasMediaTools)
+        {
+            EngineStatus = "FFprobe not found";
+            EngineDetail = "Install FFmpeg with FFprobe, then refresh Tools";
+        }
+        else if (inventory.HasFfmpeg)
         {
             var version = inventory.Get(ToolKind.Ffmpeg)!.ShortVersion;
             EngineStatus = $"FFmpeg {version}";
@@ -1611,7 +1621,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await service.RefreshToolsAsync(verifyHardware: true);
-            ShowToast(Inventory.HasFfmpeg ? "Tools refreshed." : "FFmpeg still not found. Install it, then refresh again.");
+            ShowToast(Inventory.HasMediaTools ? "Tools refreshed." : "FFmpeg or FFprobe is still missing. Install both, then select Refresh.");
         }
         finally
         {

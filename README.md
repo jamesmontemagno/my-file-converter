@@ -144,8 +144,11 @@ Direct/development builds need FFmpeg for media conversion (`winget install Gyan
 `brew install ffmpeg`), or platform binaries under
 [`Resources/ffmpeg`](dotnet/src/LocalMorph.App/Resources/ffmpeg). Packaged Windows builds also need
 Visual Studio 2022 or newer C++ tools for each target architecture to build the native Explorer DLL;
-unpackaged development builds do not. Store builds instead require a pinned, reviewed FFmpeg
-redistribution payload and bundle .NET.
+unpackaged development builds do not. Store builds bundle .NET, but not FFmpeg or FFprobe.
+Install both media tools through the Tools page using WinGet, or extract a full Windows FFmpeg
+build so `ffmpeg.exe` and `ffprobe.exe` are together in `C:\ffmpeg\bin`, then select **Refresh**.
+Manual installations on other platforms must be on PATH. Tool installation may require internet
+access and acceptance of the tool publisher's licenses.
 
 On macOS, HDR tone mapping and the full Core integration suite require `brew install ffmpeg-full`.
 Its keg-only binaries must be on PATH: `export PATH="$(brew --prefix ffmpeg-full)/bin:$PATH"`.
@@ -163,7 +166,7 @@ Direct releases are tag-driven (`vX.Y.Z-windows`, `vX.Y.Z-mac`): signed MSIX + w
 Windows, notarized universal `.app` + Sparkle appcast + Homebrew cask on macOS. Direct builds check
 `localmorph.com/appcast*.xml`; Store builds use Microsoft Store updates, not the direct appcast.
 The separate Windows Store workflow packages on tags; publishing is manual and independently
-approved. It is not release-ready until the FFmpeg compliance, approval, package-installation,
+approved. It is not release-ready until the external-tool setup, approval, package-installation,
 WACK, and native-architecture checks pass. One-time setup (environments, secrets, Azure/Apple accounts):
 [docs/shipping-checklist.md](docs/shipping-checklist.md); pipeline details: [docs/release-setup.md](docs/release-setup.md).
 
