@@ -2,12 +2,14 @@ name: Bridge CI
 
 on:
   push:
+    branches: ['main']
     paths:
       - 'dotnet/**'
       - 'README.md'
       - 'scripts/windows/**'
       - '.github/workflows/bridge-ci.yml'
   pull_request:
+    branches: ['main']
     paths:
       - 'dotnet/**'
       - 'README.md'
