@@ -7,19 +7,36 @@ on:
       - 'dotnet/**'
       - 'README.md'
       - 'scripts/windows/**'
-      - '.github/workflows/bridge-ci.yml'
+      - 'scripts/mac/**'
+      - 'scripts/tests/**'
+      - 'scripts/create-release-tags.*'
+      - 'Casks/**'
+      - 'public/appcast*.xml'
+      - '.github/workflows/**'
   pull_request:
     branches: ['main']
     paths:
       - 'dotnet/**'
       - 'README.md'
       - 'scripts/windows/**'
-      - '.github/workflows/bridge-ci.yml'
+      - 'scripts/mac/**'
+      - 'scripts/tests/**'
+      - 'scripts/create-release-tags.*'
+      - 'Casks/**'
+      - 'public/appcast*.xml'
+      - '.github/workflows/**'
 
 permissions:
   contents: read
 
 jobs:
+  distribution:
+    name: Store-only distribution guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -68,7 +85,8 @@ jobs:
           Assert-PdbMatchesBinary -Binary artifacts\native-shell\ARM64\LocalMorph.Shell.dll -Pdb artifacts\native-shell\ARM64\LocalMorph.Shell.pdb
 
   desktop-app-mac:
-    runs-on: macos-26
+    runs-on: xcode-27
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -76,6 +94,49 @@ jobs:
           dotnet-version: '10.0.401'
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '26.6'
-      - run: dotnet workload install maui-maccatalyst --version 10.0.401
+          xcode-version: '27.0'
+      - run: dotnet workload install maui-maccatalyst --version 10.0.401.1
       - run: dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-maccatalyst --configuration Release -p:MacOnly=true -p:EnableCodeSigning=false
+      - name: Validate Release architecture, minimum OS and scenes
+        run: python3 scripts/mac/validate_app.py "dotnet/src/LocalMorph.App/bin/Release/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph.app"
+      - name: Compile isolated sandbox proof (not runtime evidence)
+        run: dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-maccatalyst -p:MacOnly=true -p:LocalMorphMacSandboxProof=true -p:EnableCodeSigning=false
+      - name: Validate sandbox proof architecture, minimum OS and scenes
+        run: python3 scripts/mac/validate_app.py "dotnet/src/LocalMorph.App/bin/Debug/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph Sandbox Proof.app"
+      - name: Build pinned source-only proof media (not shipping payload)
+        run: |
+          mkdir -p artifacts/mac-proof
+          curl --fail --location --retry 3 https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz -o artifacts/mac-proof/ffmpeg-9.0.2.tar.xz
+          bash scripts/mac/build-proof-media.sh artifacts/mac-proof/ffmpeg-9.0.2.tar.xz artifacts/mac-proof/media arm64
+      - name: Test Apple engine against source-built tools (not host FFmpeg)
+        run: |
+          export PATH="$PWD/artifacts/mac-proof/media/arm64/bin:$PATH"
+          dotnet test dotnet/tests/LocalMorph.Core.Tests --configuration Release \
+            --filter 'FullyQualifiedName~AppleEncoder|FullyQualifiedName~FfmpegEngineTests' \
+            --logger 'trx;LogFileName=apple-encoders.trx' \
+            --results-directory artifacts/mac-proof/tests
+      - name: Ad-hoc sign isolated proof without Store credentials
+        env:
+          LOCALMORPH_PROOF_SIGNING_IDENTITY: '-'
+        run: bash scripts/mac/prepare-sandbox-proof.sh artifacts/mac-proof/media artifacts/mac-proof/proof
+      - name: Verify native scenes, sandbox, Apple encoders, hard cap and cancellation
+        run: |
+          python3 scripts/mac/smoke_sandbox.py \
+            "artifacts/mac-proof/proof/app/Debug/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph Sandbox Proof.app" \
+            artifacts/mac-proof/runtime
+      - name: Retain proof evidence (not Store certification)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mac-sandbox-proof
+          if-no-files-found: warn
+          path: |
+            artifacts/mac-proof/runtime/
+            artifacts/mac-proof/tests/
+            artifacts/mac-proof/proof/proof-source/
+            artifacts/mac-proof/proof/*.txt
+            artifacts/mac-proof/proof/*.patch
+            artifacts/mac-proof/proof/*.sha256
+            artifacts/mac-proof/media/arm64/*.txt
+            artifacts/mac-proof/media/arm64/*.log
+            artifacts/mac-proof/media/arm64/*.sha256

@@ -285,15 +285,6 @@
             </Border>
 
             <HorizontalStackLayout Grid.Column="2" Spacing="8" HorizontalOptions="End" VerticalOptions="Center">
-                <Border Padding="10,5" StrokeThickness="0" StrokeShape="RoundRectangle 999" Background="{StaticResource Accent}" IsVisible="{Binding HasUpdate}" AutomationId="UpdatePill">
-                    <Border.GestureRecognizers>
-                        <TapGestureRecognizer Command="{Binding ShowToolsCommand}" />
-                    </Border.GestureRecognizers>
-                    <HorizontalStackLayout Spacing="6">
-                        <Label Style="{StaticResource Icon}" Text="{x:Static local:Icons.Download}" FontSize="13" TextColor="White" />
-                        <Label Text="{Binding UpdateLabel}" FontFamily="OpenSansSemibold" FontSize="11.5" VerticalOptions="Center" TextColor="White" />
-                    </HorizontalStackLayout>
-                </Border>
                 <Border Padding="10,5" StrokeThickness="1" StrokeShape="RoundRectangle 999"
                         Stroke="{AppThemeBinding Light=#CBE5D2, Dark=#24503A}"
                         Background="{AppThemeBinding Light={StaticResource SuccessSoftLight}, Dark={StaticResource SuccessSoftDark}}"
@@ -602,9 +593,14 @@
                                     <Entry Style="{StaticResource Input}" Text="{Binding TargetSizeText}" Keyboard="Numeric" Placeholder="25" AutomationId="TargetSizeEntry" />
                                     <Label Grid.Column="1" Text="MB" Style="{StaticResource Muted}" VerticalOptions="Center" />
                                 </Grid>
-                                <Label Text="Two-pass encode sized to fit. Great for Discord (25 MB), email, and chat." Style="{StaticResource Muted}" IsVisible="{Binding UseTargetSize}" />
+                                <Label Text="{Binding TargetSizeHint}" Style="{StaticResource Muted}" IsVisible="{Binding UseTargetSize}" />
                             </VerticalStackLayout>
 
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowVideoBitrate}">
+                                <Label Text="Video bitrate (kbps)" Style="{StaticResource FieldLabel}" />
+                                <Entry Text="{Binding VideoBitrateText}" Style="{StaticResource Input}" Keyboard="Numeric" AutomationId="VideoBitrateEntry" />
+                                <Label Text="Apple software encoding uses an average bitrate, not a constant-quality setting. Higher bitrates usually retain more detail." Style="{StaticResource Muted}" />
+                            </VerticalStackLayout>
                             <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowQuality}">
                                 <Grid ColumnDefinitions="*,Auto">
                                     <Label Text="Quality" Style="{StaticResource FieldLabel}" />
@@ -998,43 +994,14 @@
                             <VerticalStackLayout Spacing="2">
                                 <Label Text="ABOUT &amp; UPDATES" Style="{StaticResource Eyebrow}" />
                                 <Label Text="{Binding CurrentVersionLabel}" Style="{StaticResource SectionTitle}" AutomationId="VersionLabel" />
-                                <Label Text="{Binding UpdateStatus}" Style="{StaticResource Muted}" IsVisible="{Binding UpdateStatus, Converter={StaticResource HasText}}" AutomationId="UpdateStatus" />
                             </VerticalStackLayout>
                             <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Start">
-                                <ActivityIndicator IsRunning="{Binding IsCheckingForUpdates}" IsVisible="{Binding IsCheckingForUpdates}" WidthRequest="16" HeightRequest="16" Color="{StaticResource Accent}" />
-                                <Button Style="{StaticResource SecondaryButton}" Text="Check for updates" Command="{Binding CheckForUpdatesCommand}" IsEnabled="{Binding IsCheckingForUpdates, Converter={StaticResource Not}}" AutomationId="CheckUpdatesButton">
-                                    <Button.CommandParameter>
-                                        <x:Boolean>True</x:Boolean>
-                                    </Button.CommandParameter>
-                                </Button>
+                                <Button Style="{StaticResource SecondaryButton}" Text="Open Store updates" Command="{Binding OpenStoreUpdatesCommand}"
+                                        IsVisible="{Binding CanOpenStoreUpdates}" AutomationId="StoreUpdatesButton" />
                             </HorizontalStackLayout>
                         </Grid>
 
-                        <Border Style="{StaticResource CardAlt}" Padding="14" IsVisible="{Binding HasUpdate}" Stroke="{StaticResource Accent}" AutomationId="UpdateCard">
-                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
-                                <Label Grid.RowSpan="3" Style="{StaticResource IconAccent}" Text="{x:Static local:Icons.Rocket}" FontSize="28" VerticalOptions="Start" />
-                                <Label Grid.Column="1" Text="{Binding UpdateLabel}" Style="{StaticResource BodyStrong}" />
-                                <VerticalStackLayout Grid.Column="1" Grid.Row="1" Spacing="4">
-                                    <Label Text="Upgrade from your terminal:" Style="{StaticResource Muted}" />
-                                    <Label Text="{Binding UpdateInstallHint}" Style="{StaticResource Mono}" />
-                                </VerticalStackLayout>
-                                <FlexLayout Grid.Column="1" Grid.Row="2" Wrap="Wrap" JustifyContent="Start">
-                                    <Button Style="{StaticResource PrimaryButton}" HeightRequest="36" FontSize="12" Text="Copy upgrade command" Command="{Binding CopyUpdateCommandCommand}" Margin="0,0,8,6" />
-                                    <Button Style="{StaticResource SecondaryButton}" HeightRequest="36" FontSize="12" Text="Download" Command="{Binding DownloadUpdateCommand}" Margin="0,0,8,6" />
-                                    <Button Style="{StaticResource SecondaryButton}" HeightRequest="36" FontSize="12" Text="Release notes" Command="{Binding OpenUpdateCommand}" Margin="0,0,8,6" />
-                                    <Button Style="{StaticResource GhostButton}" HeightRequest="36" FontSize="12" Text="Skip this version" Command="{Binding SkipUpdateCommand}" Margin="0,0,0,6" />
-                                </FlexLayout>
-                            </Grid>
-                        </Border>
-
-                        <Label Text="Updates are managed by Microsoft Store. Check for updates opens the Store Downloads page." Style="{StaticResource Muted}" IsVisible="{Binding IsStoreBuild}" />
-                        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsDirectBuild}">
-                            <VerticalStackLayout Spacing="0">
-                                <Label Text="Check for updates automatically" Style="{StaticResource FieldLabel}" />
-                                <Label Text="Looks at localmorph.com about once a day. Nothing about you or your files is sent." Style="{StaticResource Muted}" />
-                            </VerticalStackLayout>
-                            <Switch Grid.Column="1" Style="{StaticResource AccentSwitch}" IsToggled="{Binding AutomaticUpdateChecks}" AutomationId="AutoUpdateSwitch" />
-                        </Grid>
+                        <Label Text="{Binding UpdateDescription}" Style="{StaticResource Muted}" />
                     </VerticalStackLayout>
                 </Border>
             </VerticalStackLayout>

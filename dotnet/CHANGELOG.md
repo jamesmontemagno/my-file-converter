@@ -1,9 +1,27 @@
 # LocalMorph Desktop Changelog
 
-All notable changes to the .NET MAUI desktop app. Release workflows copy the section matching
-the git tag (`## v1.2.3-windows` / `## v1.2.3-mac`) into the GitHub Release notes.
+All notable changes to the .NET MAUI desktop app. Platform tags identify Store package sources;
+desktop installers are not distributed through GitHub Releases.
 
 ## Unreleased
+
+### Changed
+- FFmpeg can use Apple's H.264/HEVC software encoders when libx264/libx265 are absent.
+  Software mode exposes an explicit bitrate instead of unsupported quality/speed controls.
+  Apple target-size jobs make at most three bitrate-adjusted attempts and never commit an
+  oversized result; the existing x264 two-pass path is unchanged.
+- Mac builds target macOS 15+ on Apple Silicon only, replacing Intel/universal output.
+  Apple app heads adopt MAUI's single-window scene lifecycle. Mac CI pins a compatible
+  Xcode 27 workload and checks generated scene/OS/architecture metadata; macOS 27 startup
+  and Store certification remain release gates.
+- Mac CI builds source-pinned, non-GPL proof tools and runs an isolated ad-hoc-signed
+  sandbox app to check scene startup, H.264/HEVC software conversion, hard caps and cancellation.
+  This diagnostic payload is not the approved shipping tool bundle or Store certification.
+- Desktop distribution is Microsoft Store and Mac App Store only. Removed direct MSIX/ZIP
+  release workflows, LocalMorph WinGet/Homebrew distribution, appcasts, and in-app download checks.
+  Windows conversion-tool installation and browser/bridge delivery are unchanged.
+- Updates are managed by the platform Store. Windows can open Store updates; Mac shows
+  App Store update instructions without polling a website or offering terminal upgrades.
 
 ## v1.0.1-windows
 
@@ -29,7 +47,7 @@ the git tag (`## v1.2.3-windows` / `## v1.2.3-mac`) into the GitHub Release note
 - Windows: HEIC/HEIF photos decode natively through the Windows HEIF Image Extensions codec (Windows Imaging Component) for PNG/JPEG/BMP/TIFF/GIF output, no ImageMagick required. When the codec is missing, the Tools view and the queue offer a "Get from Store" action that opens its Microsoft Store page, and the Tools view warns when the companion HEVC decoder is absent.
 - History of finished conversions with reopen, reveal, and reconvert.
 - Light/dark/system theme with a themed title bar.
-- In-app update check against the LocalMorph appcast (winget / Homebrew upgrade hints).
+- In-app update check against the LocalMorph appcast (removed in the Store-only transition).
 - "Open with" support: LocalMorph registers as a handler for video, audio, image, and document files on Windows (MSIX file type associations) and macOS (`CFBundleDocumentTypes`). Opening files from Explorer/Finder, or launching a second time, adds them to the running app's queue and brings it to the front.
 
 ### Fixed

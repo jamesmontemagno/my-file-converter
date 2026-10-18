@@ -1,311 +1,123 @@
-# Shipping checklist: everything to configure before the first release
-
-This is the one-time setup needed so that pushing a `vX.Y.Z-windows` / `vX.Y.Z-mac` tag produces a
-signed, installable LocalMorph Desktop release on winget and Homebrew, with a separate protected
-Microsoft Store path. Work through it top to bottom;
-each section ends with a way to verify it. The companion `release-setup.md` explains how the
-pipeline works once this is done.
-
-> Where to set things: **Settings → Secrets and variables → Actions** (repository-level), and
-> **Settings → Environments** for channel-specific environments below. Anything marked *environment secret*
-> must be created **inside** that environment, not at repository level, because the workflows declare
-> `environment: windows-release`, `macos-release`, or `microsoft-store`.
-
----
-
-## 0. Repository settings (5 minutes)
-
-| Item | Where | Value / action |
-|---|---|---|
-| Direct-release environments | Settings → Environments | Create `windows-release` and `macos-release` if absent; neither was present during the configuration review. Add reviewers according to signing policy. |
-| Store environment | Settings → Environments → `microsoft-store` | Require `jamesmontemagno` as reviewer and disable administrator bypass. Self-approval is explicitly allowed by the owner. Flight and production each pause for approval in sequence; credentials/product configuration stay here. |
-| Workflow permissions | Settings → Actions → General → Workflow permissions | Keep default permissions read-only. Direct/mac jobs declare needed write permissions explicitly. Enable Actions pull-request creation only if repository policy allows the metadata PRs; the Store workflow does not create PRs and needs only read permissions. |
-| GitHub Pages | Settings → Pages | Already configured for `localmorph.com` via `deploy.yml`. The desktop app reads `https://localmorph.com/appcast.xml` and `appcast-windows.xml`; both placeholders exist in `public/`. Nothing to change. |
-| Branch protection (optional) | Settings → Branches | If `main` requires reviews, the auto-created release-metadata PRs will wait for you; merge them to publish the appcast/cask. |
-
-**Verify:** `gh api repos/jamesmontemagno/my-file-converter/environments -q '.environments[].name'`
-lists the intended environments. Check Store reviewer protections separately; environment existence
-alone is insufficient.
-
----
-
-## 1. Windows: Azure Artifact Signing (Trusted Signing)
-
-The MSIX is signed with [Azure Artifact Signing](https://learn.microsoft.com/azure/trusted-signing/)
-using OIDC — no certificate file lives in GitHub. This is the same account/profile tiny-clips uses, so
-if that is already set up you only need to add the federated credential for this repo and copy the
-values.
-
-### 1a. Azure resources (skip if reusing tiny-clips' account)
-
-1. Create an **Artifact Signing account** (Azure portal → *Trusted Signing Accounts* → Create). Note the
-   **account name** and its **endpoint** (for example `https://wus2.codesigning.azure.net`).
-2. Complete **identity validation** for *Refractored LLC* (Organization validation). This can take a few
-   days; the certificate subject must come out as
-   `CN=Refractored LLC, O=Refractored LLC, L=Seattle, S=Washington, C=US` — it has to match
-   `Publisher` in `dotnet/src/LocalMorph.App/Platforms/Windows/Package.appxmanifest` exactly, or
-   Windows refuses to install the MSIX and the `PackageFamilyName` (`Refractored.LocalMorph_vmshqmcyy894t`)
-   changes.
-3. Create a **certificate profile** of type *Public Trust* and note its **name**.
-
-### 1b. Entra ID app registration + federated credential
-
-1. Entra ID → App registrations → New registration (for example `localmorph-release-signing`).
-   Note **Application (client) ID**, **Directory (tenant) ID**, and the **Subscription ID** that holds
-   the signing account.
-2. Certificates & secrets → **Federated credentials** → Add → *GitHub Actions deploying Azure resources*:
-   - Organization: `jamesmontemagno`
-   - Repository: `my-file-converter`
-   - Entity type: **Environment**, name: `windows-release`
-3. On the Artifact Signing account, IAM → Add role assignment → **Trusted Signing Certificate Profile
-   Signer** → assign to the app registration.
-
-### 1c. Environment secrets (`windows-release`)
-
-| Secret | Value |
-|---|---|
-| `AZURE_CLIENT_ID` | Application (client) ID from 1b |
-| `AZURE_TENANT_ID` | Directory (tenant) ID |
-| `AZURE_SUBSCRIPTION_ID` | Subscription that contains the signing account |
-| `AZURE_ARTIFACT_SIGNING_ENDPOINT` | e.g. `https://wus2.codesigning.azure.net` |
-| `AZURE_ARTIFACT_SIGNING_ACCOUNT_NAME` | Signing account name |
-| `AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME` | Certificate profile name |
-
-**Verify:** run **Windows Release** manually (Actions → Windows Release → Run workflow → tag
-`v0.0.1-windows`) after creating that tag with `.\scripts\create-release-tags.ps1 v0.0.1 -Windows -Push`.
-The *Sign MSIX packages* and *Verify signatures* steps must pass. Delete the test release/tag afterwards.
-
----
-
-## 2. Windows: winget submission
-
-`winget-submit.yml` is run by hand after you have looked at the GitHub Release.
-
-| Secret (repository-level) | Value |
-|---|---|
-| `WINGET_CREATE_GITHUB_TOKEN` | A **classic** personal access token with the `public_repo` scope, from an account that can fork `microsoft/winget-pkgs` (your own account is fine). Fine-grained tokens do not work with `wingetcreate`. See <https://aka.ms/winget-create-token>. |
-
-One-time: fork <https://github.com/microsoft/winget-pkgs> to your account so `wingetcreate` can push
-branches there.
-
-First submission of a **new package** (`Refractored.LocalMorph`) is reviewed by the winget maintainers
-and usually takes 1–3 days; updates are mostly automated. The package's dependencies
-(`Microsoft.DotNet.DesktopRuntime.10`, `Microsoft.WindowsAppRuntime.2`, `Gyan.FFmpeg`) are installed by
-winget before the app.
-
-**Verify:** after the PR merges, `winget search Refractored.LocalMorph` finds it and
-`winget install Refractored.LocalMorph` installs and launches the app on a clean machine.
-
----
-
-## 3. macOS: Developer ID signing + notarization
-
-You need a paid Apple Developer Program membership (Refractored LLC team).
-
-### 3a. Developer ID Application certificate
-
-1. On a Mac: Keychain Access → Certificate Assistant → **Request a Certificate From a Certificate
-   Authority** → save to disk.
-2. <https://developer.apple.com/account/resources/certificates> → `+` → **Developer ID Application**
-   → G2 Sub-CA → upload the CSR → download the `.cer` → double-click to install.
-3. In Keychain Access select the certificate **and its private key** → Export → `.p12` with a strong
-   password.
-4. `base64 -i DeveloperID.p12 | pbcopy`
-
-No provisioning profile is required: the app declares no restricted entitlements (sandbox is off so
-it can spawn FFmpeg; the JIT entitlements in `Entitlements.plist` are hardened-runtime flags).
-
-### 3b. App-specific password for notarytool
-
-<https://appleid.apple.com> → Sign-In and Security → **App-Specific Passwords** → Generate
-("LocalMorph notarization").
-
-### 3c. Sparkle signing key
-
-Used by `generate_appcast` to EdDSA-sign enclosures in the appcast (keeps the feed valid for a
-future in-process Sparkle updater; the current updater just reads versions).
-
-```bash
-curl -L -o Sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/2.8.1/Sparkle-2.8.1.tar.xz
-mkdir Sparkle && tar -xf Sparkle.tar.xz -C Sparkle
-./Sparkle/bin/generate_keys            # creates the key in your login keychain, prints the public key
-./Sparkle/bin/generate_keys -x sparkle_private_key.txt   # export for GitHub; back this file up securely
-```
-
-Keep the **public key** printed by `generate_keys`; add it to `Info.plist` as `SUPublicEDKey` if/when
-a native Sparkle updater is added. `sparkle_private_key*` is git-ignored.
-
-### 3d. Environment secrets (`macos-release`)
-
-| Secret | Value |
-|---|---|
-| `DEVELOPER_ID_CERTIFICATE_BASE64` | Output of step 3a.4 |
-| `DEVELOPER_ID_CERTIFICATE_PASSWORD` | Password chosen when exporting the `.p12` |
-| `KEYCHAIN_PASSWORD` | Any strong random string (protects the temporary CI keychain) |
-| `APPLE_ID` | The Apple ID e-mail that owns the team membership |
-| `APP_PASSWORD` | App-specific password from 3b |
-| `APPLE_TEAM_ID` | 10-character Team ID (developer.apple.com → Membership details) |
-| `SPARKLE_PRIVATE_KEY` | Full contents of `sparkle_private_key.txt` |
-
-**Verify:** create and push `v0.0.1-mac`; the **macOS Release** workflow must pass *Notarize and
-staple* (`status: Accepted`) and `spctl -a -vv` must print `accepted` / `source=Notarized Developer ID`.
-Download the zip from the draft release and open the app on a Mac that has never seen it.
-
----
-
-## 4. Homebrew cask
-
-The cask lives in this repository (`Casks/localmorph.rb`) and is bumped automatically by the macOS
-release PR. Users install with:
-
-```bash
-brew tap jamesmontemagno/my-file-converter https://github.com/jamesmontemagno/my-file-converter
-brew install --cask localmorph
-```
-
-Nothing to configure. Optional later: submit to `homebrew/cask` once there is a notarized release
-(cask name must be unique there; `livecheck` already points at the appcast).
-
----
-
-## 5. Website / appcast publishing
-
-`public/appcast.xml` (macOS) and `public/appcast-windows.xml` (Windows) are published by the existing
-Pages deploy. Each release workflow opens a PR that replaces the file; **merging that PR is what makes
-the in-app "Update available" pill appear** for users on older versions. The PWA service worker is
-configured to never intercept those URLs.
-
-**Verify:** `curl -s https://localmorph.com/appcast-windows.xml | head` returns XML (currently an empty
-channel).
-
----
-
-## 6. Cutting a release
-
-1. Add a section to `dotnet/CHANGELOG.md`:
-   ```markdown
-   ## v1.0.0-windows
-   ### Added
-   - ...
-   ## v1.0.0-mac
-   ### Added
-   - ...
-   ```
-   (The workflows copy the section whose heading matches the tag into the GitHub Release notes; the
-   `tag-new-release` script warns if it is missing.)
-2. Bump `ApplicationDisplayVersion` in `LocalMorph.App.csproj` only if you want the dev build to show
-   the new number — the workflows stamp the real version from the tag.
-3. Tag and push (both platforms, or just one):
-   ```powershell
-   .\scripts\create-release-tags.ps1 v1.0.0 -Windows -Mac -Push
-   ```
-4. Watch **Windows Release** and **macOS Release** in Actions. If the environments have required
-   reviewers, approve them.
-5. Review both GitHub Releases (assets, notes, hashes).
-6. Merge the two `release-metadata/v1.0.0-*` PRs → appcasts and cask go live.
-7. Run **WinGet Submission** with tag `v1.0.0-windows` → PR to `microsoft/winget-pkgs`.
-
-Tag format: `vMAJOR.MINOR.PATCH[-REV]-windows|mac` — the optional fourth number is a same-day rebuild
-(`v1.0.0.1-windows` → MSIX version `1.0.0.1`, asset `LocalMorph-1.0.0.1-x64.msix`).
-
----
-
-## 7. Quick reference: every secret in one table
-
-| Scope | Name | Used by |
-|---|---|---|
-| env `windows-release` | `AZURE_CLIENT_ID` | windows-release.yml |
-| env `windows-release` | `AZURE_TENANT_ID` | windows-release.yml |
-| env `windows-release` | `AZURE_SUBSCRIPTION_ID` | windows-release.yml |
-| env `windows-release` | `AZURE_ARTIFACT_SIGNING_ENDPOINT` | windows-release.yml |
-| env `windows-release` | `AZURE_ARTIFACT_SIGNING_ACCOUNT_NAME` | windows-release.yml |
-| env `windows-release` | `AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME` | windows-release.yml |
-| repository | `WINGET_CREATE_GITHUB_TOKEN` | winget-submit.yml |
-| env `macos-release` | `DEVELOPER_ID_CERTIFICATE_BASE64` | mac-release.yml |
-| env `macos-release` | `DEVELOPER_ID_CERTIFICATE_PASSWORD` | mac-release.yml |
-| env `macos-release` | `KEYCHAIN_PASSWORD` | mac-release.yml |
-| env `macos-release` | `APPLE_ID` | mac-release.yml |
-| env `macos-release` | `APP_PASSWORD` | mac-release.yml |
-| env `macos-release` | `APPLE_TEAM_ID` | mac-release.yml |
-| env `macos-release` | `SPARKLE_PRIVATE_KEY` | mac-release.yml |
-| repository | `MICROSOFT_STORE_IDENTITY_NAME`, `MICROSOFT_STORE_PUBLISHER`, `MICROSOFT_STORE_PUBLISHER_DISPLAY_NAME` | windows-store-publish.yml package identity |
-| repository (fallback) | `MICROSOFT_STORE_PRODUCT_ID` | Store product ID if the environment variable is absent |
-| env `microsoft-store` | `PARTNER_CENTER_TENANT_ID`, `PARTNER_CENTER_SELLER_ID`, `PARTNER_CENTER_CLIENT_ID`, `PARTNER_CENTER_CLIENT_SECRET` | protected Store diagnose/publish |
-| (built-in) | `GITHUB_TOKEN` | job-scoped permissions; Store uses read only, metadata PR creation is channel-specific |
-
-Actions **variables**: `MICROSOFT_STORE_PRODUCT_ID` in `microsoft-store`. No FFmpeg archive variables
-are needed because Store packages use externally installed media tools. Direct-channel constants remain in
-workflow `env:` blocks (`PACKAGE_FAMILY_NAME`, `SPARKLE_VERSION`, project paths).
-
-Paste-ready `gh` commands once you have the values (run from the repo root):
-
-```powershell
-# Windows signing (environment secrets)
-foreach ($s in 'AZURE_CLIENT_ID','AZURE_TENANT_ID','AZURE_SUBSCRIPTION_ID','AZURE_ARTIFACT_SIGNING_ENDPOINT','AZURE_ARTIFACT_SIGNING_ACCOUNT_NAME','AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME') {
-  gh secret set $s --env windows-release
-}
-# winget (repository secret)
-gh secret set WINGET_CREATE_GITHUB_TOKEN
-# macOS (environment secrets)
-foreach ($s in 'DEVELOPER_ID_CERTIFICATE_PASSWORD','KEYCHAIN_PASSWORD','APPLE_ID','APP_PASSWORD','APPLE_TEAM_ID') {
-  gh secret set $s --env macos-release
-}
-gh secret set DEVELOPER_ID_CERTIFICATE_BASE64 --env macos-release < DeveloperID.p12.base64.txt
-gh secret set SPARKLE_PRIVATE_KEY --env macos-release < sparkle_private_key.txt
-```
-
-Each `gh secret set` without a value prompts for it interactively so nothing lands in shell history.
-
----
-
-## 8. Things that are intentionally *not* needed
-
-- **Code-signing certificate files in the repo** — Windows uses Azure OIDC; macOS imports the `.p12`
-  from a secret into a throwaway keychain and deletes it afterwards.
-- **Bundled FFmpeg** — winget and the cask install `Gyan.FFmpeg` / `ffmpeg` as dependencies.
-  Microsoft Store users install FFmpeg and FFprobe through the Tools page or manually; the Store
-  package bundles .NET but no media tools or FFmpeg source archive.
-- **Mac App Store** — not wired up. The macOS build remains Developer ID, not sandboxed.
-
----
-
-## Microsoft Store and native Explorer release gate
-
-Use the complete [Store release setup](release-setup.md#microsoft-store-separate-identity-payload-and-approval)
-before dispatching the new workflow:
-
-- [ ] Confirm the Store identity secrets and canonical environment Product ID match Partner Center.
-- [ ] Configure the required reviewer gate, keep the owner's explicit self-approval policy, disable
-  administrator bypass, and verify protection can be read by the workflow. Do not change GitHub
-  settings without authorization.
-- [ ] Put the separate FFmpeg/FFprobe requirement at the beginning of the Store listing description
-  and document reviewer setup. Verify the WinGet and manual-install paths without redistributing
-  media tools inside the app package.
-- [ ] Ensure Visual Studio 2022 or newer C++ and SDK tools exist for x64 **and** ARM64. Local x64 compilation is not
-  proof of ARM64 compilation or runtime behavior.
-- [ ] Build package-only from an exact valid Store tag (`v1.0.0-windows`, fourth component zero).
-  Verify the real `.msixupload`, architecture-matched payloads and source-commit provenance.
-- [ ] Confirm the upload includes both x64 and ARM64 `.appxsym` archives with matching App, Core,
-  and native Explorer PDBs. Run the artifact validator and confirm no PDBs are installed in the MSIXs.
-  After an authorized submission, verify Partner Center received the symbols; symbol upload alone
-  does not guarantee diagnostic-data collection or crash-report availability.
-- [ ] Run WACK and clean-install checks on native x64 and ARM64 without system .NET or FFmpeg.
-  Verify missing-tool guidance, install FFmpeg/FFprobe, refresh, and test media inspection and
-  conversions. Include partial installation (missing FFprobe), no WinGet, and manual setup.
-  Confirm Store-resolved Windows App SDK frameworks and actual ARM64 tool compatibility.
-- [ ] Verify the installed Explorer command with multi-selection, spaces/Unicode, cold/warm/minimized
-  activation, unsupported selections and uninstall. It must queue only, not convert or change defaults.
-- [ ] Verify keyboard/foreground queue and history menus, join ordering, split output selection,
-  partial outputs, saved-settings restoration, scaled layouts, and accessibility.
-- [ ] Validate Mac Catalyst compilation/runtime separately on macOS.
-- [ ] Only after package/install validation, run protected **diagnose** for read-only account/app access.
-- [ ] Confirm the existing package flight is named exactly **Internal Testing** and has the intended
-  tester group/membership in Partner Center. Discovery must resolve exactly one matching flight.
-- [ ] On tag pushes or manual **publish**, approve the Internal Testing job only after package checks.
-  A manual **package** run remains non-publishing.
-- [ ] Wait for flight publication, install as a tester, and verify the smoke/release checks before
-  separately approving the production job. Production must use the same upload hash as the flight.
-  Review processing/certification status in Partner Center; upload success is not Store availability.
-
-No actual Store upload, WACK pass, ARM64 runtime pass, or submission is implied by the helper tests
-or a successful unpackaged Windows build.
+# Store-only desktop shipping checklist
+
+LocalMorph desktop distribution is **Microsoft Store for Windows** and **Mac App Store for Mac**.
+Direct MSIX/ZIP releases, LocalMorph WinGet/Homebrew distribution, and appcasts are removed.
+Windows conversion-tool acquisition, browser conversion, and bridge/global-tool releases remain.
+
+See [release-setup.md](release-setup.md) for the operator runbook and exact configuration scopes.
+No successful package, helper test, or compilation establishes certification or public availability.
+
+## Microsoft Store configuration
+
+- Confirm the reserved product and Store identity secrets:
+  `MICROSOFT_STORE_IDENTITY_NAME`, `MICROSOFT_STORE_PUBLISHER`,
+  `MICROSOFT_STORE_PUBLISHER_DISPLAY_NAME`.
+- Set `MICROSOFT_STORE_PRODUCT_ID` in the `microsoft-store` environment. The repository secret
+  of the same name remains a fallback.
+- Keep `PARTNER_CENTER_TENANT_ID`, `PARTNER_CENTER_SELLER_ID`, `PARTNER_CENTER_CLIENT_ID`,
+  and `PARTNER_CENTER_CLIENT_SECRET` inside the protected `microsoft-store` environment.
+- Require reviewer approval and disable administrator bypass. The owner explicitly permits
+  self-approval; the workflow checks this policy with `Test-StoreApproval.ps1 -AllowSelfReview`.
+  Missing/unreadable protections must fail closed.
+- Confirm exactly one existing package flight named **Internal Testing**, with intended testers.
+  The scripts discover it by name; they do not create it or fall back to production.
+- Confirm category, pricing/markets, support and published desktop privacy policy, age ratings,
+  and the [Microsoft Store listing kit](../store/microsoft-store/README.md).
+- Keep the FFmpeg/FFprobe external requirement at the beginning of the listing and in review notes.
+  The Windows package bundles .NET but not media tools. Tool installation may require internet
+  access and acceptance of the tool publisher's licenses.
+
+## Windows package and runtime gates
+
+- Use PowerShell 7 and Visual Studio 2022 or newer with Windows SDK and C++ tools for both
+  x64 and ARM64. The Explorer DLL and its matching PDB must be built for each architecture.
+- Run `scripts/windows/Test-StoreScripts.ps1`, then package an exact valid immutable Store tag:
+  `v1.0.0-windows` or `v1.0.0.0-windows` (fourth component must be zero).
+- Verify the real `.msixupload`: Store identity/version, both payloads, self-contained .NET,
+  Store-resolved Windows App SDK frameworks, native Explorer registrations, and source provenance.
+- Verify both architecture-specific `.appxsym` archives carry matching App/Core/Shell symbols.
+  Revalidate downloaded artifacts and hashes before submission; PDBs must not be installed in
+  MSIX payloads. Symbols do not guarantee crash reports or enable telemetry.
+- Run WACK and clean installation on native x64 and ARM64 machines without system .NET/FFmpeg.
+  ARM64 compilation on x64 is not native runtime evidence.
+- Verify missing-tool guidance, WinGet installation and manual installation of FFmpeg/FFprobe,
+  Refresh, inspection and real conversions. Include missing FFprobe, unavailable WinGet, and
+  native-architecture compatibility. A full manual Windows build can put both executables in
+  `C:\ffmpeg\bin`.
+- Verify installed Explorer cold/warm/minimized activation, multiple/unsupported selections,
+  spaces/Unicode and uninstall. It must queue only, not convert or change default associations.
+- Verify keyboard-accessible queue/history menus, join ordering, split output selection,
+  retained partial outputs, settings restoration, themes, scaled layouts and accessibility.
+- Confirm only Store-managed updates remain; no website feed or direct installer is contacted.
+
+## Windows submission gates
+
+1. Manual **package** builds and verifies only; no Partner Center mutation.
+2. Protected **diagnose** is read-only token/app access and flight discovery, not draft creation.
+3. A tag push or manual **publish** waits for approval before submitting the validated upload
+   to **Internal Testing**.
+4. Wait for flight publication, install as a tester, and complete the checks above.
+5. Separately approve production. It must use the same upload hash/source/version as the flight.
+6. Check processing, certification and Store availability separately from submission success.
+
+Do not use `--noCommit` as a claimed read-only diagnostic: creating/uploading a draft is a mutation.
+
+## Mac App Store gates
+
+Mac delivery is not yet enabled. Do not tag or advertise a public Mac release until these pass.
+
+- Confirm Apple membership, app record, effective bundle identifier, category,
+  pricing/territories, agreements and required questionnaires.
+- Enforce the approved **macOS 15+ / Apple Silicon-only** baseline: Catalyst target 18.0,
+  arm64 app and bundled executables, no Intel/universal package. Verify generated minimum-OS
+  metadata rather than interpreting the Catalyst version as a macOS version.
+- Use the pinned Xcode 27/.NET SDK/workload combination in the
+  [Mac toolchain runbook](release-setup.md#macos-toolchain). Verify scene delegates/manifests
+  and actual single-window startup on macOS 27, including cold/warm Finder intake, Dock
+  reactivation and quit/relaunch. Also test macOS 15; build success is not runtime evidence.
+- The six existing Apple repository secret names and their intended uses are recorded in
+  [Actions signing and upload configuration](release-setup.md#actions-signing-and-upload-configuration).
+  Verify that the P12 contains both application and installer private-key identities and that the
+  profile belongs to LocalMorph. Do not request duplicate API-key aliases merely to match another app.
+- Create and protect `mac-app-store` before credential diagnostics, signing or upload: required
+  reviewers, no administrator bypass, explicit branch/tag and self-review policy. Its environment
+  does not exist yet. Moving repository secrets into it requires owner-controlled configuration.
+- Prove signed sandboxed execution using bundled FFmpeg/FFprobe without Homebrew or host PATH.
+  Review component licenses, exact source/build provenance, hashes, codec/filter availability,
+  native dependencies and necessary entitlements before approving a tool payload.
+- Inspect the `mac-sandbox-proof` CI evidence independently from host-FFmpeg test results.
+  The minimal Debug proof checks Apple software H.264/HEVC, target-size caps and cancellation,
+  but lacks libass/zscale and is not the shipping payload. Verify explicit software bitrate,
+  at most three size attempts, and rejection without destination replacement if the cap is missed.
+- Verify persistent file/folder authorization for pickers, Finder, drag/drop, subtitles,
+  replacement audio, preview, conversion, history and reauthorization after relaunch.
+- Request an output folder before first conversion and remember authorized access. Source-file
+  selection alone must not be treated as permission to create sibling outputs.
+- Verify staging/commit, overwrite protection, cancellation, join/split and partial results
+  against real sandbox permissions and the actual bundled codec/filter set.
+- Configure application distribution and installer signing, provisioning, package validation,
+  architecture checks and matching crash symbols. Notarized direct downloads are not the channel.
+- Validate build-number monotonicity and retry behavior; retain the exact package hash, version,
+  build number and source before upload. Review submission must select the same processed build
+  tested through TestFlight, not a rebuilt package.
+- Audit applicable privacy manifests and data declarations; publish reviewed desktop privacy
+  and support information. Local media processing alone does not answer every privacy question.
+- Capture genuine Mac screenshots at accepted dimensions, with build/tool/output evidence.
+  Produce a website launch film and a separate screen-recording-led App Store preview; validate
+  each against its own requirements. Do not reuse Windows captures or fabricate UI/history.
+- Configure protected TestFlight upload and review gates, then test the same distributable
+  build on clean Apple Silicon Macs at the macOS 15 baseline and on macOS 27.
+  Do not upload as TestFlight Internal Only if it
+  is intended to ship to customers.
+- Require separate review submission approval and manual public release after Apple approval.
+  Update website launch claims only after actual availability is verified.
+
+## Repository and retired-channel cleanup
+
+- Keep Actions defaults read-only; retain only the permissions needed by active Store/bridge/
+  website workflows.
+- Retire unused direct-release environment/credential names only after checking other consumers
+  and obtaining authorization. Do not print secret values or remove shared credentials.
+- Report any external LocalMorph WinGet/Homebrew entries needing retirement separately.
+- Preserve existing published history/tags and all bridge releases.
+- Keep the Windows and browser website routes usable while Mac delivery remains unavailable.

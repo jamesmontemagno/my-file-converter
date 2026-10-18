@@ -9,7 +9,6 @@ using LocalMorph.Core.Formats;
 using LocalMorph.Core.Imaging;
 using LocalMorph.Core.Jobs;
 using LocalMorph.Core.Tools;
-using LocalMorph.Core.Updates;
 
 namespace LocalMorph.App.ViewModels;
 
@@ -29,7 +28,6 @@ public partial class MainViewModel : ObservableObject
 {
     private readonly ConversionService service;
     private readonly AppSettings settings;
-    private readonly UpdateService updates;
     private readonly SemaphoreSlim inspectionGate = new(4);
     private int inspectionsPending;
     private bool applyingPreset;
@@ -46,12 +44,10 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial string ImportSummary { get; set; } = "Drop more files here, or use Add files";
 
-    public MainViewModel(ConversionService service, AppSettings settings, UpdateService updates)
+    public MainViewModel(ConversionService service, AppSettings settings)
     {
         this.service = service;
         this.settings = settings;
-        this.updates = updates;
-        AutomaticUpdateChecks = updates.AutomaticChecks;
         SelectedOperation = OperationOptions[0];
         SelectedSplitMode = SplitModeOptions[0];
 
@@ -279,6 +275,8 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowLossless))]
     [NotifyPropertyChangedFor(nameof(ShowPlaybackSpeed))]
     [NotifyPropertyChangedFor(nameof(ShowVideoSection))]
+    [NotifyPropertyChangedFor(nameof(ShowVideoBitrate))]
+    [NotifyPropertyChangedFor(nameof(TargetSizeHint))]
     [NotifyPropertyChangedFor(nameof(ShowAudioSection))]
     [NotifyPropertyChangedFor(nameof(ShowAdvancedSection))]
     [NotifyPropertyChangedFor(nameof(ShowStripMetadata))]
@@ -306,6 +304,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(QualityLabel))]
     public partial int Quality { get; set; } = 80;
+
+    [ObservableProperty] public partial string VideoBitrateText { get; set; } = "4000";
 
     [ObservableProperty] public partial ChoiceOption<int?> SelectedResolution { get; set; }
     [ObservableProperty] public partial ChoiceOption<int?> SelectedFrameRate { get; set; }
@@ -467,10 +467,16 @@ public partial class MainViewModel : ObservableObject
         : UseHardwareEncoder ? $"Using {Inventory.Ffmpeg.HardwareSummary}" : $"{Inventory.Ffmpeg.HardwareSummary} available";
 
     private bool Supports(FormatFeatures feature) => !IsJoin && SelectedFormat?.Format.Supports(feature) == true;
-    public bool ShowQuality => Supports(FormatFeatures.Quality) && !(UseTargetSize && ShowTargetSize);
+    private bool UsesAppleSoftware => !IsJoin && Inventory.Ffmpeg.UsesAppleSoftwareEncoder(
+        SelectedFormat?.Format.VideoCodec, UseHardwareEncoder && !(UseTargetSize && ShowTargetSize));
+    public bool ShowVideoBitrate => UsesAppleSoftware && !(UseTargetSize && ShowTargetSize);
+    public string TargetSizeHint => UsesAppleSoftware
+        ? "Apple software encoding, with up to three bitrate-adjusted attempts. Oversized results are never committed."
+        : "Two-pass encode sized to fit. Great for Discord (25 MB), email, and chat.";
+    public bool ShowQuality => Supports(FormatFeatures.Quality) && !(UseTargetSize && ShowTargetSize) && !ShowVideoBitrate;
     public bool ShowResolution => Supports(FormatFeatures.Resolution);
     public bool ShowFrameRate => Supports(FormatFeatures.FrameRate);
-    public bool ShowSpeed => Supports(FormatFeatures.EncodingSpeed);
+    public bool ShowSpeed => Supports(FormatFeatures.EncodingSpeed) && !UsesAppleSoftware;
     public bool ShowAudio => Supports(FormatFeatures.AudioTuning) && !RemoveAudio;
     public bool ShowBitDepth => Supports(FormatFeatures.WavBitDepth);
     public bool ShowTargetSize => Supports(FormatFeatures.TargetSize);
@@ -501,7 +507,7 @@ public partial class MainViewModel : ObservableObject
         SubtitleMode.BurnIn => "The chosen track (or added file) is drawn permanently into the picture. Requires a re-encode.",
         _ => "MKV keeps every subtitle track; other containers leave them out."
     };
-    public bool ShowVideoSection => ShowResolution || ShowFrameRate || ShowSpeed || ShowQuality || ShowTargetSize;
+    public bool ShowVideoSection => ShowResolution || ShowFrameRate || ShowSpeed || ShowQuality || ShowTargetSize || ShowVideoBitrate;
     public bool ShowAudioSection => ShowAudio || ShowBitDepth;
     public bool ShowAdvancedSection => ShowHardware || ShowRotate || ShowRemoveAudio || ShowLossless || ShowPlaybackSpeed || ShowStripMetadata;
     public bool ShowTrimControls => SelectedFile?.HasTimeline == true && Supports(FormatFeatures.Trim);
@@ -550,103 +556,36 @@ public partial class MainViewModel : ObservableObject
         }
 
         if (service.History.PersistenceError is { } historyError) ReportError(historyError);
-        _ = CheckForUpdatesAsync(force: false);
     }
 
     // ---------------------------------------------------------------- updates
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasUpdate))]
-    [NotifyPropertyChangedFor(nameof(UpdateLabel))]
-    public partial UpdateInfo? AvailableUpdate { get; set; }
-
-    [ObservableProperty]
-    public partial bool IsCheckingForUpdates { get; set; }
-
-    [ObservableProperty]
-    public partial string UpdateStatus { get; set; } = string.Empty;
-
-    [ObservableProperty]
-    public partial bool AutomaticUpdateChecks { get; set; }
-
-    public bool HasUpdate => AvailableUpdate is not null;
-    public string UpdateLabel => AvailableUpdate is null ? string.Empty : $"Update available · {AvailableUpdate.DisplayVersion}";
-    public string CurrentVersionLabel => $"LocalMorph {UpdateService.CurrentVersionDisplay}";
-    public string UpdateInstallHint => UpdateService.InstallHint;
-    public bool IsDirectBuild => !Distribution.IsStoreBuild;
-    public bool IsStoreBuild => Distribution.IsStoreBuild;
-
-    partial void OnAutomaticUpdateChecksChanged(bool value) => updates.AutomaticChecks = value;
+    public string CurrentVersionLabel => $"LocalMorph {Distribution.CurrentVersionDisplay}";
+    public string UpdateDescription => Distribution.UpdateDescription;
+    public bool CanOpenStoreUpdates => Distribution.StoreUpdates is not null;
 
     [RelayCommand]
-    private async Task CheckForUpdatesAsync(bool force)
+    private async Task OpenStoreUpdatesAsync()
     {
-        if (IsCheckingForUpdates) return;
-        if (Distribution.IsStoreBuild)
+        if (Distribution.StoreUpdates is not { } uri)
         {
-            if (force) await Launcher.Default.OpenAsync(Distribution.StoreUpdates);
+            ReportError("Open App Store and choose Updates on this platform.");
             return;
         }
-        IsCheckingForUpdates = true;
         try
         {
-            var result = await updates.CheckAsync(force);
-            if (result.Error is { } error)
-            {
-                UpdateStatus = error;
-                if (force) ReportError(error);
-                return;
-            }
-            var update = result.Update;
-            AvailableUpdate = update;
-            if (force)
-            {
-                UpdateStatus = update is null ? $"You're up to date ({UpdateService.CurrentVersionDisplay})." : $"Version {update.DisplayVersion} is available.";
-                if (update is null) ShowToast("You're up to date.");
-            }
-            else if (update is not null)
-            {
-                ShowToast($"LocalMorph {update.DisplayVersion} is available.");
-            }
+            if (!await Launcher.Default.OpenAsync(uri)) ReportError("Could not open Store updates. Open Microsoft Store and choose Downloads.");
         }
-        finally
+        catch (Exception ex)
         {
-            IsCheckingForUpdates = false;
+            ReportError($"Could not open Store updates: {ex.Message}");
         }
-    }
-
-    [RelayCommand]
-    private async Task OpenUpdateAsync()
-    {
-        if (AvailableUpdate is not { } update) return;
-        await Launcher.Default.OpenAsync(update.ReleaseNotesUrl ?? update.DownloadUrl);
-    }
-
-    [RelayCommand]
-    private async Task DownloadUpdateAsync()
-    {
-        if (AvailableUpdate is { } update) await Launcher.Default.OpenAsync(update.DownloadUrl);
-    }
-
-    [RelayCommand]
-    private async Task CopyUpdateCommandAsync()
-    {
-        await Clipboard.Default.SetTextAsync(UpdateService.InstallHint);
-        ShowToast("Upgrade command copied.");
-    }
-
-    [RelayCommand]
-    private void SkipUpdate()
-    {
-        if (AvailableUpdate is not { } update) return;
-        updates.SkippedVersion = update.DisplayVersion;
-        AvailableUpdate = null;
-        UpdateStatus = $"Skipped {update.DisplayVersion}.";
     }
 
     private void ApplyTools(ToolInventory inventory)
     {
         Inventory = inventory;
+        NotifyEncoderOptionsChanged();
         InvalidatePreflight();
         foreach (var tool in Tools) tool.Apply(inventory.Get(tool.Kind));
         if (Tools.FirstOrDefault(tool => tool.Kind == ToolKind.Ffmpeg) is { } ffmpegTool)
@@ -1089,7 +1028,11 @@ public partial class MainViewModel : ObservableObject
         {
             var option = all.FirstOrDefault(candidate => candidate.Id == preset.FormatId);
             var available = option?.IsAvailable == true;
-            PresetOptions.Add(new PresetOption(preset, available, available ? null : option is null ? "Not valid for this mix of files" : option.EngineLabel));
+            var description = preset.Options.TargetSizeMegabytes is not null
+                && Inventory.Ffmpeg.UsesAppleSoftwareEncoder(preset.Format.VideoCodec, useHardware: false)
+                ? "Apple software encoding with up to three bitrate-adjusted attempts; oversized results are rejected."
+                : null;
+            PresetOptions.Add(new PresetOption(preset, available, available ? null : option is null ? "Not valid for this mix of files" : option.EngineLabel, description));
         }
         OnPropertyChanged(nameof(HasPresets));
         OnPropertyChanged(nameof(ApplicabilityLabel));
@@ -1249,6 +1192,7 @@ public partial class MainViewModel : ObservableObject
     private void ApplyOptions(ConversionOptions options)
     {
         Quality = options.Quality;
+        VideoBitrateText = (options.VideoBitrateKbps ?? 4000).ToString(CultureInfo.InvariantCulture);
         SelectedResolution = ResolutionOptions.FirstOrDefault(choice => choice.Value == options.TargetHeight) ?? ResolutionOptions[0];
         SelectedFrameRate = FrameRateOptions.FirstOrDefault(choice => choice.Value == options.FrameRate) ?? FrameRateOptions[0];
         SelectedSpeed = SpeedOptions.First(choice => choice.Value == options.Speed);
@@ -1288,6 +1232,7 @@ public partial class MainViewModel : ObservableObject
     // ---------------------------------------------------------------- settings reactions
 
     partial void OnQualityChanged(int value) => SettingsTouched();
+    partial void OnVideoBitrateTextChanged(string value) => SettingsTouched();
     partial void OnSelectedResolutionChanged(ChoiceOption<int?> value) => SettingsTouched();
     partial void OnSelectedFrameRateChanged(ChoiceOption<int?> value) => SettingsTouched();
     partial void OnSelectedSpeedChanged(ChoiceOption<EncodingSpeed> value) => SettingsTouched();
@@ -1367,6 +1312,7 @@ public partial class MainViewModel : ObservableObject
 
     private void SettingsTouched()
     {
+        NotifyEncoderOptionsChanged();
         InvalidatePreflight();
         if (!applyingPreset)
         {
@@ -1374,6 +1320,15 @@ public partial class MainViewModel : ObservableObject
         }
         ValidationMessage = null;
         UpdateCommandPreview();
+    }
+
+    private void NotifyEncoderOptionsChanged()
+    {
+        OnPropertyChanged(nameof(ShowVideoBitrate));
+        OnPropertyChanged(nameof(ShowQuality));
+        OnPropertyChanged(nameof(ShowSpeed));
+        OnPropertyChanged(nameof(ShowVideoSection));
+        OnPropertyChanged(nameof(TargetSizeHint));
     }
 
     private ConversionOptions BuildSharedOptions()
@@ -1392,6 +1347,9 @@ public partial class MainViewModel : ObservableObject
             TargetHeight = SelectedResolution.Value,
             FrameRate = SelectedFrameRate.Value,
             AudioBitrateKbps = SelectedAudioBitrate.Value,
+            VideoBitrateKbps = ShowVideoBitrate
+                ? int.TryParse(VideoBitrateText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var videoBitrate) ? videoBitrate : -1
+                : null,
             SampleRate = SelectedSampleRate.Value,
             Channels = SelectedChannels.Value,
             WavBitDepth = SelectedBitDepth.Value,

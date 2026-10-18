@@ -44,18 +44,19 @@ public sealed class FormatGroup : List<FormatOption>
 
 public sealed partial class PresetOption : ObservableObject
 {
-    public PresetOption(Preset preset, bool isAvailable, string? unavailableReason)
+    public PresetOption(Preset preset, bool isAvailable, string? unavailableReason, string? description = null)
     {
         Preset = preset;
         IsAvailable = isAvailable;
         UnavailableReason = unavailableReason;
+        Description = unavailableReason ?? description ?? preset.Description;
     }
 
     public Preset Preset { get; }
     public bool IsAvailable { get; }
     public string? UnavailableReason { get; }
     public string Name => Preset.Name;
-    public string Description => UnavailableReason ?? Preset.Description;
+    public string Description { get; }
     public string Icon => Preset.Icon;
     public string FormatLabel => Preset.Format.DisplayName;
 

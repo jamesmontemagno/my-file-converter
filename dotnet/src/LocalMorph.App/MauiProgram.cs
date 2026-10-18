@@ -15,7 +15,11 @@ public static class MauiProgram
 	{
 		var builder = MauiApp.CreateBuilder();
 		builder
+#if LOCALMORPH_MAC_SANDBOX_PROOF
+			.UseMauiApp<Platforms.MacCatalyst.SandboxProofApp>()
+#else
 			.UseMauiApp<App>()
+#endif
 			.UseMauiCommunityToolkit()
 			.UseMauiCommunityToolkitMediaElement(false)
 			.ConfigureFonts(fonts =>
@@ -27,7 +31,6 @@ public static class MauiProgram
 
 		builder.Services.AddSingleton(Preferences.Default);
 		builder.Services.AddSingleton<AppSettings>();
-		builder.Services.AddSingleton<UpdateService>();
 		builder.Services.AddSingleton<ConversionService>();
 		builder.Services.AddSingleton<MainViewModel>();
 		builder.Services.AddSingleton<MainPage>();
