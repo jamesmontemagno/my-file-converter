@@ -335,7 +335,10 @@ legal approval for Store distribution. The earlier proof built and merged both n
 slices; their dynamic dependencies were only system libraries/frameworks. That historical
 artifact predates the approved Apple Silicon-only/macOS 15 baseline and scene migration.
 The proof scripts now build and package arm64 tools only, with a macOS 15 deployment target.
-The final Release runtime/signing configuration and Xcode 27/macOS 27 startup remain unverified;
+The Xcode 27/macOS 27 CI proof now passes native scene startup, Apple H.264/HEVC software
+conversion, target-size enforcement and cancellation, with all 56 focused encoder tests passing
+against the source-built tools. This verifies the isolated Debug app, not the normal workspace,
+final Release/Store runtime/signing configuration, or macOS 15 baseline execution.
 Intel runtime testing is no longer a release requirement.
 
 | Candidate capability | Evidence / remaining work |
