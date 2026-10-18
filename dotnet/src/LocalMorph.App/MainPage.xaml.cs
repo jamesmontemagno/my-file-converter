@@ -13,6 +13,7 @@ public partial class MainPage : ContentPage
     private FileItemViewModel? previewed;
     private bool initialized;
     private bool previewExpanded;
+    private IDisposable? previewAccess;
 
     public MainPage(MainViewModel viewModel)
     {
@@ -20,31 +21,44 @@ public partial class MainPage : ContentPage
         this.viewModel = viewModel;
         BindingContext = viewModel;
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        Unloaded += (_, _) => StopPreview();
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        if (initialized) return;
-        initialized = true;
+        try { await viewModel.ResumeAsync(); }
+        catch (Exception ex) { viewModel.ReportError($"Could not reopen the workspace: {ex.Message}"); return; }
         // Files passed on the command line ("Open with LocalMorph", drag onto the exe, scripts) plus
         // anything the OS hands us later through file activation / a redirected second instance.
-        FileActivationService.Open(Environment.GetCommandLineArgs().Skip(1));
+        if (!initialized)
+        {
+            var arguments = Environment.GetCommandLineArgs().Skip(1);
+            FileActivationService.Open(Distribution.IsMacStoreBuild ? arguments.Where(Path.IsPathFullyQualified) : arguments);
+            FileActivationService.Failed += viewModel.ReportError;
+        }
         FileActivationService.Subscribe(async paths =>
         {
             await viewModel.AddPathsAsync(paths);
             viewModel.View = WorkspaceView.Convert;
         });
-        FileActivationService.Failed += viewModel.ReportError;
+        if (initialized) { UpdatePreview(); return; }
+        initialized = true;
         try { await viewModel.InitializeAsync(); }
         catch (Exception ex) { viewModel.ReportError($"Could not discover conversion tools: {ex.Message}"); }
+    }
+
+    protected override void OnDisappearing()
+    {
+        StopPreview();
+        base.OnDisappearing();
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(MainViewModel.SelectedFile) or nameof(MainViewModel.View))
         {
-            UpdatePreview();
+            UpdatePreview(force: e.PropertyName == nameof(MainViewModel.SelectedFile));
         }
     }
 
@@ -71,18 +85,16 @@ public partial class MainPage : ContentPage
         PreviewSurface.HeightRequest = Math.Max(120, Math.Min(PreviewInspector.Width * 9 / 16, PreviewInspector.Height - 32));
     }
 
-    private void UpdatePreview()
+    private void UpdatePreview(bool force = false)
     {
         var file = viewModel.IsConvertView ? viewModel.SelectedFile : null;
-        if (ReferenceEquals(file, previewed)) return;
+        if (!force && ReferenceEquals(file, previewed)) return;
+        StopPreview();
         previewed = file;
-
-        Player.Stop();
-        Player.Source = null;
-        PreviewImage.Source = null;
-        PositionLabel.Text = string.Empty;
-
-        if (file is null || !File.Exists(file.Path)) return;
+        if (file is null) return;
+        try { previewAccess = FileAccessService.Acquire(file.Path); }
+        catch (Exception ex) { previewed = null; viewModel.ReportError($"Preview could not access this file: {ex.Message}"); return; }
+        if (!File.Exists(file.Path)) { StopPreview(); return; }
         _ = ResetPreviewScrollAsync();
 
         if (file.IsImage)
@@ -110,6 +122,17 @@ public partial class MainPage : ContentPage
             Player.IsVisible = false;
             PreviewImage.IsVisible = false;
         }
+    }
+
+    private void StopPreview()
+    {
+        Player.Stop();
+        Player.Source = null;
+        PreviewImage.Source = null;
+        PositionLabel.Text = string.Empty;
+        previewed = null;
+        previewAccess?.Dispose();
+        previewAccess = null;
     }
 
     private void OnPlayerPositionChanged(object? sender, MediaPositionChangedEventArgs e)
@@ -190,7 +213,10 @@ public partial class MainPage : ContentPage
                 var completion = new TaskCompletionSource<Foundation.INSItemProviderReading[]>();
                 session.LoadObjects(new ObjCRuntime.Class(typeof(Foundation.NSUrl)), items => completion.TrySetResult(items));
                 var items = await completion.Task.WaitAsync(TimeSpan.FromSeconds(10));
-                paths.AddRange(items.OfType<Foundation.NSUrl>().Select(url => url.Path).Where(path => !string.IsNullOrWhiteSpace(path))!);
+                var urls = items.OfType<Foundation.NSUrl>().ToArray();
+                paths.AddRange(Distribution.IsMacStoreBuild
+                    ? Platforms.MacCatalyst.MacFileAccess.RegisterUrls(urls)
+                    : urls.Select(url => url.Path).OfType<string>());
             }
 #endif
             if (paths.Count == 0 && e.Data.Properties.TryGetValue("FileNames", out var fileNames) && fileNames is IEnumerable<string> names)

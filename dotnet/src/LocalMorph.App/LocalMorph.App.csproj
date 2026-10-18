@@ -63,7 +63,7 @@
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
 		<DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
 	</PropertyGroup>
-	<PropertyGroup Condition="'$(LocalMorphStoreBuild)' == 'true'">
+	<PropertyGroup Condition="'$(LocalMorphStoreBuild)' == 'true' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
 		<Platforms>x64;ARM64</Platforms>
 		<RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
 		<SelfContained>true</SelfContained>
@@ -74,6 +74,20 @@
 		<DebugType>portable</DebugType>
 		<AppxSymbolPackageEnabled>true</AppxSymbolPackageEnabled>
 	</PropertyGroup>
+	<Target Name="ValidateWindowsStorePlatform" BeforeTargets="PrepareForBuild" Condition="'$(LocalMorphStoreBuild)' == 'true'">
+		<Error Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'" Text="LocalMorphStoreBuild is Windows-only. Use LocalMorphMacStoreBuild for the Mac sandbox workspace." />
+	</Target>
+	<PropertyGroup Condition="'$(LocalMorphMacStoreBuild)' == 'true'">
+		<OutputPath>bin/mac-store/$(Configuration)/</OutputPath>
+		<DefineConstants>$(DefineConstants);LOCALMORPH_MAC_STORE</DefineConstants>
+		<CodesignEntitlements>Platforms/MacCatalyst/Store.entitlements</CodesignEntitlements>
+		<ApplicationId Condition="'$(Configuration)' == 'Debug'">com.refractored.localmorph.sandboxworkspace</ApplicationId>
+		<ApplicationTitle Condition="'$(Configuration)' == 'Debug'">LocalMorph Sandbox Workspace</ApplicationTitle>
+	</PropertyGroup>
+	<Target Name="ValidateMacStoreBuild" BeforeTargets="PrepareForBuild" Condition="'$(LocalMorphMacStoreBuild)' == 'true'">
+		<Error Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'maccatalyst' or '$(LocalMorphStoreBuild)' == 'true' or '$(LocalMorphMacSandboxProof)' == 'true'" Text="The Mac Store build must target Mac Catalyst and cannot use the Windows Store or isolated proof flavor." />
+		<Error Condition="'$(Configuration)' != 'Debug'" Text="Mac Store Release packaging is blocked until approved media payload and distribution-signing validation are implemented. Use Debug for the isolated sandbox workspace." />
+	</Target>
 
 	<!-- Apple Silicon / macOS 15+. Store signing/packaging is configured separately. -->
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst' and '$(Configuration)' == 'Release'">
@@ -89,7 +103,7 @@
 		<CodesignEntitlements>Platforms/MacCatalyst/SandboxProof.entitlements</CodesignEntitlements>
 	</PropertyGroup>
 	<Target Name="ValidateMacSandboxProof" BeforeTargets="PrepareForBuild" Condition="'$(LocalMorphMacSandboxProof)' == 'true'">
-		<Error Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'maccatalyst' or '$(Configuration)' != 'Debug' or '$(LocalMorphStoreBuild)' == 'true'" Text="The isolated Mac sandbox proof is a development-only Mac Catalyst Debug build, not a release flavor." />
+		<Error Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'maccatalyst' or '$(Configuration)' != 'Debug' or '$(LocalMorphStoreBuild)' == 'true' or '$(LocalMorphMacStoreBuild)' == 'true'" Text="The isolated Mac sandbox proof is a development-only Mac Catalyst Debug build, not a release flavor." />
 	</Target>
 
 	<ItemGroup>
@@ -122,7 +136,7 @@
 		<ProjectReference Include="..\LocalMorph.Core\LocalMorph.Core.csproj" />
 	</ItemGroup>
 
-	<ItemGroup Condition="'$(LocalMorphStoreBuild)' != 'true'">
+	<ItemGroup Condition="'$(LocalMorphStoreBuild)' != 'true' and '$(LocalMorphMacStoreBuild)' != 'true'">
 		<None Include="Resources\ffmpeg\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
 

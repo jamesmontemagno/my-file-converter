@@ -44,15 +44,15 @@ public static class MauiProgram
 		// Finder "Open with" / double-click: files arrive as URL contexts on the scene, either at
 		// connect time (cold start) or later while the app is running.
 		builder.ConfigureLifecycleEvents(events => events.AddiOS(ios => ios
-			.SceneWillConnect((scene, session, options) => FileActivationService.Open(UrlPaths(options.UrlContexts)))
+			.SceneWillConnect((scene, session, options) => OpenUrls(options.UrlContexts?.Cast<UIKit.UIOpenUrlContext>().Select(context => context.Url) ?? []))
 			.SceneOpenUrl((scene, contexts) =>
 			{
-				FileActivationService.Open(UrlPaths(contexts));
+				OpenUrls(contexts.Cast<UIKit.UIOpenUrlContext>().Select(context => context.Url));
 				return true;
 			})
 			.OpenUrl((app, url, options) =>
 			{
-				if (url.IsFileUrl && url.Path is { } path) FileActivationService.Open([path]);
+				OpenUrls([url]);
 				return true;
 			})));
 #endif
@@ -69,13 +69,15 @@ public static class MauiProgram
 	}
 
 #if MACCATALYST
-	private static IEnumerable<string> UrlPaths(Foundation.NSSet<UIKit.UIOpenUrlContext>? contexts)
+	private static void OpenUrls(IEnumerable<Foundation.NSUrl> urls)
 	{
-		if (contexts is null) yield break;
-		foreach (var context in contexts)
+		try
 		{
-			if (context.Url.IsFileUrl && context.Url.Path is { Length: > 0 } path) yield return path;
+			FileActivationService.Open(Distribution.IsMacStoreBuild
+				? Platforms.MacCatalyst.MacFileAccess.RegisterUrls(urls)
+				: urls.Where(url => url.IsFileUrl).Select(url => url.Path).OfType<string>());
 		}
+		catch (Exception ex) { FileActivationService.ReportFailure($"Could not authorize activated files: {ex.Message}"); }
 	}
 #endif
 }

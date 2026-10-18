@@ -6,6 +6,12 @@ desktop installers are not distributed through GitHub Releases.
 ## Unreleased
 
 ### Changed
+- Added an isolated, sandboxed Mac workspace build with bundle-only media-tool discovery,
+  no external installers, and explicit repair errors. Production Store packaging remains blocked.
+- Mac sandbox intake retains native URL bookmarks across picker/Finder/drop, attachment and
+  history flows. Preview, inspection and queued jobs hold independent permissions through cleanup;
+  conversion requires an authorized output folder rather than assuming sibling write access.
+  External relaunch/cloud-volume and final Store runtime checks remain release gates.
 - FFmpeg can use Apple's H.264/HEVC software encoders when libx264/libx265 are absent.
   Software mode exposes an explicit bitrate instead of unsupported quality/speed controls.
   Apple target-size jobs make at most three bitrate-adjusted attempts and never commit an

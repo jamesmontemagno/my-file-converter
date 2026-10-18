@@ -15,6 +15,7 @@ public sealed class ConversionService : IDisposable
         this.settings = settings;
         var workDirectory = Path.Combine(FileSystem.Current.CacheDirectory, "work");
         Queue = new ConversionQueue(workDirectory, settings.MaxParallel) { Tools = () => Tools };
+        if (Distribution.IsMacStoreBuild) Queue.AcquireFileAccess = FileAccessService.AcquireJob;
         History = new ConversionHistory(Path.Combine(FileSystem.Current.AppDataDirectory, "history.json"));
         Queue.JobChanged += OnJobChanged;
     }
@@ -37,19 +38,35 @@ public sealed class ConversionService : IDisposable
 
     private async Task<ToolInventory> RefreshCoreAsync(bool verifyHardware, CancellationToken token)
     {
-        var quick = await ToolInventory.DiscoverAsync(verifyHardware: false, token: token);
+        var quick = await DiscoverToolsAsync(verifyHardware: false, token);
         tools = quick;
         ToolsChanged?.Invoke(quick);
 
         if (verifyHardware && quick.HasFfmpeg)
         {
-            var verified = await ToolInventory.DiscoverAsync(verifyHardware: true, token: token);
+            var verified = await DiscoverToolsAsync(verifyHardware: true, token);
             tools = verified;
             ToolsChanged?.Invoke(verified);
             return verified;
         }
 
         return quick;
+    }
+
+    private static Task<ToolInventory> DiscoverToolsAsync(bool verifyHardware, CancellationToken token)
+    {
+#if MACCATALYST
+        if (Distribution.IsMacStoreBuild)
+        {
+            var bundle = Platforms.MacCatalyst.MacFileAccess.CanonicalPath(Foundation.NSBundle.MainBundle.BundlePath);
+            var directory = Path.Combine(bundle, "Contents", "MacOS");
+            if (!string.Equals(directory, Platforms.MacCatalyst.MacFileAccess.CanonicalPath(directory), StringComparison.Ordinal))
+                throw new IOException("The bundled media-tool directory was redirected. Repair or update LocalMorph.");
+            return ToolInventory.DiscoverBundledMediaAsync(
+                directory, verifyHardware, token);
+        }
+#endif
+        return ToolInventory.DiscoverAsync(verifyHardware: verifyHardware, token: token);
     }
 
     private void OnJobChanged(ConversionJob job)

@@ -12,6 +12,7 @@ from validate_app import validate_app
 
 
 MARKERS = (
+    "BOOKMARK_API_PROOF_PASSED",
     "APPLE_SOFTWARE_PROOF_PASSED",
     "CANCELLATION_PROOF_PASSED",
     "CONTAINER_PROOF_PASSED",
@@ -56,7 +57,7 @@ def smoke(app, output, timeout=240):
                 except subprocess.TimeoutExpired:
                     os.killpg(process.pid, signal.SIGKILL)
                     process.wait(timeout=10)
-    print(f"Native scene, Apple encoding, hard-cap and cancellation proof passed. Evidence: {log}")
+    print(f"Native scene, bookmark API, Apple encoding, hard-cap and cancellation proof passed. Evidence: {log}")
 
 
 if __name__ == "__main__":

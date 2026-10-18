@@ -10,6 +10,27 @@ namespace LocalMorph.Core.Tools;
 /// </summary>
 public static class ToolLocator
 {
+    public static IReadOnlyDictionary<ToolKind, ToolInfo> FindBundledMedia(string directory)
+    {
+        if (!Path.IsPathFullyQualified(directory)) throw new ArgumentException("Bundled tools require an absolute directory.", nameof(directory));
+        if (new DirectoryInfo(directory).LinkTarget is not null)
+            throw new IOException("The bundled media-tool directory must not be a symbolic link. Repair or update LocalMorph.");
+        var found = new Dictionary<ToolKind, ToolInfo>();
+        foreach (var kind in new[] { ToolKind.Ffmpeg, ToolKind.Ffprobe })
+        {
+            var name = kind == ToolKind.Ffmpeg ? "ffmpeg" : "ffprobe";
+            var path = Path.Combine(Path.GetFullPath(directory), name + (OperatingSystem.IsWindows() ? ".exe" : ""));
+            if (!File.Exists(path)) continue;
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0 || !IsExecutable(path))
+                throw new IOException($"The bundled {name} is not a regular executable. Repair or update LocalMorph.");
+            var version = ReadVersion(kind, path, requireSuccessfulExit: true);
+            if (version?.StartsWith(name + " version ", StringComparison.Ordinal) != true)
+                throw new IOException($"The bundled {name} could not start correctly. Repair or update LocalMorph.");
+            found.Add(kind, new ToolInfo(kind, path, version, ToolSource.Bundled));
+        }
+        return found;
+    }
+
     public static ToolInfo? Find(ToolKind kind, string? appBaseDirectory = null)
     {
         var descriptor = ToolCatalog.Get(kind);
@@ -208,7 +229,7 @@ public static class ToolLocator
         catch (UnauthorizedAccessException) { return false; }
     }
 
-    public static string? ReadVersion(ToolKind kind, string executable)
+    public static string? ReadVersion(ToolKind kind, string executable, bool requireSuccessfulExit = false)
     {
         var argument = kind switch
         {
@@ -236,6 +257,7 @@ public static class ToolLocator
                 return null;
             }
 
+            if (requireSuccessfulExit && process.ExitCode != 0) return null;
             var text = output.GetAwaiter().GetResult();
             if (string.IsNullOrWhiteSpace(text)) text = error.GetAwaiter().GetResult();
             var firstLine = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();

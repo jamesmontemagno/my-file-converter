@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Foundation;
 using LocalMorph.Core.Formats;
+using LocalMorph.Core.Files;
 using LocalMorph.Core.Jobs;
 using LocalMorph.Core.Tools;
 using UIKit;
@@ -23,6 +24,9 @@ internal sealed class SandboxProofPage : ContentPage
     private readonly Editor log = new() { IsReadOnly = true, HeightRequest = 480, FontSize = 12 };
     private readonly Button choose = new() { Text = "Test a selected source and output folder", IsEnabled = false };
     private readonly Button cancel = new() { Text = "Cancel", IsEnabled = false };
+    private readonly Button restore = new() { Text = "Restore saved selections (also test after relaunch)", IsEnabled = false };
+    private static string SelectedPath => Path.Combine(FileSystem.AppDataDirectory, "proof-selection.json");
+    private sealed record SavedSelection(string Source, string Destination, int ProcessId, DateTime ProcessStartUtc);
     private ToolInventory tools = ToolInventory.Empty;
     private CancellationTokenSource? operation;
     private bool started;
@@ -40,12 +44,13 @@ internal sealed class SandboxProofPage : ContentPage
                     new Label { Text = "Development proof only - not a Store build", FontSize = 24 },
                     new Label { Text = "Separate app identity; no real preferences or history. Bundled tools only. No feature availability changes." },
                     new Label { Text = "FFmpeg / FFprobe 9.0.2: LGPL 2.1-or-later. License texts are bundled; source and build instructions accompany the CI app artifact." },
-                    status, choose, cancel, log
+                    status, choose, restore, cancel, log
                 }
             }
         };
         choose.Clicked += async (_, _) => await RunSelectedAsync();
         cancel.Clicked += (_, _) => operation?.Cancel();
+        restore.Clicked += async (_, _) => await RestoreSelectedAsync();
     }
 
     protected override async void OnAppearing()
@@ -74,6 +79,7 @@ internal sealed class SandboxProofPage : ContentPage
             await RunToolAsync(inventory[ToolKind.Ffmpeg].Path,
                 ["-v", "error", "-nostdin", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30:duration=2",
                  "-f", "lavfi", "-i", "sine=frequency=440:duration=2", "-c:v", "mpeg4", "-c:a", "aac", "-shortest", source], token);
+            VerifyBookmarkApi(source);
             await ConvertAsync(source, root, token);
             await ConvertAsync(source, root, token, options: new ConversionOptions
             { UseHardwareEncoder = false, VideoBitrateKbps = 1000 });
@@ -100,15 +106,51 @@ internal sealed class SandboxProofPage : ContentPage
             try
             {
                 Write($"Native URL access: source={sourceAccess}; destination={destinationAccess}");
+                var paths = MacFileAccess.RegisterUrls([source, destination]);
+                using var savedSourceAccess = MacFileAccess.Acquire(paths[0], writeDirectory: false);
+                using var savedDestinationAccess = MacFileAccess.Acquire(paths[1], writeDirectory: true);
                 await ConvertAsync(source.Path ?? throw new IOException("Selected source has no file path."),
                     destination.Path ?? throw new IOException("Selected folder has no file path."), token);
-                Write("SELECTED_FILES_PROOF_PASSED. Persistent bookmarks and relaunch are not yet verified.");
+                var selection = new SavedSelection(paths[0], paths[1], Environment.ProcessId,
+                    Process.GetCurrentProcess().StartTime.ToUniversalTime());
+                await File.WriteAllTextAsync(SelectedPath, JsonSerializer.Serialize(selection), token);
+                Write("SELECTED_FILES_PROOF_PASSED. Bookmarks saved; quit, relaunch and use Restore to verify persistence.");
             }
             finally
             {
                 if (destinationAccess) destination.StopAccessingSecurityScopedResource();
                 if (sourceAccess) source.StopAccessingSecurityScopedResource();
             }
+        });
+    }
+
+    private void VerifyBookmarkApi(string source)
+    {
+        source = MacFileAccess.CanonicalPath(source);
+        using var url = NSUrl.FromFilename(source);
+        var grant = MacFileAccess.CreateGrant(url, source, directory: false, writable: false);
+        var restored = new FileAccessRegistry([grant], MacFileAccess.Open, _ => { });
+        using var access = restored.Acquire(source);
+        using var stream = File.OpenRead(source);
+        if (stream.Length == 0) throw new IOException("The native bookmark round trip did not restore the fixture.");
+        Write("BOOKMARK_API_PROOF_PASSED: native bookmark creation/resolution with a container fixture. External grants still need selected-file/relaunch checks.");
+    }
+
+    private async Task RestoreSelectedAsync()
+    {
+        await RunOperationAsync(async token =>
+        {
+            if (!File.Exists(SelectedPath)) throw new IOException("Select a generated source and output folder first.");
+            var saved = JsonSerializer.Deserialize<SavedSelection>(await File.ReadAllTextAsync(SelectedPath, token))
+                ?? throw new IOException("The saved diagnostic selection is invalid.");
+            using var source = MacFileAccess.Acquire(saved.Source, writeDirectory: false);
+            using var output = MacFileAccess.Acquire(saved.Destination, writeDirectory: true);
+            await ConvertAsync(saved.Source, saved.Destination, token);
+            var restarted = saved.ProcessId != Environment.ProcessId
+                || saved.ProcessStartUtc != Process.GetCurrentProcess().StartTime.ToUniversalTime();
+            Write(restarted
+                ? "RELAUNCHED_SELECTED_GRANTS_PROOF_PASSED: restored persisted external selections in a new process without a picker."
+                : "SAVED_SELECTION_RESTORED: same process only; quit and relaunch before claiming persistent external access.");
         });
     }
 
@@ -183,9 +225,11 @@ internal sealed class SandboxProofPage : ContentPage
 
     private async Task RunOperationAsync(Func<CancellationToken, Task> action)
     {
+        if (operation is not null) { Write("A diagnostic operation is already running."); return; }
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         operation = cancellation;
         choose.IsEnabled = false;
+        restore.IsEnabled = false;
         cancel.IsEnabled = true;
         try
         {
@@ -206,6 +250,7 @@ internal sealed class SandboxProofPage : ContentPage
         {
             operation = null;
             choose.IsEnabled = tools.HasMediaTools;
+            restore.IsEnabled = tools.HasMediaTools && File.Exists(SelectedPath);
             cancel.IsEnabled = false;
         }
     }

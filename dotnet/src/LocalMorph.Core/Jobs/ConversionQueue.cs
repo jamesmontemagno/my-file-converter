@@ -22,6 +22,7 @@ public sealed class ConversionQueue : IDisposable
     }
 
     public Func<ToolInventory> Tools { get; set; } = () => ToolInventory.Empty;
+    public Func<ConversionJob, IDisposable>? AcquireFileAccess { get; set; }
 
     public int MaxParallel
     {
@@ -129,6 +130,7 @@ public sealed class ConversionQueue : IDisposable
     {
         try
         {
+            using var access = AcquireFileAccess?.Invoke(job);
             await ConversionRunner.RunAsync(job, Tools(), workDirectory, token);
         }
         catch (Exception ex)

@@ -18,6 +18,7 @@ class MacProofTests(unittest.TestCase):
             self.assertEqual(plistlib.load(source), {
                 "com.apple.security.app-sandbox": True,
                 "com.apple.security.files.user-selected.read-write": True,
+                "com.apple.security.files.bookmarks.app-scope": True,
             })
         with (directory / "MediaTool.entitlements").open("rb") as source:
             self.assertEqual(plistlib.load(source), {

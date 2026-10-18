@@ -61,6 +61,9 @@ git rev-parse HEAD > "$OUTPUT/base-commit.txt"
 git diff --binary > "$OUTPUT/working-tree.patch"
 mkdir "$OUTPUT/proof-source"
 cp dotnet/src/LocalMorph.App/Platforms/MacCatalyst/SandboxProofApp.cs \
+  dotnet/src/LocalMorph.App/Platforms/MacCatalyst/MacFileAccess.cs \
+  dotnet/src/LocalMorph.App/Services/FileAccessService.cs \
+  dotnet/src/LocalMorph.Core/Files/FileAccessRegistry.cs \
   dotnet/src/LocalMorph.App/Platforms/MacCatalyst/SandboxProof.entitlements \
   dotnet/src/LocalMorph.App/Platforms/MacCatalyst/MediaTool.entitlements \
   dotnet/src/LocalMorph.App/Platforms/MacCatalyst/SceneDelegate.cs \

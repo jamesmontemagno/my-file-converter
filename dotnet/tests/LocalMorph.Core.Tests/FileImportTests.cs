@@ -36,6 +36,34 @@ public sealed class FileImportTests : IDisposable
     }
 
     [Fact]
+    public async Task Canonical_sources_are_deduplicated_before_becoming_workspace_paths()
+    {
+        var source = Path.Combine(root, "source.mp4");
+        var alias = Path.Combine(root, "alias.mp4");
+        await File.WriteAllTextAsync(source, "");
+        await File.WriteAllTextAsync(alias, "");
+        string Canonical(string path) => path == alias ? source : path;
+        var result = await FileImport.ScanAsync([source, alias], [], canonicalize: Canonical);
+        Assert.Equal(source, Assert.Single(result.Paths));
+        var duplicate = await FileImport.ScanAsync([source], [alias], canonicalize: Canonical);
+        Assert.Empty(duplicate.Paths);
+        Assert.Equal(source, Assert.Single(duplicate.AlreadyQueued));
+    }
+
+    [Fact]
+    public async Task Import_keeps_case_distinct_paths_on_case_sensitive_volumes()
+    {
+        var lower = Path.Combine(root, "video.mp4");
+        var upper = Path.Combine(root, "VIDEO.mp4");
+        await File.WriteAllTextAsync(lower, "");
+        await File.WriteAllTextAsync(upper, "");
+        var result = await FileImport.ScanAsync([lower, upper], []);
+        Assert.Equal(OperatingSystem.IsWindows() ? 1 : 2, result.Paths.Count);
+        var existing = await FileImport.ScanAsync([upper], [lower]);
+        Assert.Equal(OperatingSystem.IsWindows() ? 0 : 1, existing.Paths.Count);
+    }
+
+    [Fact]
     public async Task Missing_and_unsupported_inputs_are_reported()
     {
         var unknown = Path.Combine(root, "unknown.xyz");

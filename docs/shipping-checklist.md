@@ -91,6 +91,12 @@ Mac delivery is not yet enabled. Do not tag or advertise a public Mac release un
   at most three size attempts, and rejection without destination replacement if the cap is missed.
 - Verify persistent file/folder authorization for pickers, Finder, drag/drop, subtitles,
   replacement audio, preview, conversion, history and reauthorization after relaunch.
+  The Debug-only sandbox workspace and grant wiring now compile; this is not native workspace
+  evidence. Use the diagnostic Restore action after a real process restart for external grants;
+  its automated native container-bookmark round trip is a separate, narrower check.
+- Keep `LocalMorphMacStoreBuild` Release packaging blocked until the approved full media payload
+  and distribution-signing validation exist. Its Debug identity/output/container must remain
+  separate from both the normal app and diagnostic proof.
 - Request an output folder before first conversion and remember authorized access. Source-file
   selection alone must not be treated as permission to create sibling outputs.
 - Verify staging/commit, overwrite protection, cancellation, join/split and partial results

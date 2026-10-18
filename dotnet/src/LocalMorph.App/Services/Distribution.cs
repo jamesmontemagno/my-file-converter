@@ -2,6 +2,18 @@ namespace LocalMorph.App.Services;
 
 public static class Distribution
 {
+#if LOCALMORPH_MAC_STORE
+    public static bool IsMacStoreBuild => true;
+#else
+    public static bool IsMacStoreBuild => false;
+#endif
+
+    public static string ToolsDescription => IsMacStoreBuild
+        ? "This sandbox workspace uses only bundled FFmpeg and FFprobe. Available formats reflect this build's codecs and filters. External tools are not installed or discovered."
+        : "Install FFmpeg and FFprobe separately for media conversion and inspection. ImageMagick, LibreOffice, Pandoc, and Ghostscript add more formats. Everything runs locally.";
+
+    public static string BundledToolRepair => "A bundled media tool is missing or unusable. Repair or update LocalMorph; installing Homebrew tools will not repair this build.";
+
     public static string CurrentVersionDisplay
     {
         get

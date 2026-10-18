@@ -216,7 +216,8 @@ executable, and the expected single-window scene manifest. Run this for both Rel
 the isolated Debug proof. Compilation and these checks are not startup evidence.
 CI additionally builds the source-pinned minimal FFmpeg/FFprobe proof payload, ad-hoc signs
 an isolated Debug app, and launches it with `scripts/mac/smoke_sandbox.py`. The check requires
-scene-page startup, H.264/HEVC Apple software encoding, a target-size hard cap, and shared-queue
+scene-page startup, native bookmark creation/resolution for a container fixture,
+H.264/HEVC Apple software encoding, a target-size hard cap, and shared-queue
 cancellation markers; a crash, timeout or failure marker fails the job. Logs, exact proof
 sources, flags and provenance are retained in the `mac-sandbox-proof` artifact.
 The same signed app is archived once with a SHA256, transferred to the arm64 `macos-15`
@@ -261,6 +262,50 @@ Free/open-source distribution is not component, patent or App Store licensing ap
 The proof disables FFmpeg GPL/nonfree components, including libx264/libx265. Review the exact
 shipping configuration, dependencies, notices, corresponding source/build obligations and
 distribution terms before selecting a release payload.
+
+### Isolated Mac Store workspace
+
+The normal shared workspace now has a separate opt-in sandbox runtime:
+
+```bash
+dotnet build dotnet/src/LocalMorph.App -f net10.0-maccatalyst \
+  -p:MacOnly=true -p:LocalMorphMacStoreBuild=true -p:EnableCodeSigning=false
+```
+
+This compiles `LocalMorph Sandbox Workspace.app` under
+`bin/mac-store/Debug/net10.0-maccatalyst/maccatalyst-arm64/`, with the distinct
+`com.refractored.localmorph.sandboxworkspace` identity/container. Compilation alone does not
+sign or launch it. Production `Release`, Windows Store flags and diagnostic-proof combinations
+are rejected. Do not remove the Release guard until the approved complete media payload,
+provenance and distribution-signing/package validation are implemented.
+
+Only `ffmpeg` and `ffprobe` directly inside this app's `Contents/MacOS` are discovered.
+Missing tools show repair/update guidance; corrupt, symlinked or unsuccessful executables
+fail explicitly. PATH, Homebrew, optional-engine installs and Terminal automation cannot
+repair or extend this flavor. Developer and Windows tool acquisition remain unchanged.
+Version checks are not a substitute for the outstanding signed payload/hash/component audit.
+
+Native file/folder pickers, Finder activation and native drops retain bookmark data before
+paths enter the workspace. The local `file-access.json` is atomically replaced with owner-only
+permissions. Folder scopes use path boundaries, source paths are canonicalized, and case-distinct
+Mac paths are retained. Native scope leases are reference-counted independently for workspace
+rows, preview, inspection and jobs; a job releases its permissions only after the runner's
+final process/staging cleanup, not on its terminal notification.
+
+Conversion restores or requests an authorized output **directory** before preflight/enqueue.
+Input-file selection never grants sibling output writes. Legacy output/history paths need
+reauthorization; attachments use the same registry. Moved/revoked/unavailable bookmarks fail
+explicitly instead of selecting another file or destination. **Forget file permissions** clears
+workspace grants/output preferences without deleting files or history. Native open/folder
+actions have no shell fallback; Finder opening still needs real workspace runtime verification.
+
+The installed Apple `NSURL.h` marks the security-scope bookmark flags available on Mac Catalyst
+13.0+. The current .NET enum annotations incorrectly mark them macOS-only; the native backend
+documents narrowly scoped analyzer suppressions rather than casting unsupported flag values.
+Native create/resolve/read of a container fixture passes in the isolated proof. This does
+**not** establish external bookmarks after restart, cloud-file coordination, read-only/removable
+volumes, normal preview/Finder/Dock/quit behavior or final Store runtime. Keep those native checks
+open even when Core tests and compiled XAML pass.
 
 ### Remaining package and delivery work
 
@@ -345,7 +390,8 @@ The proof scripts now build and package arm64 tools only, with a macOS 15 deploy
 The Xcode 27/macOS 27 CI proof now passes native scene startup, Apple H.264/HEVC software
 conversion, target-size enforcement and cancellation, with all 56 focused encoder tests passing
 against the source-built tools. This verifies the isolated Debug app, not the normal workspace,
-final Release/Store runtime/signing configuration, or macOS 15 baseline execution.
+final Release/Store runtime/signing configuration. A subsequent exact-app transfer also passed
+on macOS 15.7.9 without rebuilding; that is not exact macOS 15.0 or normal product execution.
 Intel runtime testing is no longer a release requirement.
 
 | Candidate capability | Evidence / remaining work |
@@ -355,7 +401,7 @@ Intel runtime testing is no longer a release requirement.
 | Target-size modes | Shared Core and sandbox tests verify Apple software with at most three bitrate-adjusted attempts, decimal-MB hard-cap checks and safe commit. Existing x264 two-pass behavior remains. Nominal bitrate alone is not a file-size guarantee; oversize failure preserves an existing destination |
 | HDR / subtitle burn-in | This minimal proof lacks zscale and libass; build and verify approved dependency sources rather than deleting the features |
 | Other formats / optional engines | Not proven by this minimal dependency configuration; complete the codec/filter and optional-engine inventory before making listing claims |
-| Persistent access | Native URLs work during the operation; bookmarks, relaunch, revoked grants and all other entry points still need implementation |
+| Persistent access | Grant registry and workspace wiring implemented; native container bookmark round trip passes. External selection/relaunch, revoked grants, cloud volumes and all normal workspace entry points still need native verification |
 
 Reproduce locally with Xcode, the pinned .NET/Mac Catalyst workload, and an existing Apple
 Development signing identity. This builds diagnostic artifacts only, not Store packages:
@@ -385,7 +431,12 @@ python3 scripts/mac/smoke_sandbox.py \
 The runner stops only its own launched process group after verification or timeout.
 For external access, launch the resulting **LocalMorph Sandbox Proof** app manually and use its native
 pickers with generated demo media to verify external access. Outputs have unique proof names;
-picker cancellation makes no conversion claim.
+picker cancellation makes no conversion claim. The diagnostic now saves scoped bookmarks
+with its separate app-scope entitlement. After selecting a generated source and destination,
+quit and relaunch the **same signed identity**, then use **Restore saved selections** without
+another picker. Only `RELAUNCHED_SELECTED_GRANTS_PROOF_PASSED` establishes a new-process external
+grant check; `SAVED_SELECTION_RESTORED` means the same process and is not persistence evidence.
+The automated `BOOKMARK_API_PROOF_PASSED` marker covers only native APIs with a container fixture.
 
 This does not establish source-signature verification, component/legal approval, complete codec
 parity, distribution provisioning, Store validation, TestFlight installation, or Apple acceptance.

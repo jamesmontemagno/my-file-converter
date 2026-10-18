@@ -99,6 +99,19 @@ jobs:
       - run: dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-maccatalyst --configuration Release -p:MacOnly=true -p:EnableCodeSigning=false
       - name: Validate Release architecture, minimum OS and scenes
         run: python3 scripts/mac/validate_app.py "dotnet/src/LocalMorph.App/bin/Release/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph.app"
+      - name: Compile isolated Mac Store workspace (not shipping or runtime evidence)
+        run: dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-maccatalyst -p:MacOnly=true -p:LocalMorphMacStoreBuild=true -p:EnableCodeSigning=false
+      - name: Validate sandbox workspace architecture, minimum OS and scenes
+        run: python3 scripts/mac/validate_app.py "dotnet/src/LocalMorph.App/bin/mac-store/Debug/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph Sandbox Workspace.app"
+      - name: Reject unapproved Mac Store Release packaging
+        run: |
+          if dotnet msbuild dotnet/src/LocalMorph.App/LocalMorph.App.csproj -nologo \
+            -t:ValidateMacStoreBuild -p:TargetFramework=net10.0-maccatalyst -p:MacOnly=true \
+            -p:Configuration=Release -p:LocalMorphMacStoreBuild=true > "$RUNNER_TEMP/mac-store-guard.log" 2>&1; then
+            echo "Unapproved Mac Store Release build was accepted." >&2
+            exit 1
+          fi
+          grep -F "Mac Store Release packaging is blocked" "$RUNNER_TEMP/mac-store-guard.log"
       - name: Compile isolated sandbox proof (not runtime evidence)
         run: dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-maccatalyst -p:MacOnly=true -p:LocalMorphMacSandboxProof=true -p:EnableCodeSigning=false
       - name: Validate sandbox proof architecture, minimum OS and scenes
@@ -112,7 +125,7 @@ jobs:
         run: |
           export PATH="$PWD/artifacts/mac-proof/media/arm64/bin:$PATH"
           dotnet test dotnet/tests/LocalMorph.Core.Tests --configuration Release \
-            --filter 'FullyQualifiedName~AppleEncoder|FullyQualifiedName~FfmpegEngineTests' \
+            --filter 'FullyQualifiedName~AppleEncoder|FullyQualifiedName~FfmpegEngineTests|FullyQualifiedName~FileAccessRegistryTests|FullyQualifiedName~BundledToolTests|FullyQualifiedName~QueueFileAccessTests|FullyQualifiedName~FileImportTests' \
             --logger 'trx;LogFileName=apple-encoders.trx' \
             --results-directory artifacts/mac-proof/tests
       - name: Ad-hoc sign isolated proof without Store credentials

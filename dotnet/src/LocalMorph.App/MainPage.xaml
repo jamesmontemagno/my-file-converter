@@ -241,7 +241,7 @@
                     <VerticalStackLayout Grid.Column="2" Grid.RowSpan="3" Spacing="6" VerticalOptions="Start" IsVisible="{Binding IsMissing}">
                         <Button Style="{StaticResource PrimaryButton}" HeightRequest="36" FontSize="12" Text="{Binding InstallActionLabel}" Command="{Binding LaunchInstallerCommand}" IsVisible="{Binding CanLaunchInstaller}" AutomationId="ToolInstallButton" />
                         <Button Style="{StaticResource SecondaryButton}" HeightRequest="34" FontSize="12" Text="Copy command" Command="{Binding CopyInstallCommandCommand}" IsVisible="{Binding CanCopyCommand}" />
-                        <Button Style="{StaticResource GhostButton}" HeightRequest="32" FontSize="12" Text="Website" Command="{Binding OpenWebsiteCommand}" />
+                        <Button Style="{StaticResource GhostButton}" HeightRequest="32" FontSize="12" Text="Website" Command="{Binding OpenWebsiteCommand}" IsVisible="{Binding CanOpenWebsite}" />
                     </VerticalStackLayout>
                     <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" HeightRequest="34" FontSize="12" Text="Show location" Command="{Binding RevealPathCommand}" IsVisible="{Binding CanRevealPath}" VerticalOptions="Start" />
                 </Grid>
@@ -970,7 +970,7 @@
                     <VerticalStackLayout Spacing="2">
                         <Label Text="CONVERSION ENGINES" Style="{StaticResource Eyebrow}" />
                         <Label Text="Tools found on this device" Style="{StaticResource Title}" />
-                        <Label Text="Install FFmpeg and FFprobe separately for media conversion and inspection. ImageMagick, LibreOffice, Pandoc, and Ghostscript add more formats. Everything runs locally." Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
+                        <Label Text="{Binding ToolsDescription}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
                     </VerticalStackLayout>
                     <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Text="Refresh" Command="{Binding RefreshToolsCommand}" IsEnabled="{Binding IsRefreshingTools, Converter={StaticResource Not}}" VerticalOptions="Start" AutomationId="RefreshToolsButton">
                         <Button.ImageSource>
@@ -986,6 +986,12 @@
                     </Grid>
                 </Border>
                 <CollectionView ItemsSource="{Binding Tools}" ItemTemplate="{StaticResource ToolTemplate}" SelectionMode="None" AutomationId="ToolList" />
+                <Button Text="Forget file permissions" Style="{StaticResource SecondaryButton}" IsVisible="{Binding IsMacStoreBuild}"
+                        Command="{Binding ForgetFilePermissionsCommand}" HorizontalOptions="Start" />
+                <Button Text="Bundled media licenses" Style="{StaticResource SecondaryButton}" IsVisible="{Binding IsMacStoreBuild}"
+                        Command="{Binding ShowBundledLicensesCommand}" HorizontalOptions="Start" />
+                <Editor Text="{Binding BundledLicenseText}" IsReadOnly="True" HeightRequest="240"
+                        IsVisible="{Binding BundledLicenseText, Converter={StaticResource HasText}}" FontSize="12" />
 
                 <!-- About & updates -->
                 <Border Style="{StaticResource Card}" Padding="16,14" AutomationId="AboutPanel">

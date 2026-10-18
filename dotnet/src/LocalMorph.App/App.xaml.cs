@@ -24,6 +24,15 @@ public partial class App : Application
 			MinimumWidth = 1000,
 			MinimumHeight = 680
 		};
+		if (Distribution.IsMacStoreBuild)
+		{
+			window.Destroying += async (_, _) =>
+			{
+				FileActivationService.Suspend();
+				try { await viewModel.CloseAsync(); }
+				catch (Exception ex) { Console.Error.WriteLine($"Could not finish sandbox workspace shutdown: {ex.Message}"); }
+			};
+		}
 
 #if WINDOWS || MACCATALYST
 		// Native title bar carries the brand once: app icon, name, and a live subtitle. Interactive

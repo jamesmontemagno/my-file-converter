@@ -18,6 +18,7 @@ public sealed class FormatOption
         MissingTools = missing;
         EngineLabel = anyEngine
             ? format.Engines.First(engine => FormatCatalog.EngineAvailable(engine, format, tools)).ToString()
+            : Distribution.IsMacStoreBuild ? "Unavailable in this bundled-tool configuration"
             : $"Needs {string.Join(" or ", missing.Select(kind => ToolCatalog.Get(kind).DisplayName))}";
     }
 
@@ -76,11 +77,13 @@ public sealed partial class ToolItemViewModel : ObservableObject
     public bool IsStoreCodec => Descriptor.IsStoreCodec;
     public string InstallCommand => ToolCatalog.InstallCommand(Kind);
     /// <summary>Mono text under a missing tool: the package-manager command, or where the codec comes from.</summary>
-    public string InstallHint => IsStoreCodec ? "Free from the Microsoft Store" : InstallCommand;
+    public string InstallHint => Distribution.IsMacStoreBuild ? Distribution.BundledToolRepair
+        : IsStoreCodec ? "Free from the Microsoft Store" : InstallCommand;
     public string InstallActionLabel => IsStoreCodec ? "Get from Store" : OperatingSystem.IsWindows() ? "Install with WinGet" : "Install";
     public string WebsiteUrl => Descriptor.WebsiteUrl;
     public bool CanLaunchInstaller => PlatformActions.CanLaunchInstaller;
-    public bool CanCopyCommand => !IsStoreCodec;
+    public bool CanCopyCommand => !Distribution.IsMacStoreBuild && !IsStoreCodec;
+    public bool CanOpenWebsite => !Distribution.IsMacStoreBuild;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusIcon))]
@@ -103,9 +106,11 @@ public sealed partial class ToolItemViewModel : ObservableObject
     public partial string? Extra { get; set; }
 
     public bool IsMissing => !IsInstalled;
-    public bool CanRevealPath => IsInstalled && !IsStoreCodec;
+    public bool CanRevealPath => !Distribution.IsMacStoreBuild && IsInstalled && !IsStoreCodec;
     public string StatusIcon => IsInstalled ? Icons.CheckCircle : Icons.Download;
-    public string StatusText => IsInstalled ? $"Installed · {Version}" : IsCore ? "Required · not found" : "Optional · not installed";
+    public string StatusText => IsInstalled ? $"{(Distribution.IsMacStoreBuild ? "Bundled" : "Installed")} · {Version}"
+        : Distribution.IsMacStoreBuild ? "Bundled tool missing · repair required"
+        : IsCore ? "Required · not found" : "Optional · not installed";
 
     public void Apply(ToolInfo? info)
     {
@@ -124,11 +129,19 @@ public sealed partial class ToolItemViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task CopyInstallCommandAsync() => await Clipboard.Default.SetTextAsync(InstallCommand);
+    private async Task CopyInstallCommandAsync()
+    {
+        if (CanCopyCommand) await Clipboard.Default.SetTextAsync(InstallCommand);
+    }
 
     [RelayCommand]
     private async Task LaunchInstallerAsync()
     {
+        if (Distribution.IsMacStoreBuild)
+        {
+            await Shell.Current.DisplayAlertAsync("Bundled media tools", Distribution.BundledToolRepair, "OK");
+            return;
+        }
         if (!PlatformActions.LaunchInstaller(Kind))
         {
             await Shell.Current.DisplayAlertAsync("Could not open installer",
@@ -137,11 +150,14 @@ public sealed partial class ToolItemViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task OpenWebsiteAsync() => await Launcher.Default.OpenAsync(WebsiteUrl);
+    private async Task OpenWebsiteAsync()
+    {
+        if (CanOpenWebsite) await Launcher.Default.OpenAsync(WebsiteUrl);
+    }
 
     [RelayCommand]
     private void RevealPath()
     {
-        if (Path is not null) PlatformActions.RevealInFolder(Path);
+        if (CanRevealPath && Path is not null) PlatformActions.RevealInFolder(Path);
     }
 }
