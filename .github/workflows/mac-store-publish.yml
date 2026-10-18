@@ -138,6 +138,16 @@ jobs:
         with:
           name: mac-store-beta-media
           path: artifacts/mac-media
+      - name: Restore executable modes and validate transferred media before signing
+        run: |
+          chmod 755 artifacts/mac-media/payload/bin/ffmpeg artifacts/mac-media/payload/bin/ffprobe
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, "scripts/mac")
+          from store_release import validate_media
+          validate_media(Path("artifacts/mac-media/payload"))
+          PY
       - name: Prepare temporary application/installer signing identities
         id: signing
         env:

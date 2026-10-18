@@ -116,6 +116,22 @@ class MacReleaseTests(unittest.TestCase):
                     with patch.object(release, "run", side_effect=AssertionError("Invalid media accepted")):
                         with self.assertRaises(ValueError):
                             release.validate_media(media)
+            (media / "binaries.sha256").write_text("".join(
+                release.digest(media / "bin" / name) + "  bin/" + name + "\n"
+                for name in ("ffmpeg", "ffprobe")))
+            (media / "configure-flags.txt").write_text("\n".join((
+                "--disable-gpl", "--disable-nonfree", "--disable-autodetect",
+                "--disable-network", "--enable-videotoolbox")))
+            for name in ("ffmpeg", "ffprobe"):
+                (media / "bin" / name).chmod(0o755)
+            def native_run(command, *args):
+                return b"arm64\n" if command == "lipo" else b"fixture:\n\t/usr/lib/libSystem.B.dylib\n"
+            with patch.object(release, "run", side_effect=native_run):
+                release.validate_media(media)
+                if os.name == "posix":
+                    (media / "bin/ffprobe").chmod(0o644)
+                    with self.assertRaisesRegex(ValueError, "regular media executable"):
+                        release.validate_media(media)
 
     def test_package_retains_corresponding_source_matching_symbols_and_complete_inventory(self):
         with tempfile.TemporaryDirectory() as temporary:
