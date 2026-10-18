@@ -124,6 +124,18 @@ jobs:
           python3 scripts/mac/smoke_sandbox.py \
             "artifacts/mac-proof/proof/app/Debug/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph Sandbox Proof.app" \
             artifacts/mac-proof/runtime
+      - name: Preserve the exact signed app for minimum-OS testing
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "artifacts/mac-proof/proof/app/Debug/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph Sandbox Proof.app" \
+            artifacts/mac-proof/sandbox-app.zip
+          (cd artifacts/mac-proof && shasum -a 256 sandbox-app.zip > sandbox-app.sha256)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mac-sandbox-app
+          path: |
+            artifacts/mac-proof/sandbox-app.zip
+            artifacts/mac-proof/sandbox-app.sha256
       - name: Retain proof evidence (not Store certification)
         if: always()
         uses: actions/upload-artifact@v7
@@ -140,3 +152,40 @@ jobs:
             artifacts/mac-proof/media/arm64/*.txt
             artifacts/mac-proof/media/arm64/*.log
             artifacts/mac-proof/media/arm64/*.sha256
+
+  desktop-app-mac-baseline:
+    name: Run the Xcode 27 proof on macOS 15
+    needs: desktop-app-mac
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Assert the deployment-baseline host
+        run: |
+          test "$(uname -m)" = arm64
+          test "$(sw_vers -productVersion | cut -d . -f 1)" = 15
+          mkdir -p artifacts/mac-baseline
+          sw_vers > artifacts/mac-baseline/system.txt
+      - uses: actions/download-artifact@v8
+        with:
+          name: mac-sandbox-app
+          path: artifacts/mac-baseline
+      - name: Verify and run the same app without rebuilding
+        run: |
+          (cd artifacts/mac-baseline && shasum -a 256 -c sandbox-app.sha256)
+          ditto -x -k artifacts/mac-baseline/sandbox-app.zip artifacts/mac-baseline/app
+          APP="artifacts/mac-baseline/app/LocalMorph Sandbox Proof.app"
+          codesign --verify --strict "$APP"
+          codesign --verify --strict "$APP/Contents/MacOS/ffmpeg"
+          codesign --verify --strict "$APP/Contents/MacOS/ffprobe"
+          python3 scripts/mac/smoke_sandbox.py "$APP" artifacts/mac-baseline/runtime
+      - name: Retain minimum-OS runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mac-sandbox-proof-macos15
+          if-no-files-found: warn
+          path: |
+            artifacts/mac-baseline/system.txt
+            artifacts/mac-baseline/sandbox-app.sha256
+            artifacts/mac-baseline/runtime/

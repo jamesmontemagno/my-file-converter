@@ -219,11 +219,15 @@ an isolated Debug app, and launches it with `scripts/mac/smoke_sandbox.py`. The 
 scene-page startup, H.264/HEVC Apple software encoding, a target-size hard cap, and shared-queue
 cancellation markers; a crash, timeout or failure marker fails the job. Logs, exact proof
 sources, flags and provenance are retained in the `mac-sandbox-proof` artifact.
+The same signed app is archived once with a SHA256, transferred to the arm64 `macos-15`
+job, verified, and launched there without rebuilding or installing the .NET SDK/media tools.
+That job asserts the host OS/architecture and retains separate `mac-sandbox-proof-macos15`
+runtime evidence. A declared deployment minimum alone does not satisfy this check.
 It uses no Store credentials and cannot launch the normal app identity. The ad-hoc CI identity
 is `com.refractored.localmorph.sandboxproof.ci`, separate from the Apple Development proof
 identity to avoid reusing a container across signing identities.
-This is container-only Debug evidence, not persistent external-file access, Release/TestFlight
-certification, complete codec/filter parity, or minimum-baseline testing on macOS 15.
+This is container-only Debug evidence, not persistent external-file access, normal workspace
+verification, Release/TestFlight certification, or complete codec/filter parity.
 The implementation machine currently has Xcode 26.6, not Xcode 27; do not claim that a local
 build on that older toolchain verifies the new CI combination.
 
