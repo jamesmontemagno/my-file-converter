@@ -49,37 +49,51 @@ public static class ConversionRunner
         job.ReportProgress(0, plan.Steps[0].Label);
         try
         {
-            foreach (var step in plan.Steps)
+            for (var attempt = 1; ; attempt++)
             {
-                token.ThrowIfCancellationRequested();
-                job.ReportProgress(step.ProgressStart, step.Label);
-                job.AppendLog($"$ {step.Describe()}");
-                var exitCode = step.IsInProcess ? await RunInProcessAsync(job, step, token) : await RunStepAsync(job, step, token);
-                if (exitCode != 0)
+                foreach (var step in plan.Steps)
                 {
-                    // Tools often create/truncate the destination before failing; never leave a corrupt file behind.
-                    TryDelete(job, stagingPath);
-                    job.MarkFailed(DescribeFailure(job, exitCode));
+                    token.ThrowIfCancellationRequested();
+                    job.ReportProgress(step.ProgressStart, step.Label);
+                    job.AppendLog($"$ {step.Describe()}");
+                    var exitCode = step.IsInProcess ? await RunInProcessAsync(job, step, token) : await RunStepAsync(job, step, token);
+                    if (exitCode != 0)
+                    {
+                        TryDelete(job, stagingPath);
+                        job.MarkFailed(DescribeFailure(job, exitCode));
+                        return;
+                    }
+                }
+
+                if (plan.Finalize is not null) await plan.Finalize(token);
+
+                token.ThrowIfCancellationRequested();
+                var output = new FileInfo(stagingPath);
+                if (!output.Exists || output.Length == 0)
+                {
+                    job.MarkFailed("The tool finished but no output file was written." + LogHint(job));
                     return;
                 }
+
+                if (job.Options.TargetSizeMegabytes is { } megabytes && output.Length > megabytes * 1_000_000)
+                {
+                    if (attempt < 3 && plan.RetryOversizedOutput?.Invoke(output.Length) is { } retry)
+                    {
+                        plan.Cleanup?.Invoke();
+                        File.Delete(stagingPath);
+                        plan = retry;
+                        job.AppendLog($"Target-size retry {attempt + 1} of 3; oversized staged output discarded.");
+                        job.CommandLine += "\n" + retry.Describe();
+                        continue;
+                    }
+                    throw new InvalidOperationException($"The result exceeds the {megabytes:0.##} MB limit. Try a lower audio bitrate or a shorter clip; the existing destination was not changed.");
+                }
+
+                File.Move(stagingPath, job.OutputPath, overwrite: job.OverwritePolicy == OverwritePolicy.Overwrite);
+                job.RecordOutput(new OutputResult(job.OutputPath, output.Length));
+                job.MarkCompleted(new JobResult(job.OutputPath, output.Length, stopwatch.Elapsed, job.CommandLine ?? string.Empty, job.CompletedOutputs));
+                break;
             }
-
-            if (plan.Finalize is not null) await plan.Finalize(token);
-
-            token.ThrowIfCancellationRequested();
-            var output = new FileInfo(stagingPath);
-            if (!output.Exists || output.Length == 0)
-            {
-                job.MarkFailed("The tool finished but no output file was written." + LogHint(job));
-                return;
-            }
-
-            if (job.Options.TargetSizeMegabytes is { } megabytes && output.Length > megabytes * 1_000_000)
-                throw new InvalidOperationException($"The result exceeds the {megabytes:0.##} MB limit. Try a lower audio bitrate or a shorter clip; the existing destination was not changed.");
-
-            File.Move(stagingPath, job.OutputPath, overwrite: job.OverwritePolicy == OverwritePolicy.Overwrite);
-            job.RecordOutput(new OutputResult(job.OutputPath, output.Length));
-            job.MarkCompleted(new JobResult(job.OutputPath, output.Length, stopwatch.Elapsed, job.CommandLine ?? string.Empty, job.CompletedOutputs));
         }
         catch (OperationCanceledException)
         {

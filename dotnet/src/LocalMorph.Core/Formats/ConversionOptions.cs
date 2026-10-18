@@ -52,6 +52,7 @@ public sealed record ConversionOptions
     public int? TargetHeight { get; init; }
     public int? FrameRate { get; init; }
     public int? AudioBitrateKbps { get; init; }
+    public int? VideoBitrateKbps { get; init; }
     public int? SampleRate { get; init; }
     public ChannelMode Channels { get; init; } = ChannelMode.Source;
     public int WavBitDepth { get; init; } = 16;
@@ -127,6 +128,8 @@ public sealed record ConversionOptions
         if (TargetHeight is { } height && (height < 16 || height > 8192)) return "Resolution must be between 16 and 8192 pixels tall.";
         if (FrameRate is { } fps && (fps < 1 || fps > 240)) return "Frame rate must be between 1 and 240.";
         if (AudioBitrateKbps is { } kbps && (kbps < 8 || kbps > 1024)) return "Audio bitrate must be between 8 and 1024 kbps.";
+        if (VideoBitrateKbps is < 100 or > 200_000) return "Video bitrate must be between 100 and 200000 kbps.";
+        if (VideoBitrateKbps is not null && format.VideoCodec is not ("h264" or "hevc")) return "An explicit video bitrate requires H.264 or HEVC.";
         if (SampleRate is { } rate && rate is not (8000 or 11025 or 16000 or 22050 or 24000 or 32000 or 44100 or 48000 or 88200 or 96000)) return "Choose a standard sample rate.";
         if (WavBitDepth is not (16 or 24 or 32)) return "Bit depth must be 16, 24, or 32.";
         if (TrimStartSeconds is { } start && (!double.IsFinite(start) || start < 0)) return "Trim start must be zero or later.";

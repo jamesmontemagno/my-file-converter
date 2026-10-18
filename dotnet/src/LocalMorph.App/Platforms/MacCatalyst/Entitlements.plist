@@ -2,8 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
     <dict>
-        <!-- Direct-download distribution: the sandbox stays off so the app can spawn FFmpeg and the
-             other tools installed on the user's Mac. Hardened runtime is enabled at publish time. -->
+        <!-- Local development only. Mac App Store delivery requires separately verified sandbox
+             entitlements and bundled tools; this configuration is not a Store package. -->
         <key>com.apple.security.app-sandbox</key>
         <false/>
         <key>com.apple.security.network.client</key>
@@ -17,4 +17,3 @@
         <true/>
     </dict>
 </plist>
-

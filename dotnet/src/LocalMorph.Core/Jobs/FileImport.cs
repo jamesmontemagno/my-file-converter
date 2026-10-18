@@ -15,19 +15,22 @@ public static class FileImport
 {
     public const int MaxFiles = 2000;
     public const int MaxDepth = 8;
+    private static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
-    public static Task<FileImportResult> ScanAsync(IEnumerable<string> paths, IEnumerable<string> existing, CancellationToken token = default)
+    public static Task<FileImportResult> ScanAsync(IEnumerable<string> paths, IEnumerable<string> existing,
+        CancellationToken token = default, Func<string, string>? canonicalize = null)
     {
+        canonicalize ??= Path.GetFullPath;
         var roots = paths.ToArray();
-        var queued = existing.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return Task.Run(() => Scan(roots, queued, token), token);
+        var queued = existing.Select(canonicalize).ToHashSet(PathComparer);
+        return Task.Run(() => Scan(roots, queued, token, canonicalize), token);
     }
 
-    private static FileImportResult Scan(IEnumerable<string> roots, ISet<string> existing, CancellationToken token)
+    private static FileImportResult Scan(IEnumerable<string> roots, ISet<string> existing, CancellationToken token, Func<string, string> canonicalize)
     {
         var accepted = new List<string>();
-        var duplicates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var duplicates = new HashSet<string>(PathComparer);
+        var seen = new HashSet<string>(PathComparer);
         var errors = new List<string>();
         var unsupported = 0;
         var excluded = 0;
@@ -36,7 +39,7 @@ public static class FileImport
         void Add(string path)
         {
             token.ThrowIfCancellationRequested();
-            path = Path.GetFullPath(path);
+            path = canonicalize(path);
             if (!seen.Add(path)) return;
             if (existing.Contains(path)) { duplicates.Add(path); return; }
             if (SourceClassifier.Classify(path) == MediaCategory.Unknown) { unsupported++; return; }

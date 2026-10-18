@@ -42,7 +42,13 @@ public sealed class FfmpegEngine : IConversionEngine
             };
         }
 
+        return SinglePassPlan(context, ffmpeg);
+    }
+
+    private static ConversionPlan SinglePassPlan(BuildContext context, string ffmpeg)
+    {
         var arguments = BuildArguments(context, pass: 0, passLog: null);
+        var durationUs = EffectiveDurationMicroseconds(context);
         var label = context.Format.Category switch
         {
             MediaCategory.Subtitle => context.Source.Category == MediaCategory.Subtitle ? "Converting subtitles" : "Extracting subtitles",
@@ -51,7 +57,8 @@ public sealed class FfmpegEngine : IConversionEngine
             MediaCategory.Image when context.Source.Category == MediaCategory.Video => "Extracting frame",
             MediaCategory.Image => "Converting image",
             MediaCategory.Audio => context.Format.AudioCodec == "copy" ? "Extracting audio" : "Encoding audio",
-            _ => context.Format.VideoCodec == "copy" ? "Remuxing" : "Encoding video"
+            _ => context.Format.VideoCodec == "copy" ? "Remuxing"
+                : context.UsesAppleSoftware ? "Encoding video with Apple software" : "Encoding video"
         };
         return new ConversionPlan
         {
@@ -64,7 +71,18 @@ public sealed class FfmpegEngine : IConversionEngine
                     IsIndeterminate = durationUs is null,
                     ParseStdout = line => ParseProgress(line, durationUs)
                 }
-            ]
+            ],
+            RetryOversizedOutput = context.UsesAppleSoftware && context.TargetVideoKbps is { } bitrate
+                && context.Options.TargetSizeMegabytes is { } limit
+                ? bytes =>
+                {
+                    var adjusted = (int)Math.Floor(bitrate * (limit * 1_000_000 / bytes) * 0.9);
+                    if (adjusted < 100 || adjusted >= bitrate) return null;
+                    var retry = new BuildContext(context.Source, context.Format, context.Options,
+                        context.Capabilities, context.OutputPath, adjusted);
+                    return SinglePassPlan(retry, ffmpeg);
+                }
+                : null
         };
     }
 
@@ -473,7 +491,7 @@ public sealed class FfmpegEngine : IConversionEngine
         var quality = options.Quality;
         var speed = options.Speed;
         var hardware = context.HardwareEncoder;
-        var targetKbps = context.TargetVideoKbps;
+        var targetKbps = context.TargetVideoKbps ?? options.VideoBitrateKbps;
 
         switch (format.VideoCodec)
         {
@@ -483,6 +501,12 @@ public sealed class FfmpegEngine : IConversionEngine
                 if (hardware is not null)
                 {
                     AddHardwareVideoEncoder(args, hardware, format.VideoCodec, quality, speed, targetKbps);
+                }
+                else if (context.UsesAppleSoftware)
+                {
+                    args.AddRange(["-c:v", format.VideoCodec == "h264" ? "h264_videotoolbox" : "hevc_videotoolbox",
+                        "-require_sw", "1", "-b:v", $"{targetKbps}k"]);
+                    if (format.VideoCodec == "h264") args.AddRange(["-profile:v", "high"]);
                 }
                 else
                 {
@@ -897,13 +921,15 @@ public sealed class FfmpegEngine : IConversionEngine
 
     private sealed class BuildContext
     {
-        public BuildContext(SourceFile source, OutputFormat format, ConversionOptions options, FfmpegCapabilities capabilities, string outputPath)
+        public BuildContext(SourceFile source, OutputFormat format, ConversionOptions options, FfmpegCapabilities capabilities, string outputPath, int? targetVideoKbps = null)
         {
             Source = source;
             Format = format;
             Options = options;
             Capabilities = capabilities;
             OutputPath = outputPath;
+            if (options.VideoBitrateKbps is not null && options.Validate(format) is { } bitrateIssue)
+                throw new InvalidOperationException(bitrateIssue);
             if (options.ToneMapToSdr)
             {
                 if (options.Validate(format) is { } issue) throw new InvalidOperationException(issue);
@@ -915,10 +941,13 @@ public sealed class FfmpegEngine : IConversionEngine
 
             var wantsTargetSize = options.TargetSizeMegabytes is not null && format.Supports(FormatFeatures.TargetSize);
 
-            // Target-size encodes always use the software two-pass path: hardware rate control is too loose to hit a cap.
+            // Size-limited jobs use software; Apple rate control is checked and retried before commit.
             HardwareEncoder = !wantsTargetSize && options.UseHardwareEncoder && format.Supports(FormatFeatures.HardwareAccel) && format.VideoCodec is { } codec
                 ? capabilities.HardwareEncoderFor(codec)
                 : null;
+            UsesAppleSoftware = capabilities.UsesAppleSoftwareEncoder(format.VideoCodec, HardwareEncoder is not null);
+            if (UsesAppleSoftware && !wantsTargetSize && options.VideoBitrateKbps is null)
+                throw new InvalidOperationException("Apple software encoding needs an explicit video bitrate. Choose a bitrate or enable a verified hardware encoder.");
 
             if (wantsTargetSize)
             {
@@ -941,12 +970,12 @@ public sealed class FfmpegEngine : IConversionEngine
                     }
                     else
                     {
-                        TargetVideoKbps = (int)videoKbps;
+                        TargetVideoKbps = Math.Min((int)videoKbps, targetVideoKbps ?? int.MaxValue);
                     }
                 }
             }
 
-            UsesTwoPass = TargetVideoKbps is not null && format.VideoCodec == "h264";
+            UsesTwoPass = TargetVideoKbps is not null && format.VideoCodec == "h264" && !UsesAppleSoftware;
 
             var audioStreams = source.Media?.AudioStreams ?? [];
             AudioTrack = format.Supports(FormatFeatures.AudioTracks) ? options.AudioTrack ?? 0 : 0;
@@ -1048,6 +1077,7 @@ public sealed class FfmpegEngine : IConversionEngine
         public HardwareEncoder? HardwareEncoder { get; }
         public int? TargetVideoKbps { get; }
         public bool UsesTwoPass { get; }
+        public bool UsesAppleSoftware { get; }
         public string? TargetSizeError { get; }
 
         private static double EffectiveDurationSeconds(SourceFile source, ConversionOptions options)

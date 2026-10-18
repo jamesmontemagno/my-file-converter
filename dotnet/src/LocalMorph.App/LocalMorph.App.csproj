@@ -8,19 +8,13 @@
 		<TargetFrameworks Condition="'$(WindowsOnly)' != 'true' and '$(MacOnly)' != 'true' and !$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
 		<TargetFrameworks Condition="'$(WindowsOnly)' != 'true' and '$(MacOnly)' != 'true' and $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
 
-		<!-- Note for MacCatalyst:
-		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
-		When specifying both architectures, use the plural <RuntimeIdentifiers> instead of the singular <RuntimeIdentifier>.
-		The Mac App Store will NOT accept apps with ONLY maccatalyst-arm64 indicated;
-		either BOTH runtimes must be indicated or ONLY macatalyst-x64. -->
-		<!-- For example: <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers> -->
-
 		<OutputType>Exe</OutputType>
 		<RootNamespace>LocalMorph.App</RootNamespace>
 		<UseMaui>true</UseMaui>
 		<SingleProject>true</SingleProject>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+		<MauiControlsVersion>10.0.60</MauiControlsVersion>
 
 		<!-- Enable XAML source generation for faster build times and improved performance.
 		     This generates C# code from XAML at compile time instead of runtime inflation.
@@ -51,16 +45,25 @@
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.19041.0</TargetPlatformMinVersion>
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">18.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
 	</PropertyGroup>
+
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' or $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+		<MauiControlsVersion>10.0.110</MauiControlsVersion>
+	</PropertyGroup>
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+		<RuntimeIdentifier>maccatalyst-arm64</RuntimeIdentifier>
+	</PropertyGroup>
+	<Target Name="ValidateMacArchitecture" BeforeTargets="PrepareForBuild" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+		<Error Condition="'$(RuntimeIdentifier)' != 'maccatalyst-arm64' or ('$(RuntimeIdentifiers)' != '' and '$(RuntimeIdentifiers)' != 'maccatalyst-arm64')" Text="LocalMorph for Mac supports Apple Silicon only. Use maccatalyst-arm64." />
+	</Target>
 
 	<!-- Windows: custom Program.Main (Platforms/Windows/Program.cs) handles single-instance redirection. -->
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
 		<DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
 	</PropertyGroup>
-	<PropertyGroup Condition="'$(LocalMorphStoreBuild)' == 'true'">
-		<DefineConstants>$(DefineConstants);LOCALMORPH_STORE_BUILD</DefineConstants>
+	<PropertyGroup Condition="'$(LocalMorphStoreBuild)' == 'true' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
 		<Platforms>x64;ARM64</Platforms>
 		<RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
 		<SelfContained>true</SelfContained>
@@ -71,14 +74,43 @@
 		<DebugType>portable</DebugType>
 		<AppxSymbolPackageEnabled>true</AppxSymbolPackageEnabled>
 	</PropertyGroup>
+	<Target Name="ValidateWindowsStorePlatform" BeforeTargets="PrepareForBuild" Condition="'$(LocalMorphStoreBuild)' == 'true'">
+		<Error Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'" Text="LocalMorphStoreBuild is Windows-only. Use LocalMorphMacStoreBuild for the Mac sandbox workspace." />
+	</Target>
+	<PropertyGroup Condition="'$(LocalMorphMacStoreBuild)' == 'true'">
+		<OutputPath>bin/mac-store/$(Configuration)/</OutputPath>
+		<DefineConstants>$(DefineConstants);LOCALMORPH_MAC_STORE</DefineConstants>
+		<CodesignEntitlements>Platforms/MacCatalyst/Store.entitlements</CodesignEntitlements>
+		<ApplicationId Condition="'$(Configuration)' == 'Debug'">com.refractored.localmorph.sandboxworkspace</ApplicationId>
+		<ApplicationTitle Condition="'$(Configuration)' == 'Debug'">LocalMorph Sandbox Workspace</ApplicationTitle>
+		<UseInterpreter Condition="'$(Configuration)' == 'Release'">true</UseInterpreter>
+	</PropertyGroup>
+	<ItemGroup Condition="'$(LocalMorphMacStoreBuild)' == 'true'">
+		<CustomEntitlements Include="com.apple.security.cs.allow-jit" Type="Remove" />
+		<BundleResource Include="Platforms/iOS/Resources/PrivacyInfo.xcprivacy" LogicalName="PrivacyInfo.xcprivacy" />
+	</ItemGroup>
+	<Target Name="ValidateMacStoreBuild" BeforeTargets="PrepareForBuild" Condition="'$(LocalMorphMacStoreBuild)' == 'true'">
+		<Error Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'maccatalyst' or '$(LocalMorphStoreBuild)' == 'true' or '$(LocalMorphMacSandboxProof)' == 'true'" Text="The Mac Store build must target Mac Catalyst and cannot use the Windows Store or isolated proof flavor." />
+		<Error Condition="'$(Configuration)' != 'Debug' and '$(LocalMorphMacStoreBetaRelease)' != 'true'" Text="Mac Store Release packaging is blocked unless the explicit TestFlight beta payload is selected. Use Debug for the isolated sandbox workspace." />
+		<Error Condition="'$(Configuration)' != 'Debug' and (!Exists('$(LocalMorphMacStoreMediaDirectory)/bin/ffmpeg') or !Exists('$(LocalMorphMacStoreMediaDirectory)/bin/ffprobe'))" Text="Mac Store beta builds require the pinned source-built FFmpeg/FFprobe payload. Run the Mac Store workflow; host tools are not accepted." />
+	</Target>
 
-	<!-- Release-only: macOS direct-download bundle (universal, not sandboxed). -->
+	<!-- Apple Silicon / macOS 15+. Store signing/packaging is configured separately. -->
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst' and '$(Configuration)' == 'Release'">
-		<RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers>
 		<CreatePackage>false</CreatePackage>
 		<UseHardenedRuntime>true</UseHardenedRuntime>
 		<EnableCodeSigning Condition="'$(EnableCodeSigning)' == ''">false</EnableCodeSigning>
 	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(LocalMorphMacSandboxProof)' == 'true'">
+		<DefineConstants>$(DefineConstants);LOCALMORPH_MAC_SANDBOX_PROOF</DefineConstants>
+		<ApplicationId>com.refractored.localmorph.sandboxproof</ApplicationId>
+		<ApplicationTitle>LocalMorph Sandbox Proof</ApplicationTitle>
+		<CodesignEntitlements>Platforms/MacCatalyst/SandboxProof.entitlements</CodesignEntitlements>
+	</PropertyGroup>
+	<Target Name="ValidateMacSandboxProof" BeforeTargets="PrepareForBuild" Condition="'$(LocalMorphMacSandboxProof)' == 'true'">
+		<Error Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'maccatalyst' or '$(Configuration)' != 'Debug' or '$(LocalMorphStoreBuild)' == 'true' or '$(LocalMorphMacStoreBuild)' == 'true'" Text="The isolated Mac sandbox proof is a development-only Mac Catalyst Debug build, not a release flavor." />
+	</Target>
 
 	<ItemGroup>
 		<!-- App Icon -->
@@ -102,7 +134,7 @@
 		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.0" />
 		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="10.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.60" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiControlsVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 	</ItemGroup>
 
@@ -110,7 +142,7 @@
 		<ProjectReference Include="..\LocalMorph.Core\LocalMorph.Core.csproj" />
 	</ItemGroup>
 
-	<ItemGroup Condition="'$(LocalMorphStoreBuild)' != 'true'">
+	<ItemGroup Condition="'$(LocalMorphStoreBuild)' != 'true' and '$(LocalMorphMacStoreBuild)' != 'true'">
 		<None Include="Resources\ffmpeg\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
 

@@ -37,6 +37,8 @@ public sealed class ConversionPlan
     public Func<CancellationToken, Task>? Finalize { get; init; }
     /// <summary>Always runs, success or failure.</summary>
     public Action? Cleanup { get; init; }
+    /// <summary>Replans an oversized staged output. The runner allows at most three total attempts.</summary>
+    public Func<long, ConversionPlan?>? RetryOversizedOutput { get; init; }
     public string Describe() => string.Join("\n", Steps.Select(step => step.Describe()));
 }
 

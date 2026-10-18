@@ -72,6 +72,14 @@ public sealed partial class FfmpegCapabilities
     public HardwareEncoder? HardwareEncoderFor(string codec) =>
         WorkingHardwareEncoders.FirstOrDefault(encoder => encoder.Codec == codec);
 
+    public bool UsesAppleSoftwareEncoder(string? codec, bool useHardware) =>
+        (!useHardware || HardwareEncoderFor(codec ?? string.Empty) is null) && (codec switch
+        {
+            "h264" => !HasEncoder("libx264") && HasEncoder("h264_videotoolbox"),
+            "hevc" => !HasEncoder("libx265") && HasEncoder("hevc_videotoolbox"),
+            _ => false
+        });
+
     public string HardwareSummary => WorkingHardwareEncoders.Count == 0
         ? "Software encoding"
         : string.Join(", ", WorkingHardwareEncoders.Select(encoder => encoder.DisplayName).Distinct());

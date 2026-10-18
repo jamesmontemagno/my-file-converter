@@ -28,9 +28,8 @@ a promise to delete converted files saved outside its private app storage.
 ## Network access and external services
 
 The Microsoft Store edition receives app updates through Microsoft Store. An explicit
-update action may open the Store. Direct-download editions may request an update feed from
-localmorph.com; web hosting services can receive ordinary network information associated with
-those requests. These update requests do not include the source media files.
+update action may open the Store. The app does not poll a LocalMorph update feed or
+download replacement application packages.
 
 The Tools page can open external installation, codec, or project links. FFmpeg and FFprobe
 must be installed separately for media processing. Tool and codec installation may use

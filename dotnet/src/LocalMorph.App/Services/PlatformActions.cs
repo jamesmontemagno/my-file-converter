@@ -18,6 +18,7 @@ public static class PlatformActions
 
     public static bool RevealInFolder(string path)
     {
+        if (Distribution.IsMacStoreBuild) return false;
         try
         {
             if (OperatingSystem.IsWindows())
@@ -48,8 +49,53 @@ public static class PlatformActions
         }
     }
 
+    public static async Task<bool> RevealInFolderAsync(string path)
+    {
+        if (!Distribution.IsMacStoreBuild) return (File.Exists(path) || Directory.Exists(path)) && RevealInFolder(path);
+        try
+        {
+            using var access = await FileAccessService.RequestAsync([path]);
+            if (access is null) return false;
+            if (!File.Exists(path) && !Directory.Exists(path)) return false;
+            var folder = Directory.Exists(path) ? path : Path.GetDirectoryName(path);
+            if (folder is null) return false;
+            using var folderAccess = await FileAccessService.RequestAsync([folder]);
+            if (folderAccess is null) return false;
+#if MACCATALYST
+            using var url = Foundation.NSUrl.FromFilename(folder);
+            return await UIKit.UIApplication.SharedApplication.OpenUrlAsync(url, new UIKit.UIApplicationOpenUrlOptions());
+#else
+            return false;
+#endif
+        }
+        catch (Exception ex)
+        {
+            await Shell.Current.DisplayAlertAsync("Could not open folder", ex.Message, "OK");
+            return false;
+        }
+    }
+
     public static async Task<bool> OpenAsync(string path)
     {
+        if (Distribution.IsMacStoreBuild)
+        {
+            try
+            {
+                using var access = await FileAccessService.RequestAsync([path]);
+                if (access is null || !File.Exists(path)) return false;
+#if MACCATALYST
+                using var url = Foundation.NSUrl.FromFilename(path);
+                return await UIKit.UIApplication.SharedApplication.OpenUrlAsync(url, new UIKit.UIApplicationOpenUrlOptions());
+#else
+                return false;
+#endif
+            }
+            catch (Exception ex)
+            {
+                await Shell.Current.DisplayAlertAsync("Could not open file", ex.Message, "OK");
+                return false;
+            }
+        }
         try
         {
             if (!File.Exists(path) && !Directory.Exists(path)) return false;
@@ -72,6 +118,7 @@ public static class PlatformActions
     /// <summary>Opens a terminal running the package-manager install command so the user can watch and approve it. Store codecs open their Microsoft Store page instead.</summary>
     public static bool LaunchInstaller(ToolKind kind)
     {
+        if (Distribution.IsMacStoreBuild) return false;
         var descriptor = ToolCatalog.Get(kind);
         if (descriptor.IsStoreCodec) return OpenStorePage(ToolCatalog.StoreUri(descriptor), descriptor.WebsiteUrl);
 
@@ -102,7 +149,7 @@ public static class PlatformActions
         return false;
     }
 
-    public static bool CanLaunchInstaller => OperatingSystem.IsWindows() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsMacOS();
+    public static bool CanLaunchInstaller => !Distribution.IsMacStoreBuild && (OperatingSystem.IsWindows() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsMacOS());
 
     /// <summary>Opens the Microsoft Store app at a product page, falling back to the web store when the ms-windows-store: protocol is unavailable.</summary>
     public static bool OpenStorePage(string storeUri, string webUrl)

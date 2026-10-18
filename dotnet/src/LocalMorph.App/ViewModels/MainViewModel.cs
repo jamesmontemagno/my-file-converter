@@ -9,7 +9,6 @@ using LocalMorph.Core.Formats;
 using LocalMorph.Core.Imaging;
 using LocalMorph.Core.Jobs;
 using LocalMorph.Core.Tools;
-using LocalMorph.Core.Updates;
 
 namespace LocalMorph.App.ViewModels;
 
@@ -27,9 +26,9 @@ public sealed record ChoiceOption<T>(string Label, T Value)
 
 public partial class MainViewModel : ObservableObject
 {
+    private static StringComparison PathComparison => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
     private readonly ConversionService service;
     private readonly AppSettings settings;
-    private readonly UpdateService updates;
     private readonly SemaphoreSlim inspectionGate = new(4);
     private int inspectionsPending;
     private bool applyingPreset;
@@ -38,6 +37,13 @@ public partial class MainViewModel : ObservableObject
     private readonly SemaphoreSlim importGate = new(1);
     private CancellationTokenSource? importCancellation;
     private BatchPreflight? preflight;
+    private readonly Dictionary<string, IDisposable> workspaceAccess = new(StringComparer.Ordinal);
+    private IDisposable? outputAccess;
+    private bool NeedsOutputAuthorization => Distribution.IsMacStoreBuild && outputAccess is null;
+    private bool isClosing;
+    private Task? closing;
+    private CancellationTokenSource inspectionCancellation = new();
+    private TaskCompletionSource? inspectionsStopped;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanConvert))]
@@ -46,12 +52,10 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial string ImportSummary { get; set; } = "Drop more files here, or use Add files";
 
-    public MainViewModel(ConversionService service, AppSettings settings, UpdateService updates)
+    public MainViewModel(ConversionService service, AppSettings settings)
     {
         this.service = service;
         this.settings = settings;
-        this.updates = updates;
-        AutomaticUpdateChecks = updates.AutomaticChecks;
         SelectedOperation = OperationOptions[0];
         SelectedSplitMode = SplitModeOptions[0];
 
@@ -71,7 +75,8 @@ public partial class MainViewModel : ObservableObject
         SelectedVolume = VolumeOptions[DefaultVolumeIndex];
         SelectedAudioDelay = AudioDelayOptions[DefaultAudioDelayIndex];
 
-        foreach (var descriptor in ToolCatalog.All.Where(descriptor => descriptor.Kind != ToolKind.Ffprobe))
+        foreach (var descriptor in ToolCatalog.All.Where(descriptor => Distribution.IsMacStoreBuild
+            ? descriptor.Kind is ToolKind.Ffmpeg or ToolKind.Ffprobe : descriptor.Kind != ToolKind.Ffprobe))
         {
             Tools.Add(new ToolItemViewModel(descriptor));
         }
@@ -92,7 +97,7 @@ public partial class MainViewModel : ObservableObject
         service.ToolsChanged += inventory => MainThread.BeginInvokeOnMainThread(() => ApplyTools(inventory));
         service.HistoryAdded += entry => MainThread.BeginInvokeOnMainThread(() => History.Insert(0, entry));
         service.History.PersistenceFailed += message => MainThread.BeginInvokeOnMainThread(() => ReportError(message));
-        service.Queue.Drained += () => MainThread.BeginInvokeOnMainThread(OnQueueDrained);
+        service.Queue.Drained += () => MainThread.BeginInvokeOnMainThread(async () => await OnQueueDrainedAsync());
 
         RefreshFormats();
     }
@@ -130,6 +135,9 @@ public partial class MainViewModel : ObservableObject
         {
             if (IsConverting || SelectedFormat is null) return "";
             if (IsReadingFiles) return "Reading files before checking this batch…";
+            if (NeedsOutputAuthorization) return HasCustomOutputDirectory
+                ? "Output-folder access will be restored or requested before conversion."
+                : "Choose an output folder before converting. Selecting an input file does not authorize writing beside it.";
             var plan = PreparedBatch;
             var excluded = plan.Entries.Where(entry => !entry.CanRun).ToArray();
             return $"{plan.RunnableCount} operation(s) ready · {excluded.Length} will be skipped"
@@ -279,6 +287,8 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowLossless))]
     [NotifyPropertyChangedFor(nameof(ShowPlaybackSpeed))]
     [NotifyPropertyChangedFor(nameof(ShowVideoSection))]
+    [NotifyPropertyChangedFor(nameof(ShowVideoBitrate))]
+    [NotifyPropertyChangedFor(nameof(TargetSizeHint))]
     [NotifyPropertyChangedFor(nameof(ShowAudioSection))]
     [NotifyPropertyChangedFor(nameof(ShowAdvancedSection))]
     [NotifyPropertyChangedFor(nameof(ShowStripMetadata))]
@@ -306,6 +316,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(QualityLabel))]
     public partial int Quality { get; set; } = 80;
+
+    [ObservableProperty] public partial string VideoBitrateText { get; set; } = "4000";
 
     [ObservableProperty] public partial ChoiceOption<int?> SelectedResolution { get; set; }
     [ObservableProperty] public partial ChoiceOption<int?> SelectedFrameRate { get; set; }
@@ -449,7 +461,8 @@ public partial class MainViewModel : ObservableObject
     public bool HasFormat => SelectedFormat is not null;
     public bool HasFfmpeg => Inventory.HasFfmpeg;
     public bool HasMediaTools => Inventory.HasMediaTools;
-    public string FfmpegSetupInstructions => OperatingSystem.IsWindows()
+    public string ToolsDescription => Distribution.ToolsDescription;
+    public string FfmpegSetupInstructions => Distribution.IsMacStoreBuild ? Distribution.BundledToolRepair : OperatingSystem.IsWindows()
         ? @"FFmpeg and FFprobe are required for media conversion and inspection. Use Install to open WinGet, or Website for manual setup. Keep both executables in C:\ffmpeg\bin, then select Refresh."
         : "FFmpeg and FFprobe are required for media conversion and inspection. Use Install to open your package manager, or Website for manual setup. Keep both executables on PATH, then select Refresh.";
     public bool HasHistory => History.Count > 0;
@@ -457,7 +470,10 @@ public partial class MainViewModel : ObservableObject
     public bool HasValidationMessage => !string.IsNullOrWhiteSpace(ValidationMessage);
     public bool HasDecoderHint => !string.IsNullOrWhiteSpace(DecoderHint);
     public bool HasCustomOutputDirectory => !string.IsNullOrWhiteSpace(OutputDirectory);
-    public string OutputDirectoryLabel => HasCustomOutputDirectory ? OutputDirectory : "Next to each source file";
+    public string OutputDirectoryLabel => HasCustomOutputDirectory ? OutputDirectory
+        : Distribution.IsMacStoreBuild ? "Choose an authorized output folder" : "Next to each source file";
+    public bool IsMacStoreBuild => Distribution.IsMacStoreBuild;
+    [ObservableProperty] public partial string? BundledLicenseText { get; set; }
     public string OutputExtensionLabel => SelectedFormat?.Extension ?? string.Empty;
     public string QualityLabel => Quality >= 95 ? $"{Quality} · near lossless" : Quality >= 80 ? $"{Quality} · high" : Quality >= 60 ? $"{Quality} · balanced" : $"{Quality} · small file";
     public string TargetSizeLabel => UseTargetSize && double.TryParse(TargetSizeText, NumberStyles.Float, CultureInfo.InvariantCulture, out var megabytes) ? $"Fit in {megabytes:0.#} MB" : "Target file size";
@@ -467,10 +483,16 @@ public partial class MainViewModel : ObservableObject
         : UseHardwareEncoder ? $"Using {Inventory.Ffmpeg.HardwareSummary}" : $"{Inventory.Ffmpeg.HardwareSummary} available";
 
     private bool Supports(FormatFeatures feature) => !IsJoin && SelectedFormat?.Format.Supports(feature) == true;
-    public bool ShowQuality => Supports(FormatFeatures.Quality) && !(UseTargetSize && ShowTargetSize);
+    private bool UsesAppleSoftware => !IsJoin && Inventory.Ffmpeg.UsesAppleSoftwareEncoder(
+        SelectedFormat?.Format.VideoCodec, UseHardwareEncoder && !(UseTargetSize && ShowTargetSize));
+    public bool ShowVideoBitrate => UsesAppleSoftware && !(UseTargetSize && ShowTargetSize);
+    public string TargetSizeHint => UsesAppleSoftware
+        ? "Apple software encoding, with up to three bitrate-adjusted attempts. Oversized results are never committed."
+        : "Two-pass encode sized to fit. Great for Discord (25 MB), email, and chat.";
+    public bool ShowQuality => Supports(FormatFeatures.Quality) && !(UseTargetSize && ShowTargetSize) && !ShowVideoBitrate;
     public bool ShowResolution => Supports(FormatFeatures.Resolution);
     public bool ShowFrameRate => Supports(FormatFeatures.FrameRate);
-    public bool ShowSpeed => Supports(FormatFeatures.EncodingSpeed);
+    public bool ShowSpeed => Supports(FormatFeatures.EncodingSpeed) && !UsesAppleSoftware;
     public bool ShowAudio => Supports(FormatFeatures.AudioTuning) && !RemoveAudio;
     public bool ShowBitDepth => Supports(FormatFeatures.WavBitDepth);
     public bool ShowTargetSize => Supports(FormatFeatures.TargetSize);
@@ -501,12 +523,14 @@ public partial class MainViewModel : ObservableObject
         SubtitleMode.BurnIn => "The chosen track (or added file) is drawn permanently into the picture. Requires a re-encode.",
         _ => "MKV keeps every subtitle track; other containers leave them out."
     };
-    public bool ShowVideoSection => ShowResolution || ShowFrameRate || ShowSpeed || ShowQuality || ShowTargetSize;
+    public bool ShowVideoSection => ShowResolution || ShowFrameRate || ShowSpeed || ShowQuality || ShowTargetSize || ShowVideoBitrate;
     public bool ShowAudioSection => ShowAudio || ShowBitDepth;
     public bool ShowAdvancedSection => ShowHardware || ShowRotate || ShowRemoveAudio || ShowLossless || ShowPlaybackSpeed || ShowStripMetadata;
     public bool ShowTrimControls => SelectedFile?.HasTimeline == true && Supports(FormatFeatures.Trim);
     public bool ShowFrameControls => SelectedFile?.IsVideo == true && Supports(FormatFeatures.FrameExtract);
-    public bool CanConvert => HasFiles && HasFormat && SelectedFormat!.IsAvailable && !IsConverting && !IsReadingFiles && PreparedBatch.RunnableCount > 0;
+    public bool CanConvert => HasFiles && HasFormat && SelectedFormat!.IsAvailable && !IsConverting && !service.Queue.IsRunning && !IsReadingFiles
+        && (NeedsOutputAuthorization
+            ? Files.Any(file => file.IsPending && file.Source is not null) : PreparedBatch.RunnableCount > 0);
     public bool CanCancelAll => IsConverting;
     public string ConvertButtonText
     {
@@ -550,103 +574,36 @@ public partial class MainViewModel : ObservableObject
         }
 
         if (service.History.PersistenceError is { } historyError) ReportError(historyError);
-        _ = CheckForUpdatesAsync(force: false);
     }
 
     // ---------------------------------------------------------------- updates
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasUpdate))]
-    [NotifyPropertyChangedFor(nameof(UpdateLabel))]
-    public partial UpdateInfo? AvailableUpdate { get; set; }
-
-    [ObservableProperty]
-    public partial bool IsCheckingForUpdates { get; set; }
-
-    [ObservableProperty]
-    public partial string UpdateStatus { get; set; } = string.Empty;
-
-    [ObservableProperty]
-    public partial bool AutomaticUpdateChecks { get; set; }
-
-    public bool HasUpdate => AvailableUpdate is not null;
-    public string UpdateLabel => AvailableUpdate is null ? string.Empty : $"Update available · {AvailableUpdate.DisplayVersion}";
-    public string CurrentVersionLabel => $"LocalMorph {UpdateService.CurrentVersionDisplay}";
-    public string UpdateInstallHint => UpdateService.InstallHint;
-    public bool IsDirectBuild => !Distribution.IsStoreBuild;
-    public bool IsStoreBuild => Distribution.IsStoreBuild;
-
-    partial void OnAutomaticUpdateChecksChanged(bool value) => updates.AutomaticChecks = value;
+    public string CurrentVersionLabel => $"LocalMorph {Distribution.CurrentVersionDisplay}";
+    public string UpdateDescription => Distribution.UpdateDescription;
+    public bool CanOpenStoreUpdates => Distribution.StoreUpdates is not null;
 
     [RelayCommand]
-    private async Task CheckForUpdatesAsync(bool force)
+    private async Task OpenStoreUpdatesAsync()
     {
-        if (IsCheckingForUpdates) return;
-        if (Distribution.IsStoreBuild)
+        if (Distribution.StoreUpdates is not { } uri)
         {
-            if (force) await Launcher.Default.OpenAsync(Distribution.StoreUpdates);
+            ReportError("Open App Store and choose Updates on this platform.");
             return;
         }
-        IsCheckingForUpdates = true;
         try
         {
-            var result = await updates.CheckAsync(force);
-            if (result.Error is { } error)
-            {
-                UpdateStatus = error;
-                if (force) ReportError(error);
-                return;
-            }
-            var update = result.Update;
-            AvailableUpdate = update;
-            if (force)
-            {
-                UpdateStatus = update is null ? $"You're up to date ({UpdateService.CurrentVersionDisplay})." : $"Version {update.DisplayVersion} is available.";
-                if (update is null) ShowToast("You're up to date.");
-            }
-            else if (update is not null)
-            {
-                ShowToast($"LocalMorph {update.DisplayVersion} is available.");
-            }
+            if (!await Launcher.Default.OpenAsync(uri)) ReportError("Could not open Store updates. Open Microsoft Store and choose Downloads.");
         }
-        finally
+        catch (Exception ex)
         {
-            IsCheckingForUpdates = false;
+            ReportError($"Could not open Store updates: {ex.Message}");
         }
-    }
-
-    [RelayCommand]
-    private async Task OpenUpdateAsync()
-    {
-        if (AvailableUpdate is not { } update) return;
-        await Launcher.Default.OpenAsync(update.ReleaseNotesUrl ?? update.DownloadUrl);
-    }
-
-    [RelayCommand]
-    private async Task DownloadUpdateAsync()
-    {
-        if (AvailableUpdate is { } update) await Launcher.Default.OpenAsync(update.DownloadUrl);
-    }
-
-    [RelayCommand]
-    private async Task CopyUpdateCommandAsync()
-    {
-        await Clipboard.Default.SetTextAsync(UpdateService.InstallHint);
-        ShowToast("Upgrade command copied.");
-    }
-
-    [RelayCommand]
-    private void SkipUpdate()
-    {
-        if (AvailableUpdate is not { } update) return;
-        updates.SkippedVersion = update.DisplayVersion;
-        AvailableUpdate = null;
-        UpdateStatus = $"Skipped {update.DisplayVersion}.";
     }
 
     private void ApplyTools(ToolInventory inventory)
     {
         Inventory = inventory;
+        NotifyEncoderOptionsChanged();
         InvalidatePreflight();
         foreach (var tool in Tools) tool.Apply(inventory.Get(tool.Kind));
         if (Tools.FirstOrDefault(tool => tool.Kind == ToolKind.Ffmpeg) is { } ffmpegTool)
@@ -659,7 +616,7 @@ public partial class MainViewModel : ObservableObject
         if (inventory.HasFfmpeg && !inventory.HasMediaTools)
         {
             EngineStatus = "FFprobe not found";
-            EngineDetail = "Install FFmpeg with FFprobe, then refresh Tools";
+            EngineDetail = Distribution.IsMacStoreBuild ? Distribution.BundledToolRepair : "Install FFmpeg with FFprobe, then refresh Tools";
         }
         else if (inventory.HasFfmpeg)
         {
@@ -671,7 +628,7 @@ public partial class MainViewModel : ObservableObject
         else
         {
             EngineStatus = "FFmpeg not found";
-            EngineDetail = "Install FFmpeg to convert video and audio";
+            EngineDetail = Distribution.IsMacStoreBuild ? Distribution.BundledToolRepair : "Install FFmpeg to convert video and audio";
         }
 
         OnPropertyChanged(nameof(HasFfmpeg));
@@ -687,7 +644,7 @@ public partial class MainViewModel : ObservableObject
 
     private async Task RefreshMissingMetadataAsync()
     {
-        if (refreshingMetadata || !Inventory.Has(ToolKind.Ffprobe)) return;
+        if (isClosing || refreshingMetadata || !Inventory.Has(ToolKind.Ffprobe)) return;
         refreshingMetadata = true;
         await importGate.WaitAsync();
         try
@@ -728,6 +685,13 @@ public partial class MainViewModel : ObservableObject
     {
         try
         {
+#if MACCATALYST
+            if (Distribution.IsMacStoreBuild)
+            {
+                await AddPathsAsync(await Platforms.MacCatalyst.MacFileAccess.PickAsync(folder: false, multiple: true));
+                return;
+            }
+#endif
             var results = await FilePicker.Default.PickMultipleAsync(new PickOptions { PickerTitle = "Choose files to convert" });
             if (results is not null) await AddPathsAsync(results.Select(result => result.FullPath));
         }
@@ -742,6 +706,13 @@ public partial class MainViewModel : ObservableObject
     {
         try
         {
+#if MACCATALYST
+            if (Distribution.IsMacStoreBuild)
+            {
+                await AddPathsAsync(await Platforms.MacCatalyst.MacFileAccess.PickAsync(folder: true, multiple: false));
+                return;
+            }
+#endif
             var result = await FolderPicker.Default.PickAsync(CancellationToken.None);
             if (!result.IsSuccessful || result.Folder is null) return;
             await AddPathsAsync([result.Folder.Path]);
@@ -754,8 +725,10 @@ public partial class MainViewModel : ObservableObject
 
     public async Task AddPathsAsync(IEnumerable<string> paths)
     {
+        if (isClosing) return;
         var requested = paths.ToArray();
         await importGate.WaitAsync();
+        if (isClosing) { importGate.Release(); return; }
         using var cancellation = new CancellationTokenSource();
         importCancellation = cancellation;
         IsImporting = true;
@@ -763,14 +736,24 @@ public partial class MainViewModel : ObservableObject
         var added = new List<FileItemViewModel>();
         try
         {
-            var imported = await FileImport.ScanAsync(requested, Files.Select(file => file.Path), cancellation.Token);
+            using var access = await FileAccessService.RequestAsync(requested);
+            if (access is null) { ImportSummary = "Import canceled. No files were added."; return; }
+            Func<string, string>? canonicalize = null;
+#if MACCATALYST
+            if (Distribution.IsMacStoreBuild) canonicalize = Platforms.MacCatalyst.MacFileAccess.CanonicalPath;
+#endif
+            var imported = await FileImport.ScanAsync(requested, Files.Select(file => file.Path), cancellation.Token, canonicalize);
             addingFiles = true;
             foreach (var path in imported.AlreadyQueued)
-                if (Files.FirstOrDefault(file => string.Equals(file.Path, path, StringComparison.OrdinalIgnoreCase)) is { IsTerminal: true } previous)
+            {
+                RetainWorkspaceAccess(path);
+                if (Files.FirstOrDefault(file => string.Equals(file.Path, path, PathComparison)) is { IsTerminal: true } previous)
                     previous.ResetForRetry();
+            }
             foreach (var path in imported.Paths)
             {
                 cancellation.Token.ThrowIfCancellationRequested();
+                RetainWorkspaceAccess(path);
                 var item = new FileItemViewModel(path);
                 item.RemoveRequested += RemoveFile;
                 item.SelectRequested += file => SelectedFile = file;
@@ -785,6 +768,7 @@ public partial class MainViewModel : ObservableObject
             }
             addingFiles = false;
             OnFilesChanged();
+            if (Distribution.IsMacStoreBuild) OnPropertyChanged(nameof(SelectedFile));
             ImportSummary = imported.Summary;
             View = WorkspaceView.Convert;
             await Task.WhenAll(added.Select(file => InspectAsync(file, cancellation.Token)));
@@ -818,6 +802,9 @@ public partial class MainViewModel : ObservableObject
 
     private async Task InspectAsync(FileItemViewModel item, CancellationToken token = default)
     {
+        if (isClosing) return;
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, inspectionCancellation.Token);
+        token = linked.Token;
         inspectionsPending++;
         InvalidatePreflight();
         var acquired = false;
@@ -826,10 +813,12 @@ public partial class MainViewModel : ObservableObject
             await inspectionGate.WaitAsync(token);
             acquired = true;
             item.IsInspecting = true;
+            using var access = FileAccessService.Acquire(item.Path);
             var source = await SourceInspector.InspectAsync(item.Path, Inventory, token);
+            token.ThrowIfCancellationRequested();
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                if (!Files.Contains(item)) return;
+                if (isClosing || !Files.Contains(item)) return;
                 item.ApplySource(source);
                 if (ReferenceEquals(item, SelectedFile)) UpdateCommandPreview();
             });
@@ -837,6 +826,7 @@ public partial class MainViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             await MainThread.InvokeOnMainThreadAsync(() => item.MarkInspectionFailed("Inspection canceled. Use Retry to inspect this file."));
+            if (isClosing) return;
             throw;
         }
         catch (Exception ex)
@@ -847,7 +837,8 @@ public partial class MainViewModel : ObservableObject
         {
             if (acquired) inspectionGate.Release();
             inspectionsPending--;
-            if (!IsReadingFiles)
+            if (inspectionsPending == 0) inspectionsStopped?.TrySetResult();
+            if (!IsReadingFiles && !isClosing)
             {
                 RefreshFormats();
                 InvalidatePreflight();
@@ -907,6 +898,7 @@ public partial class MainViewModel : ObservableObject
 
     private void OnFilesChanged()
     {
+        PruneWorkspaceAccess();
         InvalidatePreflight();
         for (var index = 0; index < Files.Count; index++) { Files[index].QueueIndex = index; Files[index].QueueCount = Files.Count; }
         OnPropertyChanged(nameof(HasFiles));
@@ -940,6 +932,12 @@ public partial class MainViewModel : ObservableObject
 
         var count = Files.Count(file => PlatformImageCodec.IsHeif(file.Path));
         var photos = count == 1 ? "This HEIC photo needs" : $"{count} HEIC photos need";
+        if (Distribution.IsMacStoreBuild)
+        {
+            DecoderHint = $"{photos} a decoder not included in this media bundle. External tool installs cannot extend this build.";
+            DecoderHintAction = "Review bundled tools";
+            return;
+        }
         if (kind == ToolKind.WindowsHeif)
         {
             DecoderHint = $"{photos} the free Windows HEIF Image Extensions codec to convert reliably (or ImageMagick).";
@@ -991,6 +989,10 @@ public partial class MainViewModel : ObservableObject
                 break;
             case nameof(FileItemViewModel.ReplacementAudioPath):
             case nameof(FileItemViewModel.ExternalSubtitlePath):
+                PruneWorkspaceAccess();
+                OnTracksChanged();
+                if (ReferenceEquals(sender, SelectedFile)) UpdateCommandPreview();
+                break;
             case nameof(FileItemViewModel.AudioTrackChoices):
             case nameof(FileItemViewModel.SubtitleTrackChoices):
                 OnTracksChanged();
@@ -1035,9 +1037,14 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private void OnQueueDrained()
+    private async Task OnQueueDrainedAsync()
     {
+        if (isClosing) return;
+        await service.Queue.WaitForIdleAsync();
+        if (isClosing) return;
         IsConverting = Files.Any(file => file.IsRunning || file.IsQueued);
+        OnPropertyChanged(nameof(CanConvert));
+        OnPropertyChanged(nameof(ConvertButtonText));
         OnPropertyChanged(nameof(HasFailed));
         UpdateBatchStatus();
         var done = Files.Count(file => file.IsCompleted);
@@ -1046,7 +1053,7 @@ public partial class MainViewModel : ObservableObject
 
         if (OpenFolderWhenDone && Files.FirstOrDefault(file => file.IsCompleted && file.OutputPath is not null) is { OutputPath: { } output })
         {
-            PlatformActions.RevealInFolder(output);
+            if (!await PlatformActions.RevealInFolderAsync(output)) ReportError("Could not open the completed results folder.");
         }
     }
 
@@ -1089,7 +1096,11 @@ public partial class MainViewModel : ObservableObject
         {
             var option = all.FirstOrDefault(candidate => candidate.Id == preset.FormatId);
             var available = option?.IsAvailable == true;
-            PresetOptions.Add(new PresetOption(preset, available, available ? null : option is null ? "Not valid for this mix of files" : option.EngineLabel));
+            var description = preset.Options.TargetSizeMegabytes is not null
+                && Inventory.Ffmpeg.UsesAppleSoftwareEncoder(preset.Format.VideoCodec, useHardware: false)
+                ? "Apple software encoding with up to three bitrate-adjusted attempts; oversized results are rejected."
+                : null;
+            PresetOptions.Add(new PresetOption(preset, available, available ? null : option is null ? "Not valid for this mix of files" : option.EngineLabel, description));
         }
         OnPropertyChanged(nameof(HasPresets));
         OnPropertyChanged(nameof(ApplicabilityLabel));
@@ -1150,14 +1161,15 @@ public partial class MainViewModel : ObservableObject
         if (SelectedFile is not { } file) return;
         try
         {
-            var result = await FilePicker.Default.PickAsync(new PickOptions { PickerTitle = "Choose the new soundtrack", FileTypes = AudioFileTypes });
-            if (result is null) return;
-            if (SourceClassifier.Classify(result.FullPath) is not (MediaCategory.Audio or MediaCategory.Video))
+            var path = await PickAttachmentAsync("Choose the new soundtrack", AudioFileTypes);
+            if (path is null || !Files.Contains(file)) return;
+            if (SourceClassifier.Classify(path) is not (MediaCategory.Audio or MediaCategory.Video))
             {
-                ShowToast($"{result.FileName} isn't an audio file.");
+                ShowToast($"{Path.GetFileName(path)} isn't an audio file.");
                 return;
             }
-            file.ReplacementAudioPath = result.FullPath;
+            RetainWorkspaceAccess(path);
+            file.ReplacementAudioPath = path;
         }
         catch (Exception ex)
         {
@@ -1171,19 +1183,134 @@ public partial class MainViewModel : ObservableObject
         if (SelectedFile is not { } file) return;
         try
         {
-            var result = await FilePicker.Default.PickAsync(new PickOptions { PickerTitle = "Choose a subtitle file", FileTypes = SubtitleFileTypes });
-            if (result is null) return;
-            if (SourceClassifier.Classify(result.FullPath) != MediaCategory.Subtitle)
+            var path = await PickAttachmentAsync("Choose a subtitle file", SubtitleFileTypes);
+            if (path is null || !Files.Contains(file)) return;
+            if (SourceClassifier.Classify(path) != MediaCategory.Subtitle)
             {
                 ShowToast("Subtitle files must be .srt, .vtt, .ass, or .ssa.");
                 return;
             }
-            file.ExternalSubtitlePath = result.FullPath;
+            RetainWorkspaceAccess(path);
+            file.ExternalSubtitlePath = path;
         }
         catch (Exception ex)
         {
             ShowToast($"Could not open the file picker: {ex.Message}");
         }
+    }
+
+    private static async Task<string?> PickAttachmentAsync(string title, FilePickerFileType types)
+    {
+#if MACCATALYST
+        if (Distribution.IsMacStoreBuild)
+            return (await Platforms.MacCatalyst.MacFileAccess.PickAsync(folder: false, multiple: false)).FirstOrDefault();
+#endif
+        return (await FilePicker.Default.PickAsync(new PickOptions { PickerTitle = title, FileTypes = types }))?.FullPath;
+    }
+
+    private void RetainWorkspaceAccess(string path)
+    {
+        if (!Distribution.IsMacStoreBuild) return;
+        var access = FileAccessService.Acquire(path);
+        workspaceAccess.TryGetValue(path, out var previous);
+        workspaceAccess[path] = access;
+        previous?.Dispose();
+    }
+
+    private void PruneWorkspaceAccess()
+    {
+        var needed = Files.SelectMany(file => new[] { file.Path, file.ReplacementAudioPath, file.ExternalSubtitlePath })
+            .OfType<string>().ToHashSet(StringComparer.Ordinal);
+        foreach (var path in workspaceAccess.Keys.Where(path => !needed.Contains(path)).ToArray())
+        {
+            workspaceAccess[path].Dispose();
+            workspaceAccess.Remove(path);
+        }
+    }
+
+    public Task CloseAsync() => closing ??= CloseCoreAsync();
+
+    private async Task CloseCoreAsync()
+    {
+        isClosing = true;
+        inspectionsStopped = inspectionsPending == 0 ? null : new(TaskCreationOptions.RunContinuationsAsynchronously);
+        importCancellation?.Cancel();
+        inspectionCancellation.Cancel();
+        service.Queue.CancelAll();
+        await Task.WhenAll(service.Queue.WaitForIdleAsync(), inspectionsStopped?.Task ?? Task.CompletedTask);
+        await importGate.WaitAsync();
+        try
+        {
+            foreach (var access in workspaceAccess.Values) access.Dispose();
+            workspaceAccess.Clear();
+            outputAccess?.Dispose();
+            outputAccess = null;
+        }
+        finally { importGate.Release(); }
+    }
+
+    public async Task ResumeAsync()
+    {
+        if (closing is null) return;
+        await closing;
+        closing = null;
+        inspectionCancellation.Dispose();
+        inspectionCancellation = new();
+        inspectionsStopped = null;
+        isClosing = false;
+        var failures = new List<string>();
+        foreach (var path in Files.SelectMany(file => new[] { file.Path, file.ReplacementAudioPath, file.ExternalSubtitlePath })
+            .OfType<string>().Distinct(StringComparer.Ordinal))
+        {
+            try { RetainWorkspaceAccess(path); }
+            catch (Exception ex) { failures.Add($"{Path.GetFileName(path)}: {ex.Message}"); }
+        }
+        IsConverting = service.Queue.IsRunning;
+        OnFilesChanged();
+        UpdateCommandPreview();
+        if (failures.Count > 0) ReportError($"{failures.Count} workspace item(s) need to be selected again. {string.Join("; ", failures.Take(3))}");
+    }
+
+    [RelayCommand]
+    private async Task ForgetFilePermissionsAsync()
+    {
+        if (!Distribution.IsMacStoreBuild) return;
+        if (IsReadingFiles || IsConverting || service.Queue.IsRunning)
+        {
+            ReportError("Wait for inspection and conversions to finish before forgetting permissions.");
+            return;
+        }
+        if (!await Shell.Current.DisplayAlertAsync("Forget file permissions?",
+            "Clear the workspace and saved file/folder permissions. Your files and history will not be deleted. Select files and an output folder again to authorize access.", "Forget", "Cancel")) return;
+        if (IsReadingFiles || IsConverting || service.Queue.IsRunning) { ReportError("Work started while confirming. Wait before forgetting permissions."); return; }
+        try
+        {
+            BatchFileChanges(() => { foreach (var file in Files.ToArray()) RemoveFile(file); });
+            ResetOutputDirectory();
+#if MACCATALYST
+            Platforms.MacCatalyst.MacFileAccess.Forget();
+#endif
+            ShowToast("Saved file permissions forgotten.");
+        }
+        catch (Exception ex) { ReportError($"Could not forget file permissions: {ex.Message}"); }
+    }
+
+    [RelayCommand]
+    private async Task ShowBundledLicensesAsync()
+    {
+        if (!Distribution.IsMacStoreBuild) return;
+        try
+        {
+            string? directory = null;
+#if MACCATALYST
+            directory = Path.Combine(Foundation.NSBundle.MainBundle.BundlePath, "Contents", "Resources", "FFmpeg");
+#endif
+            if (directory is null) throw new PlatformNotSupportedException("Bundled Mac media notices require Mac Catalyst.");
+            var paths = new[] { "FFmpeg-proof-NOTICE.txt", "LICENSE.md", "COPYING.LGPLv2.1" }
+                .Select(name => Path.Combine(directory, name));
+            BundledLicenseText = string.Join("\n\n", await Task.WhenAll(paths.Select(path => File.ReadAllTextAsync(path))));
+        }
+        catch (Exception ex) { ReportError($"Bundled media notices could not be read. Repair or update this build: {ex.Message}"); }
     }
 
     partial void OnSelectedFormatChanged(FormatOption? value)
@@ -1249,6 +1376,7 @@ public partial class MainViewModel : ObservableObject
     private void ApplyOptions(ConversionOptions options)
     {
         Quality = options.Quality;
+        VideoBitrateText = (options.VideoBitrateKbps ?? 4000).ToString(CultureInfo.InvariantCulture);
         SelectedResolution = ResolutionOptions.FirstOrDefault(choice => choice.Value == options.TargetHeight) ?? ResolutionOptions[0];
         SelectedFrameRate = FrameRateOptions.FirstOrDefault(choice => choice.Value == options.FrameRate) ?? FrameRateOptions[0];
         SelectedSpeed = SpeedOptions.First(choice => choice.Value == options.Speed);
@@ -1288,6 +1416,7 @@ public partial class MainViewModel : ObservableObject
     // ---------------------------------------------------------------- settings reactions
 
     partial void OnQualityChanged(int value) => SettingsTouched();
+    partial void OnVideoBitrateTextChanged(string value) => SettingsTouched();
     partial void OnSelectedResolutionChanged(ChoiceOption<int?> value) => SettingsTouched();
     partial void OnSelectedFrameRateChanged(ChoiceOption<int?> value) => SettingsTouched();
     partial void OnSelectedSpeedChanged(ChoiceOption<EncodingSpeed> value) => SettingsTouched();
@@ -1367,6 +1496,7 @@ public partial class MainViewModel : ObservableObject
 
     private void SettingsTouched()
     {
+        NotifyEncoderOptionsChanged();
         InvalidatePreflight();
         if (!applyingPreset)
         {
@@ -1374,6 +1504,15 @@ public partial class MainViewModel : ObservableObject
         }
         ValidationMessage = null;
         UpdateCommandPreview();
+    }
+
+    private void NotifyEncoderOptionsChanged()
+    {
+        OnPropertyChanged(nameof(ShowVideoBitrate));
+        OnPropertyChanged(nameof(ShowQuality));
+        OnPropertyChanged(nameof(ShowSpeed));
+        OnPropertyChanged(nameof(ShowVideoSection));
+        OnPropertyChanged(nameof(TargetSizeHint));
     }
 
     private ConversionOptions BuildSharedOptions()
@@ -1392,6 +1531,9 @@ public partial class MainViewModel : ObservableObject
             TargetHeight = SelectedResolution.Value,
             FrameRate = SelectedFrameRate.Value,
             AudioBitrateKbps = SelectedAudioBitrate.Value,
+            VideoBitrateKbps = ShowVideoBitrate
+                ? int.TryParse(VideoBitrateText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var videoBitrate) ? videoBitrate : -1
+                : null,
             SampleRate = SelectedSampleRate.Value,
             Channels = SelectedChannels.Value,
             WavBitDepth = SelectedBitDepth.Value,
@@ -1435,10 +1577,16 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        if (NeedsOutputAuthorization)
+        {
+            CommandPreview = "Authorize an output folder to preview the final conversion command.";
+            return;
+        }
         var engine = FormatCatalog.ResolveEngine(format.Format, source.Path, Inventory);
         if (engine is null)
         {
-            CommandPreview = $"{format.DisplayName} needs {string.Join(" or ", format.MissingTools.Select(kind => ToolCatalog.Get(kind).DisplayName))}. Open Tools to install it.";
+            CommandPreview = Distribution.IsMacStoreBuild ? $"{format.DisplayName} is unavailable in this bundled-tool configuration."
+                : $"{format.DisplayName} needs {string.Join(" or ", format.MissingTools.Select(kind => ToolCatalog.Get(kind).DisplayName))}. Open Tools to install it.";
             return;
         }
 
@@ -1481,6 +1629,20 @@ public partial class MainViewModel : ObservableObject
     {
         try
         {
+#if MACCATALYST
+            if (Distribution.IsMacStoreBuild)
+            {
+                var path = (await Platforms.MacCatalyst.MacFileAccess.PickAsync(folder: true, multiple: false)).FirstOrDefault();
+                if (path is null) return;
+                var access = FileAccessService.Acquire(path, writeDirectory: true);
+                outputAccess?.Dispose();
+                outputAccess = access;
+                OutputDirectory = path;
+                settings.OutputDirectory = path;
+                UpdateCommandPreview();
+                return;
+            }
+#endif
             var result = await FolderPicker.Default.PickAsync(CancellationToken.None);
             if (!result.IsSuccessful || result.Folder is null) return;
             OutputDirectory = result.Folder.Path;
@@ -1496,25 +1658,51 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ResetOutputDirectory()
     {
+        outputAccess?.Dispose();
+        outputAccess = null;
         OutputDirectory = string.Empty;
         settings.OutputDirectory = string.Empty;
         UpdateCommandPreview();
     }
 
     [RelayCommand]
-    private void OpenOutputDirectory()
+    private async Task OpenOutputDirectoryAsync()
     {
         var target = HasCustomOutputDirectory ? OutputDirectory : Files.FirstOrDefault(file => file.OutputPath is not null)?.OutputPath ?? SelectedFile?.Path;
-        if (target is not null) PlatformActions.RevealInFolder(target);
+        if (target is not null && !await PlatformActions.RevealInFolderAsync(target)) ReportError("Could not open the output folder.");
     }
 
     // ---------------------------------------------------------------- conversion
 
     [RelayCommand]
-    private void ConvertAll()
+    private async Task ConvertAllAsync()
     {
-        if (IsReadingFiles || IsConverting) return;
+        if (isClosing || IsReadingFiles || IsConverting || service.Queue.IsRunning) return;
+        var requestLifetime = inspectionCancellation.Token;
         if (SelectedFormat is not { } format) { ReportError("Choose an output format first."); return; }
+        if (Distribution.IsMacStoreBuild)
+        {
+            try
+            {
+                if (HasCustomOutputDirectory && outputAccess is null)
+                {
+                    try { outputAccess = FileAccessService.Acquire(OutputDirectory, writeDirectory: true); }
+                    catch (UnauthorizedAccessException)
+                    {
+                        if (!await Shell.Current.DisplayAlertAsync("Authorize output folder",
+                            "Choose the folder to use for results. A saved path alone does not grant write access.", "Choose folder", "Cancel")) return;
+                    }
+                }
+                if (outputAccess is null) await PickOutputDirectoryAsync();
+                if (outputAccess is null) return;
+            }
+            catch (Exception ex) { ReportError($"Could not authorize the output folder: {ex.Message}"); return; }
+            if (isClosing || requestLifetime.IsCancellationRequested) return;
+            if (IsReadingFiles || IsConverting) { ReportError("The workspace changed while choosing a folder. Try converting again."); return; }
+            format = SelectedFormat ?? format;
+            InvalidatePreflight();
+            UpdateCommandPreview();
+        }
         if (HasCustomOutputDirectory && !Directory.Exists(OutputDirectory))
         {
             ReportError("The output folder no longer exists. Choose another one.");
@@ -1530,7 +1718,7 @@ public partial class MainViewModel : ObservableObject
             var job = new ConversionJob(entry.Inputs[0], format.Format, entry.Options, entry.OutputPath, entry.Engine)
             { Inputs = entry.Inputs, Operation = Operation, OverwritePolicy = SelectedOverwritePolicy.Value, ProtectedInputPaths = protectedPaths };
             foreach (var source in entry.Inputs)
-                Files.First(file => string.Equals(file.Path, source.Path, StringComparison.OrdinalIgnoreCase)).AttachJob(job);
+                Files.First(file => string.Equals(file.Path, source.Path, PathComparison)).AttachJob(job);
             if (entry.Issue is { } issue) { job.Skip("Skipped · " + issue); continue; }
             service.Queue.Enqueue(job);
             queued++;
@@ -1621,8 +1809,10 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await service.RefreshToolsAsync(verifyHardware: true);
-            ShowToast(Inventory.HasMediaTools ? "Tools refreshed." : "FFmpeg or FFprobe is still missing. Install both, then select Refresh.");
+            ShowToast(Inventory.HasMediaTools ? "Tools refreshed." : Distribution.IsMacStoreBuild
+                ? Distribution.BundledToolRepair : "FFmpeg or FFprobe is still missing. Install both, then select Refresh.");
         }
+        catch (Exception ex) { ReportError($"Could not refresh conversion tools: {ex.Message}"); }
         finally
         {
             IsRefreshingTools = false;
@@ -1647,7 +1837,7 @@ public partial class MainViewModel : ObservableObject
     private async Task RevealHistoryOutputAsync(HistoryEntry entry)
     {
         var path = await PlatformActions.ChooseOutputAsync(entry.AllOutputs);
-        if (path is not null && (!File.Exists(path) || !PlatformActions.RevealInFolder(path))) ReportError("That result no longer exists or could not be revealed.");
+        if (path is not null && !await PlatformActions.RevealInFolderAsync(path)) ReportError("That result no longer exists or could not be revealed.");
     }
 
     [RelayCommand] private async Task CopyHistoryOutputsAsync(HistoryEntry entry) => await Clipboard.Default.SetTextAsync(string.Join(Environment.NewLine, entry.AllOutputs.Select(output => output.Path)));
@@ -1669,6 +1859,10 @@ public partial class MainViewModel : ObservableObject
             ReportError("This history entry uses an unsupported operation. Add the source files manually.");
             return;
         }
+        var options = entry.Options ?? ConversionOptions.Default;
+        using var access = await RequestHistoryAccessAsync(entry.AllInputs.Concat(
+            new[] { options.ReplacementAudioPath, options.ExternalSubtitlePath }.OfType<string>()));
+        if (access is null) return;
         if (entry.AllInputs.Any(path => !File.Exists(path)))
         {
             ReportError("One or more original files no longer exist. This operation cannot be reconstructed.");
@@ -1682,13 +1876,12 @@ public partial class MainViewModel : ObservableObject
         SelectedOperation = OperationOptions.First(choice => choice.Value == operation.Kind);
         SelectedSplitMode = SplitModeOptions.First(choice => choice.Value == operation.SplitMode);
         SegmentSecondsText = operation.SegmentSeconds.ToString(CultureInfo.InvariantCulture);
-        var row = Files.FirstOrDefault(file => string.Equals(file.Path, entry.SourcePath, StringComparison.OrdinalIgnoreCase));
+        var row = Files.FirstOrDefault(file => string.Equals(file.Path, entry.SourcePath, PathComparison));
         if (row is not null) SelectedFile = row;
         View = WorkspaceView.Convert;
         var format = FormatGroups.SelectMany(group => group).FirstOrDefault(option => option.Id == entry.FormatId);
         if (format is not null) SelectedFormat = format;
         else ShowToast($"{entry.FormatName} isn't available right now; pick another format.");
-        var options = entry.Options ?? ConversionOptions.Default;
         ApplyOptions(options);
         foreach (var file in Files)
         {
@@ -1696,9 +1889,17 @@ public partial class MainViewModel : ObservableObject
             file.TrimEndSeconds = options.TrimEndSeconds ?? file.DurationSeconds;
             file.SelectedAudioTrack = file.AudioTrackChoices.FirstOrDefault(choice => choice.Value == (options.AudioTrack ?? 0));
             file.SelectedSubtitleTrack = file.SubtitleTrackChoices.FirstOrDefault(choice => choice.Value == (options.SubtitleTrack ?? 0));
+            if (options.ReplacementAudioPath is { } audio) RetainWorkspaceAccess(audio);
             file.ReplacementAudioPath = options.ReplacementAudioPath;
+            if (options.ExternalSubtitlePath is { } subtitle) RetainWorkspaceAccess(subtitle);
             file.ExternalSubtitlePath = options.ExternalSubtitlePath;
         }
+    }
+
+    private async Task<IDisposable?> RequestHistoryAccessAsync(IEnumerable<string> paths)
+    {
+        try { return await FileAccessService.RequestAsync(paths); }
+        catch (Exception ex) { ReportError($"Could not restore access for this operation: {ex.Message}"); return null; }
     }
 
     [RelayCommand]

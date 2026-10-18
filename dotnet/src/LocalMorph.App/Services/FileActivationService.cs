@@ -11,6 +11,7 @@ namespace LocalMorph.App.Services;
 public static class FileActivationService
 {
     private static readonly ConcurrentQueue<string> Pending = new();
+    private static readonly ConcurrentQueue<string> PendingErrors = new();
     private static readonly object Gate = new();
     private static Func<IReadOnlyList<string>, Task>? handler;
 
@@ -21,7 +22,7 @@ public static class FileActivationService
     {
         var list = paths
             .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
             .ToList();
         Func<IReadOnlyList<string>, Task>? current;
         lock (Gate)
@@ -35,7 +36,7 @@ public static class FileActivationService
         }
 
         Activated?.Invoke();
-        if (list.Count > 0) Dispatch(current, list);
+        if (list.Count > 0) Dispatch(list);
     }
 
     public static void Subscribe(Func<IReadOnlyList<string>, Task> onFiles)
@@ -48,12 +49,37 @@ public static class FileActivationService
             while (Pending.TryDequeue(out var path)) buffered.Add(path);
         }
 
-        if (buffered.Count > 0) Dispatch(onFiles, buffered);
+        if (buffered.Count > 0) Dispatch(buffered);
+        while (PendingErrors.TryDequeue(out var message)) ReportFailure(message);
     }
 
-    private static void Dispatch(Func<IReadOnlyList<string>, Task> target, IReadOnlyList<string> paths) =>
+    public static void Suspend()
+    {
+        lock (Gate) handler = null;
+    }
+
+    public static void ReportFailure(string message)
+    {
+        lock (Gate)
+        {
+            if (handler is null) { PendingErrors.Enqueue(message); return; }
+        }
+        MainThread.BeginInvokeOnMainThread(() => Failed?.Invoke(message));
+    }
+
+    private static void Dispatch(IReadOnlyList<string> paths) =>
         MainThread.BeginInvokeOnMainThread(async () =>
         {
+            Func<IReadOnlyList<string>, Task>? target;
+            lock (Gate)
+            {
+                target = handler;
+                if (target is null)
+                {
+                    foreach (var path in paths) Pending.Enqueue(path);
+                    return;
+                }
+            }
             try { await target(paths); }
             catch (Exception ex) { Failed?.Invoke($"Could not open activated files: {ex.Message}"); }
         });

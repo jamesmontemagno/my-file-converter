@@ -411,11 +411,14 @@ public partial class FileItemViewModel : ObservableObject
     private async Task RevealOutputAsync()
     {
         var path = await PlatformActions.ChooseOutputAsync(Outputs);
-        if (path is not null && (!File.Exists(path) || !PlatformActions.RevealInFolder(path))) FeedbackRequested?.Invoke("Could not show the result in its folder.");
+        if (path is not null && !await PlatformActions.RevealInFolderAsync(path)) FeedbackRequested?.Invoke("Could not show the result in its folder.");
     }
 
     [RelayCommand]
-    private void RevealSource() => PlatformActions.RevealInFolder(Path);
+    private async Task RevealSourceAsync()
+    {
+        if (!await PlatformActions.RevealInFolderAsync(Path)) FeedbackRequested?.Invoke("Could not show the source folder.");
+    }
 
     // A picker whose ItemsSource is swapped briefly reports "nothing selected"; keep the real choice instead.
     partial void OnSelectedAudioTrackChanged(ChoiceOption<int>? oldValue, ChoiceOption<int>? newValue)

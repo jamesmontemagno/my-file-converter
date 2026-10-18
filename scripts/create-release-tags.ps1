@@ -8,8 +8,8 @@ param(
     [switch]$Push
 )
 
-# Creates the per-platform release tags that trigger .github/workflows/mac-release.yml and
-# windows-release.yml. Example: .\scripts\create-release-tags.ps1 v1.0.0 -Windows -Mac -Push
+# Creates tags for enabled Store workflows only.
+# Example: .\scripts\create-release-tags.ps1 v1.0.0 -Windows -Push
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -21,6 +21,22 @@ if (-not $Mac -and -not $Windows) {
     throw "Select at least one platform with -Mac and/or -Windows."
 }
 
+$root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+if ($Mac -and -not (Test-Path -LiteralPath (Join-Path $root '.github/workflows/mac-store-publish.yml'))) {
+    throw 'Mac App Store delivery is not enabled yet; no tags were created.'
+}
+if ($Mac -and $Version -notmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+    throw 'Mac Store versions require exactly three integer components without leading zeroes.'
+}
+if ($Windows -and -not (Test-Path -LiteralPath (Join-Path $root '.github/workflows/windows-store-publish.yml'))) {
+    throw 'Windows Store delivery is not enabled; no tags were created.'
+}
+if ($Windows) {
+    . (Join-Path $PSScriptRoot 'windows/Store-Functions.ps1')
+    $null = Get-StoreVersion "$Version-windows"
+}
+
+Set-Location -LiteralPath $root
 $tags = @()
 if ($Mac) { $tags += "$Version-mac" }
 if ($Windows) { $tags += "$Version-windows" }

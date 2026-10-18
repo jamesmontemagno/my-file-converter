@@ -141,7 +141,7 @@ levels. Further imports can extend the queue; duplicates do not consume the impo
   audio (or a video's chosen audio track).
 - **Hardware encoding** — NVIDIA NVENC, Intel Quick Sync, AMD AMF, and Apple VideoToolbox are
   detected with a real test encode and used automatically when they work.
-- **Tools view** — finds FFmpeg, ImageMagick, LibreOffice, Pandoc, and Ghostscript on PATH, in
+- **Development/Windows Tools view** — finds FFmpeg, ImageMagick, LibreOffice, Pandoc, and Ghostscript on PATH, in
   winget/Homebrew/Program Files locations, or bundled with the app; one-click install via
   `winget`/`brew` for anything missing.
 - **HEIC on Windows** — HEIC/HEIF photos decode natively through the Windows **HEIF Image
@@ -172,11 +172,11 @@ Real-FFmpeg integration tests share one xUnit collection so concurrent encoders 
 probes on smaller CI runners. Other test collections remain parallel; production probe timeouts and
 conversion concurrency are unchanged.
 
-Direct/development builds need FFmpeg for media conversion (`winget install Gyan.FFmpeg` /
+Development builds need FFmpeg for media conversion (`winget install Gyan.FFmpeg` /
 `brew install ffmpeg`), or platform binaries under
 [`Resources/ffmpeg`](dotnet/src/LocalMorph.App/Resources/ffmpeg). Packaged Windows builds also need
 Visual Studio 2022 or newer C++ tools for each target architecture to build the native Explorer DLL;
-unpackaged development builds do not. Store builds bundle .NET, but not FFmpeg or FFprobe.
+unpackaged development builds do not. Windows Store builds bundle .NET, but not FFmpeg or FFprobe.
 Install both media tools through the Tools page using WinGet, or extract a full Windows FFmpeg
 build so `ffmpeg.exe` and `ffprobe.exe` are together in `C:\ffmpeg\bin`, then select **Refresh**.
 Manual installations on other platforms must be on PATH. Tool installation may require internet
@@ -186,30 +186,40 @@ On macOS, HDR tone mapping and the full Core integration suite require `brew ins
 Its keg-only binaries must be on PATH: `export PATH="$(brew --prefix ffmpeg-full)/bin:$PATH"`.
 The standard Homebrew `ffmpeg` build does not include the required `zscale` filter.
 
+The Mac app targets **macOS 15+ on Apple Silicon only** (Mac Catalyst 18.0 / `maccatalyst-arm64`).
+Its CI uses Xcode 27 on macOS 27 with a compatible pinned .NET workload; this does not raise
+the installation minimum to macOS 27. See the [Mac toolchain runbook](docs/release-setup.md#macos-toolchain)
+for the exact versions and scene-lifecycle/runtime gates. Intel Mac packages are not planned.
+
 ### Install the desktop app
 
-```text
-winget install Refractored.LocalMorph                                # Windows 10 2004+ (x64 / ARM64)
-brew tap jamesmontemagno/my-file-converter https://github.com/jamesmontemagno/my-file-converter
-brew install --cask localmorph                                       # macOS 15+ (universal)
-```
+Desktop distribution is **Store-only**:
 
-Direct releases are tag-driven (`vX.Y.Z-windows`, `vX.Y.Z-mac`): signed MSIX + winget manifest on
-Windows, notarized universal `.app` + Sparkle appcast + Homebrew cask on macOS. Direct builds check
-`localmorph.com/appcast*.xml`; Store builds use Microsoft Store updates, not the direct appcast.
-The separate Windows Store workflow packages on tags, then requires approval to submit to the
+- **Windows:** [Microsoft Store](https://apps.microsoft.com/detail/9PM1NHPT1JR5).
+- **Mac:** Mac App Store delivery is being prepared; no public Mac download is available.
+
+There are no desktop GitHub installers, LocalMorph WinGet packages, Homebrew casks, or in-app
+download/update feeds. Installing FFmpeg with WinGet or Homebrew for Windows/development/bridge
+use is separate from installing LocalMorph itself. Browser conversion and bridge releases remain
+available.
+
+The Windows Store workflow packages on `vX.Y.Z-windows` tags, then requires approval to submit to the
 existing **Internal Testing** package flight and a second approval to submit the same upload to the
 main listing. Manual package-only builds remain available. It is not release-ready until the
 external-tool setup, approval, package-installation, WACK, and native-architecture checks pass.
-One-time setup (environments, secrets, Azure/Apple accounts):
+Mac Store delivery remains blocked on sandboxed bundled-tool verification, file permissions,
+component licensing, signing/provisioning, and TestFlight validation. The current development
+build and host-tool tests are not evidence of Mac App Store readiness.
+One-time setup (environments, secrets, Apple/Partner Center accounts):
 [docs/shipping-checklist.md](docs/shipping-checklist.md); pipeline details: [docs/release-setup.md](docs/release-setup.md).
 
 ## Continuous integration
 
 CI runs on pull requests targeting `main` and pushes to `main`, including merges.
 Feature-branch pushes do not trigger CI, avoiding duplicate push and pull-request runs.
-Bridge CI runs only when changes include `dotnet/**`, `README.md`, or
-`.github/workflows/bridge-ci.yml`; web CI runs for all changes.
+Bridge CI runs when changes include `dotnet/**`, `README.md`, release-tag helpers,
+Windows/Mac helpers, helper tests, Store workflows, or `.github/workflows/bridge-ci.yml`;
+retired cask/feed paths and other workflow changes also run the guards. Web CI runs for all changes.
 
 ## Deployment
 

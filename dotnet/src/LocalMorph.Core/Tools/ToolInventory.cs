@@ -30,4 +30,13 @@ public sealed class ToolInventory
             : FfmpegCapabilities.Empty;
         return new ToolInventory(tools, capabilities);
     }
+
+    public static async Task<ToolInventory> DiscoverBundledMediaAsync(string directory, bool verifyHardware = true, CancellationToken token = default)
+    {
+        var tools = await Task.Run(() => ToolLocator.FindBundledMedia(directory), token);
+        var capabilities = tools.TryGetValue(ToolKind.Ffmpeg, out var ffmpeg)
+            ? await FfmpegCapabilities.DiscoverAsync(ffmpeg.Path, verifyHardware, token)
+            : FfmpegCapabilities.Empty;
+        return new ToolInventory(tools, capabilities);
+    }
 }
