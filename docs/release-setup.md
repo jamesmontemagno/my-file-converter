@@ -223,6 +223,9 @@ The same signed app is archived once with a SHA256, transferred to the arm64 `ma
 job, verified, and launched there without rebuilding or installing the .NET SDK/media tools.
 That job asserts the host OS/architecture and retains separate `mac-sandbox-proof-macos15`
 runtime evidence. A declared deployment minimum alone does not satisfy this check.
+The transfer artifact includes the matching FFmpeg source archive, license texts, configure
+flags and build instructions. The proof app also carries FFmpeg attribution and license texts
+under `Contents/Resources/FFmpeg`; diagnostic artifacts are not exempt from component notices.
 It uses no Store credentials and cannot launch the normal app identity. The ad-hoc CI identity
 is `com.refractored.localmorph.sandboxproof.ci`, separate from the Apple Development proof
 identity to avoid reusing a container across signing identities.

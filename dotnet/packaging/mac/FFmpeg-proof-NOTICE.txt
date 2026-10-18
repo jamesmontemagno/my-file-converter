@@ -1,0 +1,23 @@
+LocalMorph sandbox diagnostic - FFmpeg notice
+
+This development-only diagnostic includes the separate FFmpeg and FFprobe 9.0.2
+executables from the FFmpeg project, licensed under the GNU Lesser General Public
+License, version 2.1 or later. LocalMorph's MIT license does not replace their
+license. See the accompanying COPYING.LGPLv2.1 and LICENSE.md.
+
+The CI binary artifact also contains the exact unmodified upstream source
+archive, its source SHA256, build-proof-media.sh, configure flags, dependency
+report and Xcode version used to build these tools. Rebuild on Apple Silicon
+macOS using the recorded Xcode version:
+
+  bash build-proof-media.sh ffmpeg-9.0.2.tar.xz new-output-directory arm64
+
+The builder checks the source hash before extraction. GPL, nonfree, network and
+automatic external-library discovery are disabled for this diagnostic. Apple
+system frameworks are not included in the source archive.
+
+Upstream: https://ffmpeg.org/
+
+This is not the approved shipping media payload. Shipping components, codec
+coverage, notices, source/build obligations and distribution terms still need
+their separate release review.

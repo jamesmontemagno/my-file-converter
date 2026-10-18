@@ -39,6 +39,7 @@ internal sealed class SandboxProofPage : ContentPage
                 {
                     new Label { Text = "Development proof only - not a Store build", FontSize = 24 },
                     new Label { Text = "Separate app identity; no real preferences or history. Bundled tools only. No feature availability changes." },
+                    new Label { Text = "FFmpeg / FFprobe 9.0.2: LGPL 2.1-or-later. License texts are bundled; source and build instructions accompany the CI app artifact." },
                     status, choose, cancel, log
                 }
             }

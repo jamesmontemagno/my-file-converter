@@ -50,6 +50,9 @@ for tool in ffmpeg ffprobe; do
     --entitlements dotnet/src/LocalMorph.App/Platforms/MacCatalyst/MediaTool.entitlements "$APP/Contents/MacOS/$tool"
   codesign --verify --strict "$APP/Contents/MacOS/$tool"
 done
+mkdir -p "$APP/Contents/Resources/FFmpeg"
+cp "$MEDIA/arm64/COPYING.LGPLv2.1" "$MEDIA/arm64/LICENSE.md" \
+  dotnet/packaging/mac/FFmpeg-proof-NOTICE.txt "$APP/Contents/Resources/FFmpeg/"
 codesign --force --sign "$IDENTITY" --timestamp=none \
   --entitlements dotnet/src/LocalMorph.App/Platforms/MacCatalyst/SandboxProof.entitlements "$APP"
 codesign --verify --strict "$APP"
@@ -63,7 +66,8 @@ cp dotnet/src/LocalMorph.App/Platforms/MacCatalyst/SandboxProofApp.cs \
   dotnet/src/LocalMorph.App/Platforms/MacCatalyst/SceneDelegate.cs \
   dotnet/src/LocalMorph.App/Platforms/MacCatalyst/Info.plist \
   scripts/mac/build-proof-media.sh scripts/mac/prepare-sandbox-proof.sh \
-  scripts/mac/validate_app.py scripts/mac/smoke_sandbox.py "$OUTPUT/proof-source/"
+  scripts/mac/validate_app.py scripts/mac/smoke_sandbox.py \
+  dotnet/packaging/mac/FFmpeg-proof-NOTICE.txt "$OUTPUT/proof-source/"
 shasum -a 256 "$OUTPUT/proof-source/"* > "$OUTPUT/proof-source.sha256"
 echo "Prepared local sandbox proof: $APP"
 echo "This is an Apple Silicon / macOS 15+ development app, not a Store upload artifact."
