@@ -25,6 +25,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ $MAC -eq 1 && ! -f "$ROOT/.github/workflows/mac-store-publish.yml" ]]; then
   echo "Mac App Store delivery is not enabled yet; no tags were created." >&2; exit 1
 fi
+if [[ $MAC -eq 1 && ! "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+  echo "Mac Store versions require exactly three integer components without leading zeroes." >&2; exit 1
+fi
 if [[ $WINDOWS -eq 1 && ! -f "$ROOT/.github/workflows/windows-store-publish.yml" ]]; then
   echo "Windows Store delivery is not enabled; no tags were created." >&2; exit 1
 fi

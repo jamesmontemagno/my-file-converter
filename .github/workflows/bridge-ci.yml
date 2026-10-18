@@ -33,9 +33,17 @@ jobs:
   distribution:
     name: Store-only distribution guards
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v7
       - run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+      - name: Check real Mac release approval settings without Apple credentials
+        if: github.repository == 'jamesmontemagno/my-file-converter'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/mac/store_release.py approval
 
   test:
     runs-on: ${{ matrix.os }}
@@ -128,6 +136,17 @@ jobs:
             --filter 'FullyQualifiedName~AppleEncoder|FullyQualifiedName~FfmpegEngineTests|FullyQualifiedName~FileAccessRegistryTests|FullyQualifiedName~BundledToolTests|FullyQualifiedName~QueueFileAccessTests|FullyQualifiedName~FileImportTests' \
             --logger 'trx;LogFileName=apple-encoders.trx' \
             --results-directory artifacts/mac-proof/tests
+      - name: Build and stage Release Store beta without Store credentials or launch
+        run: |
+          dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-maccatalyst -c Release \
+            -p:MacOnly=true -p:LocalMorphMacStoreBuild=true -p:LocalMorphMacStoreBetaRelease=true \
+            "-p:LocalMorphMacStoreMediaDirectory=$PWD/artifacts/mac-proof/media/arm64" \
+            -p:EnableCodeSigning=true -p:CodesignKey=- -p:CodesignRequireProvisioningProfile=false \
+            -p:NoDSymUtil=false -p:DebugSymbols=true -p:DebugType=portable
+          python3 scripts/mac/store_release.py stage \
+            --app dotnet/src/LocalMorph.App/bin/mac-store/Release/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph.app \
+            --media artifacts/mac-proof/media/arm64 --version 1.0.0 --build 1 \
+            --source "$(git rev-parse HEAD)" --identity=-
       - name: Ad-hoc sign isolated proof without Store credentials
         env:
           LOCALMORPH_PROOF_SIGNING_IDENTITY: '-'

@@ -237,10 +237,13 @@ build on that older toolchain verifies the new CI combination.
 
 ## Mac App Store readiness
 
-Mac delivery is not enabled yet. The existing Mac development build is not a Store upload.
-Before enabling it, prove sandboxed bundled FFmpeg/FFprobe, persistent security-scoped file/folder
-access, safe destination staging, codec/filter availability and component licensing. A host
-Homebrew installation must not be mistaken for an approved, self-contained shipping bundle.
+The protected beta workflow below enables an initial TestFlight package, not public release.
+The normal Mac development build is not a Store upload. Full shipping still requires native
+workspace/relaunch acceptance, codec/filter parity, component licensing and the final privacy/
+listing review. A host Homebrew installation must not be mistaken for an approved,
+self-contained shipping bundle. The beta shares the existing SDK required-reason privacy
+manifest, including app-local preferences, and validates its placement in the actual bundle;
+this does not settle the separate data-collection questionnaire or complete the privacy audit.
 
 ### Apple encoder feasibility
 
@@ -353,16 +356,83 @@ does not establish tester availability, review submission or public release. Do 
 arbitrary build-number offset: validate the selected build number against accepted Store builds,
 handle retries explicitly, and retain it with the immutable artifact.
 
-There is currently **no `mac-app-store` environment** in this repository. Before any credential
-diagnostics, signing or upload, create its required-reviewer policy, disable administrator
-bypass, and select allowed branches/tags and self-review policy explicitly. A YAML environment
-name alone is not an approval gate. Prefer environment-scoped Apple secrets; moving or removing
-the current repository secrets is a separate owner-controlled action, not an automatic cleanup.
+The owner authorized creating **`mac-app-store` on October 18, 2026**. It requires
+`jamesmontemagno` approval, disables administrator bypass, and permits only the `main` branch
+and `v*-mac` tags. Self-review is explicitly allowed, matching the Windows release policy.
+The workflow rechecks these rules before credential use, including inside protected jobs.
+Prefer environment-scoped Apple secrets; moving or removing the current repository secrets
+is a separate owner-controlled action, not an automatic cleanup.
 Keep signing and API material scoped to the steps that need it, use an isolated temporary
 keychain, and clean up keys/profiles even on cancellation or failure.
 
-No certificate/profile values were read, no credentials were moved, and no signing validation,
-App Store API diagnostics or upload has been performed for LocalMorph using these secrets.
+No credential values were read locally or moved. Distribution signing, App Store API diagnostics
+and upload using these secrets still require the first approved workflow execution.
+
+### Mac Store release and TestFlight
+
+`.github/workflows/mac-store-publish.yml` is displayed as **Mac Store Release** in Actions.
+It uses the six existing secrets above without alternate names or additional required variables.
+An optional `MAC_APP_STORE_INTERNAL_GROUP` repository variable can select an existing internal
+TestFlight group; a dispatch's `testflight_group` overrides it. With neither set, exactly one
+internal group must exist. The App Store Connect app record must match
+`com.refractored.localmorph`; the workflow does not create records or tester groups.
+
+After merging, use Actions on `main` or run:
+
+```bash
+# Read-only Apple app/group/profile/certificate diagnostics, after environment approval:
+gh workflow run mac-store-publish.yml --ref main \
+  -f mode=diagnose -f version=1.0.0 -f build_number=1
+
+# Build/sign, approve the exact package upload, await processing and assign the internal group:
+gh workflow run mac-store-publish.yml --ref main \
+  -f mode=testflight -f version=1.0.0 -f build_number=1
+```
+
+Use an **unused increasing** build number from 1 to 9999, not necessarily `1` from the examples.
+An empty `build_number` uses this workflow's run number without an arbitrary offset. Reruns
+reuse that number; App Store preflight rejects an already uploaded version/build. If an upload
+succeeds but processing/assignment fails or times out, inspect the existing build in App Store
+Connect or run diagnostics before retrying. Do not blindly upload it again.
+
+`mode=package` signs and retains artifacts but never contacts App Store Connect or uploads.
+A pushed `v1.0.0-mac` tag also runs **package only**, never TestFlight automatically. Tags must
+point to commits already on `main`; manual dispatch is accepted only from `main` or an allowed
+Mac tag. No merge itself uploads anything.
+
+The workflow:
+
+1. Checks source/ref, versions and the protected environment before Apple credential use.
+2. Builds pinned arm64 FFmpeg/FFprobe from the verified upstream source archive, without
+   Homebrew, GPL/nonfree, networking or automatic dependency discovery.
+3. After approval, checks the combined P12's application/installer private-key identities,
+   profile expiry/platform/distribution type, exact LocalMorph identifier/team and certificate.
+   Credentials live only in an isolated temporary keychain/profile and are cleaned on failure.
+4. Builds the actual sandboxed Store **Release** app with SDK 10.0.401, workload 10.0.401.1 and
+   Xcode 27. The Store-only Mono interpreter setting avoids adding a JIT entitlement.
+5. Signs the nested media tools with sandbox/inherit, preserves the SDK's profile entitlements,
+   re-signs the enclosing app, and creates the signed `.pkg` with Apple's `productbuild --component`
+   path. This explicit order puts the media in the app **before** packaging. It does not use
+   blanket deep signing.
+6. Verifies package/app/tool signatures, architecture, minimum OS/scenes, source/build identity,
+   raw/signed tool hashes and matching native dSYM. Retains the immutable package/hash, source
+   archive, licenses, build recipe/evidence and crash symbols for 90 days.
+7. For `testflight` only, requests approval again, validates the downloaded package against
+   the signing job's hash/team, checks app/internal-group access and rejects duplicate uploads.
+   Uploads a normal distributable build with the existing `APPLE_REFRACTORED_*` API credentials.
+8. Waits for Apple processing, fails on rejected/ambiguous/timed-out builds, and confirms the
+   exact processed Mac version/build is in the selected internal group. Retains its build ID.
+
+This is the owner's explicitly selected **initial TestFlight beta payload**, not a claim of
+full Windows parity: libass subtitle burn-in, zscale HDR mapping and optional external engines
+are still absent and must stay unavailable according to actual capabilities. No full shipping
+component/legal review, external-bookmark/native workspace acceptance or TestFlight installation
+is implied by compilation, ad-hoc staging or helper tests.
+
+The workflow contains **no App Review submission or public-release operation**. Those remain
+separately approved, manual gates after actual TestFlight results and shipping prerequisites.
+Do not mark this run as TestFlight Internal Only if its exact tested build is intended for
+later App Store submission.
 
 ### Isolated sandbox feasibility proof
 

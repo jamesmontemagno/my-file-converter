@@ -1,0 +1,285 @@
+name: Mac Store Release
+
+on:
+  push:
+    tags: ['v*-mac']
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Package only, read-only diagnostics, or approved TestFlight upload. Never submits review or releases publicly.'
+        type: choice
+        options: [package, diagnose, testflight]
+        default: package
+        required: true
+      version:
+        description: 'Display version, for example 1.0.0'
+        type: string
+        default: '1.0.0'
+        required: true
+      build_number:
+        description: 'Unused increasing build number (1-9999). Empty uses this workflow run number; reruns reuse it.'
+        type: string
+        required: false
+      testflight_group:
+        description: 'Exact internal group name. Empty auto-selects only if exactly one internal group exists.'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: mac-store-release
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+
+jobs:
+  validate:
+    name: Validate source and protected release settings
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.request.outputs.version }}
+      build: ${{ steps.request.outputs.build }}
+      source: ${{ steps.request.outputs.source }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate immutable source and version
+        id: request
+        env:
+          DISPLAY_VERSION: ${{ inputs.version }}
+          BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess, sys
+          sys.path.insert(0, "scripts/mac")
+          from store_release import require, versions
+          ref = os.environ["GITHUB_REF"]
+          version = os.environ["DISPLAY_VERSION"]
+          if ref.startswith("refs/tags/"):
+              tag = ref.removeprefix("refs/tags/")
+              require(tag.startswith("v") and tag.endswith("-mac"), "Expected a v<version>-mac tag.")
+              version = tag[1:-4]
+          else:
+              require(ref == "refs/heads/main", "Run Store workflows from main after merging.")
+          version, build = versions(version, os.environ["BUILD_NUMBER"])
+          source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          require(source == os.environ["GITHUB_SHA"], "Checkout does not match the triggering commit.")
+          subprocess.run(["git", "merge-base", "--is-ancestor", source, "origin/main"], check=True)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"version={version}\nbuild={build}\nsource={source}\n")
+          PY
+      - name: Verify approval gate before any Apple credential use
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/mac/store_release.py approval
+      - run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+
+  media:
+    name: Build pinned beta media from source
+    needs: validate
+    if: github.event_name == 'push' || inputs.mode != 'diagnose'
+    runs-on: xcode-27
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '27.0'
+      - name: Build the current explicitly selected beta configuration
+        run: |
+          mkdir -p artifacts/mac-media
+          curl --fail --location --retry 3 https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz -o artifacts/mac-media/ffmpeg-9.0.2.tar.xz
+          bash scripts/mac/build-proof-media.sh artifacts/mac-media/ffmpeg-9.0.2.tar.xz artifacts/mac-media/media arm64
+          mkdir -p artifacts/mac-media/payload
+          cp -R artifacts/mac-media/media/arm64/bin artifacts/mac-media/payload/
+          cp artifacts/mac-media/media/arm64/{COPYING.LGPLv2.1,LICENSE.md,configure-flags.txt,source.txt,binaries.sha256,dependencies.txt,xcode.txt} artifacts/mac-media/payload/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mac-store-beta-media
+          path: |
+            artifacts/mac-media/payload/
+            artifacts/mac-media/ffmpeg-9.0.2.tar.xz
+          if-no-files-found: error
+
+  package:
+    name: Approve signing and build verified Mac Store beta package
+    needs: [validate, media]
+    environment: mac-app-store
+    runs-on: xcode-27
+    timeout-minutes: 60
+    outputs:
+      sha256: ${{ steps.package.outputs.sha256 }}
+      team: ${{ steps.signing.outputs.team }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Recheck required approval protection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/mac/store_release.py approval
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '27.0'
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.401'
+      - run: dotnet workload install maui-maccatalyst --version 10.0.401.1
+      - uses: actions/download-artifact@v8
+        with:
+          name: mac-store-beta-media
+          path: artifacts/mac-media
+      - name: Prepare temporary application/installer signing identities
+        id: signing
+        env:
+          APPLE_MACCATALYST_APPSTORE_CERTIFICATE_P12: ${{ secrets.APPLE_MACCATALYST_APPSTORE_CERTIFICATE_P12 }}
+          APPLE_MACCATALYST_APPSTORE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_MACCATALYST_APPSTORE_CERTIFICATE_PASSWORD }}
+          APPLE_MACCATALYST_APPSTORE_PROFILE: ${{ secrets.APPLE_MACCATALYST_APPSTORE_PROFILE }}
+        run: python3 scripts/mac/store_release.py signing "$RUNNER_TEMP/localmorph-signing"
+      - name: Build the real Release Store app with its distribution profile
+        env:
+          APP_KEY: ${{ steps.signing.outputs.app_key }}
+          KEYCHAIN: ${{ steps.signing.outputs.keychain }}
+          PROFILE: ${{ steps.signing.outputs.profile_uuid }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          BUILD_NUMBER: ${{ needs.validate.outputs.build }}
+        run: |
+          dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-maccatalyst -c Release \
+            -p:MacOnly=true -p:LocalMorphMacStoreBuild=true -p:LocalMorphMacStoreBetaRelease=true \
+            "-p:LocalMorphMacStoreMediaDirectory=$PWD/artifacts/mac-media/payload" \
+            -p:RuntimeIdentifier=maccatalyst-arm64 -p:CreatePackage=false -p:EnableCodeSigning=true \
+            "-p:CodesignKey=$APP_KEY" "-p:CodesignKeychain=$KEYCHAIN" "-p:CodesignProvision=$PROFILE" \
+            "-p:ApplicationDisplayVersion=$VERSION" "-p:ApplicationVersion=$BUILD_NUMBER" \
+            -p:DebugSymbols=true -p:DebugType=portable -p:NoDSymUtil=false
+      - name: Sign media, re-sign enclosing app and verify signed installer/provenance/symbols
+        id: package
+        env:
+          APP_KEY: ${{ steps.signing.outputs.app_key }}
+          PKG_KEY: ${{ steps.signing.outputs.pkg_key }}
+          KEYCHAIN: ${{ steps.signing.outputs.keychain }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          BUILD_NUMBER: ${{ needs.validate.outputs.build }}
+          SOURCE: ${{ needs.validate.outputs.source }}
+        run: |
+          python3 scripts/mac/store_release.py package \
+            --app dotnet/src/LocalMorph.App/bin/mac-store/Release/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph.app \
+            --media "$PWD/artifacts/mac-media/payload" --version "$VERSION" --build "$BUILD_NUMBER" \
+            --source "$SOURCE" --identity "$APP_KEY" --installer "$PKG_KEY" --keychain "$KEYCHAIN" \
+            --symbols dotnet/src/LocalMorph.App/bin/mac-store/Release \
+            --output artifacts/mac-store
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mac-store-package
+          path: artifacts/mac-store/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Remove temporary signing and provisioning material
+        if: always()
+        run: python3 scripts/mac/store_release.py cleanup "$RUNNER_TEMP/localmorph-signing"
+
+  diagnose:
+    name: Approve read-only Apple configuration diagnostics
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'diagnose'
+    environment: mac-app-store
+    runs-on: xcode-27
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Verify required approval protection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/mac/store_release.py approval
+      - name: Validate LocalMorph profile and certificate private-key identities locally
+        env:
+          APPLE_MACCATALYST_APPSTORE_CERTIFICATE_P12: ${{ secrets.APPLE_MACCATALYST_APPSTORE_CERTIFICATE_P12 }}
+          APPLE_MACCATALYST_APPSTORE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_MACCATALYST_APPSTORE_CERTIFICATE_PASSWORD }}
+          APPLE_MACCATALYST_APPSTORE_PROFILE: ${{ secrets.APPLE_MACCATALYST_APPSTORE_PROFILE }}
+        run: python3 scripts/mac/store_release.py signing "$RUNNER_TEMP/localmorph-signing"
+      - name: Read-only app, build and internal-group access
+        env:
+          APPLE_REFRACTORED_ISSUER_ID: ${{ secrets.APPLE_REFRACTORED_ISSUER_ID }}
+          APPLE_REFRACTORED_KEY_ID: ${{ secrets.APPLE_REFRACTORED_KEY_ID }}
+          APPLE_REFRACTORED_P8_KEY: ${{ secrets.APPLE_REFRACTORED_P8_KEY }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          BUILD_NUMBER: ${{ needs.validate.outputs.build }}
+          GROUP: ${{ inputs.testflight_group || vars.MAC_APP_STORE_INTERNAL_GROUP }}
+        run: python3 scripts/mac/testflight.py diagnose --version "$VERSION" --build "$BUILD_NUMBER" --group "$GROUP"
+      - name: Remove temporary signing and provisioning material
+        if: always()
+        run: python3 scripts/mac/store_release.py cleanup "$RUNNER_TEMP/localmorph-signing"
+
+  testflight:
+    name: Approve upload, await processing and confirm internal group
+    needs: [validate, package]
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'testflight'
+    environment: mac-app-store
+    runs-on: xcode-27
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Recheck required approval protection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/mac/store_release.py approval
+      - uses: actions/download-artifact@v8
+        with:
+          name: mac-store-package
+          path: artifacts/mac-store
+      - name: Revalidate the exact package and immutable build provenance
+        id: package
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          BUILD_NUMBER: ${{ needs.validate.outputs.build }}
+          SOURCE: ${{ needs.validate.outputs.source }}
+          PACKAGE_SHA256: ${{ needs.package.outputs.sha256 }}
+          PACKAGE_TEAM: ${{ needs.package.outputs.team }}
+        run: python3 scripts/mac/store_release.py verify --directory artifacts/mac-store --version "$VERSION" --build "$BUILD_NUMBER" --source "$SOURCE"
+      - name: Resolve the internal group and reject duplicate build uploads
+        env:
+          APPLE_REFRACTORED_ISSUER_ID: ${{ secrets.APPLE_REFRACTORED_ISSUER_ID }}
+          APPLE_REFRACTORED_KEY_ID: ${{ secrets.APPLE_REFRACTORED_KEY_ID }}
+          APPLE_REFRACTORED_P8_KEY: ${{ secrets.APPLE_REFRACTORED_P8_KEY }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          BUILD_NUMBER: ${{ needs.validate.outputs.build }}
+          GROUP: ${{ inputs.testflight_group || vars.MAC_APP_STORE_INTERNAL_GROUP }}
+        run: python3 scripts/mac/testflight.py preflight --version "$VERSION" --build "$BUILD_NUMBER" --group "$GROUP"
+      - uses: apple-actions/upload-testflight-build@v5
+        with:
+          app-type: macos
+          app-path: ${{ steps.package.outputs.package }}
+          backend: altool
+          issuer-id: ${{ secrets.APPLE_REFRACTORED_ISSUER_ID }}
+          api-key-id: ${{ secrets.APPLE_REFRACTORED_KEY_ID }}
+          api-private-key: ${{ secrets.APPLE_REFRACTORED_P8_KEY }}
+      - name: Wait for Apple processing and confirm internal tester group assignment
+        env:
+          APPLE_REFRACTORED_ISSUER_ID: ${{ secrets.APPLE_REFRACTORED_ISSUER_ID }}
+          APPLE_REFRACTORED_KEY_ID: ${{ secrets.APPLE_REFRACTORED_KEY_ID }}
+          APPLE_REFRACTORED_P8_KEY: ${{ secrets.APPLE_REFRACTORED_P8_KEY }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          BUILD_NUMBER: ${{ needs.validate.outputs.build }}
+          GROUP: ${{ inputs.testflight_group || vars.MAC_APP_STORE_INTERNAL_GROUP }}
+        run: |
+          python3 scripts/mac/testflight.py deliver --version "$VERSION" --build "$BUILD_NUMBER" \
+            --group "$GROUP" --output artifacts/testflight-result.json
+          echo "Apple processing and internal group membership confirmed. No App Review submission or public release was performed." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mac-testflight-result
+          path: artifacts/testflight-result.json
+          if-no-files-found: warn

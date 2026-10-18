@@ -1,0 +1,24 @@
+LocalMorph TestFlight beta - FFmpeg notice
+
+This beta includes separate FFmpeg and FFprobe 9.0.2 executables from the FFmpeg
+project, licensed under the GNU Lesser General Public License, version 2.1 or
+later. LocalMorph's MIT license does not replace their license. See the
+accompanying COPYING.LGPLv2.1 and LICENSE.md.
+
+Upstream source: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
+SHA256: 8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
+Build instructions: https://github.com/jamesmontemagno/my-file-converter/blob/main/scripts/mac/build-proof-media.sh
+
+The workflow retains the exact upstream source archive, builder, configure flags,
+dependency report, source hashes and Xcode version alongside the package.
+Rebuild on Apple Silicon macOS with the recorded Xcode version:
+
+  bash build-proof-media.sh ffmpeg-9.0.2.tar.xz new-output-directory arm64
+
+GPL, nonfree, network and automatic external-library discovery are disabled.
+Apple system frameworks are not included in the source archive.
+
+This initial beta does not include libass, zscale or optional external engines.
+Availability follows the bundled capabilities; installing host tools does not
+enable missing features. Full shipping-component and distribution review remains
+a separate prerequisite before App Store review and public release.

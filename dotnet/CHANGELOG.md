@@ -6,8 +6,14 @@ desktop installers are not distributed through GitHub Releases.
 ## Unreleased
 
 ### Changed
+- Added a protected Mac Store beta pipeline with package-only, read-only diagnostics and
+  approved TestFlight delivery using the existing Apple secrets. Release bundles contain
+  source-pinned FFmpeg/FFprobe, attribution, SDK privacy reasons and matching crash symbols.
+  Store Release uses the interpreter without JIT exceptions. Initial beta codec limitations
+  remain explicit; App Review and public release are never automatic.
 - Added an isolated, sandboxed Mac workspace build with bundle-only media-tool discovery,
-  no external installers, and explicit repair errors. Production Store packaging remains blocked.
+  no external installers, and explicit repair errors. Store Release requires the explicit
+  TestFlight beta flag and pinned media payload.
 - Mac sandbox intake retains native URL bookmarks across picker/Finder/drop, attachment and
   history flows. Preview, inspection and queued jobs hold independent permissions through cleanup;
   conversion requires an authorized output folder rather than assuming sibling write access.

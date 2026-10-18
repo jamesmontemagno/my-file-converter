@@ -79,9 +79,9 @@ Mac delivery is not yet enabled. Do not tag or advertise a public Mac release un
   [Actions signing and upload configuration](release-setup.md#actions-signing-and-upload-configuration).
   Verify that the P12 contains both application and installer private-key identities and that the
   profile belongs to LocalMorph. Do not request duplicate API-key aliases merely to match another app.
-- Create and protect `mac-app-store` before credential diagnostics, signing or upload: required
-  reviewers, no administrator bypass, explicit branch/tag and self-review policy. Its environment
-  does not exist yet. Moving repository secrets into it requires owner-controlled configuration.
+- Recheck the owner-approved `mac-app-store` environment before credential diagnostics, signing
+  or upload: owner review, no administrator bypass, main/Mac tags only and self-review allowed.
+  It was created October 18, 2026; moving repository secrets remains a separate owner action.
 - Prove signed sandboxed execution using bundled FFmpeg/FFprobe without Homebrew or host PATH.
   Review component licenses, exact source/build provenance, hashes, codec/filter availability,
   native dependencies and necessary entitlements before approving a tool payload.
@@ -94,15 +94,19 @@ Mac delivery is not yet enabled. Do not tag or advertise a public Mac release un
   The Debug-only sandbox workspace and grant wiring now compile; this is not native workspace
   evidence. Use the diagnostic Restore action after a real process restart for external grants;
   its automated native container-bookmark round trip is a separate, narrower check.
-- Keep `LocalMorphMacStoreBuild` Release packaging blocked until the approved full media payload
-  and distribution-signing validation exist. Its Debug identity/output/container must remain
-  separate from both the normal app and diagnostic proof.
+- Keep default `LocalMorphMacStoreBuild` Release blocked. The owner-selected TestFlight beta
+  requires `LocalMorphMacStoreBetaRelease`, pinned media and verified application/installer
+  signing. Its current libass/zscale/optional-engine gaps remain explicit. Preserve the separate
+  Debug workspace identity/output/container; beta permission is not final shipping approval.
 - Request an output folder before first conversion and remember authorized access. Source-file
   selection alone must not be treated as permission to create sibling outputs.
 - Verify staging/commit, overwrite protection, cancellation, join/split and partial results
   against real sandbox permissions and the actual bundled codec/filter set.
 - Configure application distribution and installer signing, provisioning, package validation,
   architecture checks and matching crash symbols. Notarized direct downloads are not the channel.
+  The new Mac Store Release workflow implements these checks; its first approved credentialed
+  run and genuine TestFlight install remain required evidence. Package mode and tag pushes do
+  not upload; TestFlight requires explicit dispatch and separate upload approval.
 - Validate build-number monotonicity and retry behavior; retain the exact package hash, version,
   build number and source before upload. Review submission must select the same processed build
   tested through TestFlight, not a rebuilt package.

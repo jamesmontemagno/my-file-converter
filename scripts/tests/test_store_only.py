@@ -73,6 +73,16 @@ class StoreOnlyTests(unittest.TestCase):
                 for flags in ([mac], [windows, mac, push]):
                     with self.subTest(runner=runner, flags=flags):
                         self.assert_tag_result(runner, script, "v1.2.3", flags, False)
+            else:
+                for version, flags, succeeds in (
+                    ("v1.2.3", [mac], True),
+                    ("v1.2.3", [windows, mac, push], True),
+                    ("v1.2.3.0", [mac], False),
+                    ("v1.2.3.0", [windows, mac, push], False),
+                    ("v1.02.3", [mac], False),
+                ):
+                    with self.subTest(runner=runner, version=version, flags=flags):
+                        self.assert_tag_result(runner, script, version, flags, succeeds)
 
     def assert_tag_result(self, runner, script, version, flags, succeeds):
         with tempfile.TemporaryDirectory() as directory:
@@ -101,7 +111,9 @@ class StoreOnlyTests(unittest.TestCase):
             calls = log.read_text().splitlines() if log.exists() else []
             mutations = [call for call in calls if call.startswith(("tag ", "push "))]
             if succeeds:
-                self.assertIn(f"tag -a {version}-windows -m Release {version}-windows", calls)
+                for platform in ("windows", "mac"):
+                    if any(flag.lower().lstrip("-") == platform for flag in flags):
+                        self.assertIn(f"tag -a {version}-{platform} -m Release {version}-{platform}", calls)
             else:
                 self.assertEqual([], mutations, calls)
 

@@ -83,10 +83,16 @@
 		<CodesignEntitlements>Platforms/MacCatalyst/Store.entitlements</CodesignEntitlements>
 		<ApplicationId Condition="'$(Configuration)' == 'Debug'">com.refractored.localmorph.sandboxworkspace</ApplicationId>
 		<ApplicationTitle Condition="'$(Configuration)' == 'Debug'">LocalMorph Sandbox Workspace</ApplicationTitle>
+		<UseInterpreter Condition="'$(Configuration)' == 'Release'">true</UseInterpreter>
 	</PropertyGroup>
+	<ItemGroup Condition="'$(LocalMorphMacStoreBuild)' == 'true'">
+		<CustomEntitlements Include="com.apple.security.cs.allow-jit" Type="Remove" />
+		<BundleResource Include="Platforms/iOS/Resources/PrivacyInfo.xcprivacy" LogicalName="PrivacyInfo.xcprivacy" />
+	</ItemGroup>
 	<Target Name="ValidateMacStoreBuild" BeforeTargets="PrepareForBuild" Condition="'$(LocalMorphMacStoreBuild)' == 'true'">
 		<Error Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'maccatalyst' or '$(LocalMorphStoreBuild)' == 'true' or '$(LocalMorphMacSandboxProof)' == 'true'" Text="The Mac Store build must target Mac Catalyst and cannot use the Windows Store or isolated proof flavor." />
-		<Error Condition="'$(Configuration)' != 'Debug'" Text="Mac Store Release packaging is blocked until approved media payload and distribution-signing validation are implemented. Use Debug for the isolated sandbox workspace." />
+		<Error Condition="'$(Configuration)' != 'Debug' and '$(LocalMorphMacStoreBetaRelease)' != 'true'" Text="Mac Store Release packaging is blocked unless the explicit TestFlight beta payload is selected. Use Debug for the isolated sandbox workspace." />
+		<Error Condition="'$(Configuration)' != 'Debug' and (!Exists('$(LocalMorphMacStoreMediaDirectory)/bin/ffmpeg') or !Exists('$(LocalMorphMacStoreMediaDirectory)/bin/ffprobe'))" Text="Mac Store beta builds require the pinned source-built FFmpeg/FFprobe payload. Run the Mac Store workflow; host tools are not accepted." />
 	</Target>
 
 	<!-- Apple Silicon / macOS 15+. Store signing/packaging is configured separately. -->

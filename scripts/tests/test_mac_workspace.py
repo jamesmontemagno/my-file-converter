@@ -48,6 +48,13 @@ class MacWorkspaceTests(unittest.TestCase):
         self.assertTrue(any("$(Configuration)" in error.attrib["Condition"]
                             and "Release packaging is blocked" in error.attrib["Text"]
                             for error in errors))
+        self.assertTrue(any("$(LocalMorphMacStoreBetaRelease)" in error.attrib["Condition"] for error in errors))
+        self.assertTrue(any("$(LocalMorphMacStoreMediaDirectory)" in error.attrib["Condition"] for error in errors))
+        self.assertEqual("true", project.findtext("./PropertyGroup/UseInterpreter"))
+        removal = project.find("./ItemGroup/CustomEntitlements[@Include='com.apple.security.cs.allow-jit']")
+        self.assertEqual("Remove", removal.attrib["Type"])
+        privacy = project.find("./ItemGroup/BundleResource[@LogicalName='PrivacyInfo.xcprivacy']")
+        self.assertEqual("Platforms/iOS/Resources/PrivacyInfo.xcprivacy", privacy.attrib["Include"])
         self.assertIsNotNone(project.find("./Target[@Name='ValidateWindowsStorePlatform']"))
 
 

@@ -25,6 +25,9 @@ $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if ($Mac -and -not (Test-Path -LiteralPath (Join-Path $root '.github/workflows/mac-store-publish.yml'))) {
     throw 'Mac App Store delivery is not enabled yet; no tags were created.'
 }
+if ($Mac -and $Version -notmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+    throw 'Mac Store versions require exactly three integer components without leading zeroes.'
+}
 if ($Windows -and -not (Test-Path -LiteralPath (Join-Path $root '.github/workflows/windows-store-publish.yml'))) {
     throw 'Windows Store delivery is not enabled; no tags were created.'
 }
