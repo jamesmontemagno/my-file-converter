@@ -342,9 +342,9 @@ required private-key identities. Secret listing cannot verify that condition. A 
 record for another product is not interchangeable with LocalMorph's, even when the Apple team
 and API key are shared.
 
-The planned signing path is temporary-keychain import, unambiguous application/installer
-identity resolution, decoded profile validation, nested-code signing, and SDK `.pkg` publishing
-with application signing, package signing and provisioning explicitly selected. Retain the
+The implemented signing path is temporary-keychain import, unambiguous application/installer
+identity resolution, decoded profile validation, an SDK-signed application build, nested-media
+signing, enclosing-app re-signing and explicit `productbuild` installer signing. Retain the
 approved Apple Silicon-only architecture policy and the pinned toolchain; another app's architecture,
 minimum OS, workload set or runner label is not a LocalMorph compatibility decision.
 
