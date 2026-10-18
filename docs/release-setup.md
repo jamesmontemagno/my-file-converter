@@ -403,8 +403,9 @@ Mac tag. No merge itself uploads anything.
 The workflow:
 
 1. Checks source/ref, versions and the protected environment before Apple credential use.
-2. Builds pinned arm64 FFmpeg/FFprobe from the verified upstream source archive, without
-   Homebrew, GPL/nonfree, networking or automatic dependency discovery.
+2. After package approval, builds pinned arm64 FFmpeg/FFprobe in the package job from the
+   verified upstream source archive, without Homebrew, GPL/nonfree, networking or automatic
+   dependency discovery.
 3. After approval, checks the combined P12's application/installer private-key identities,
    profile expiry/platform/distribution type, exact LocalMorph identifier/team and certificate.
    Credentials live only in an isolated temporary keychain/profile and are cleaned on failure.
@@ -423,6 +424,11 @@ The workflow:
 8. Waits for Apple processing, fails on rejected/ambiguous/timed-out builds, and confirms the
    exact processed Mac version/build is in the selected internal group. Retains its build ID.
 
+Media builds in place before signing keys are imported; there is no separate media runner or
+intermediate media upload/download. The signed package artifact still crosses the separate
+upload approval and is revalidated there. Offline helper regression tests run in CI rather than
+being repeated in every release dispatch.
+
 This is the owner's explicitly selected **initial TestFlight beta payload**, not a claim of
 full Windows parity: libass subtitle burn-in, zscale HDR mapping and optional external engines
 are still absent and must stay unavailable according to actual capabilities. No full shipping
@@ -433,6 +439,19 @@ The workflow contains **no App Review submission or public-release operation**. 
 separately approved, manual gates after actual TestFlight results and shipping prerequisites.
 Do not mark this run as TestFlight Internal Only if its exact tested build is intended for
 later App Store submission.
+
+### Directory-aware CI and deployment
+
+Website CI and Pages only run for `src/`, `public/`, HTML, Node/TypeScript/Vite inputs and their
+own workflow files. Desktop CI ignores website and prose-only changes. Its changed-file job uses
+the full push range or PR merge-base diff, including deletions and both sides of renames:
+Mac-specific changes run Mac checks, Windows-specific changes run Windows checks, and shared
+app/Core/build changes retain cross-platform coverage. Python/tag guard tests run without
+rebuilding unrelated apps. The iOS privacy manifest shared by Mac remains a Mac build input.
+Superseded CI runs cancel per PR/ref; release operations remain serialized without auto-cancel.
+
+Store/NuGet release workflows stay explicit dispatch/tag operations, not ordinary directory-change
+builds. Keep the required signing, source/hash/symbol verification, cleanup and approval gates.
 
 ### Isolated sandbox feasibility proof
 

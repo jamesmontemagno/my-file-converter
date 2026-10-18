@@ -79,40 +79,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/mac/store_release.py approval
-      - run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
-
-  media:
-    name: Build pinned beta media from source
-    needs: validate
-    if: github.event_name == 'push' || inputs.mode != 'diagnose'
-    runs-on: xcode-27
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '27.0'
-      - name: Build the current explicitly selected beta configuration
-        run: |
-          mkdir -p artifacts/mac-media
-          curl --fail --location --retry 3 https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz -o artifacts/mac-media/ffmpeg-9.0.2.tar.xz
-          bash scripts/mac/build-proof-media.sh artifacts/mac-media/ffmpeg-9.0.2.tar.xz artifacts/mac-media/media arm64
-          mkdir -p artifacts/mac-media/payload
-          cp -R artifacts/mac-media/media/arm64/bin artifacts/mac-media/payload/
-          cp artifacts/mac-media/media/arm64/{COPYING.LGPLv2.1,LICENSE.md,configure-flags.txt,source.txt,binaries.sha256,dependencies.txt,xcode.txt} artifacts/mac-media/payload/
-      - uses: actions/upload-artifact@v7
-        with:
-          name: mac-store-beta-media
-          path: |
-            artifacts/mac-media/payload/
-            artifacts/mac-media/ffmpeg-9.0.2.tar.xz
-          if-no-files-found: error
 
   package:
     name: Approve signing and build verified Mac Store beta package
-    needs: [validate, media]
+    needs: validate
+    if: github.event_name == 'push' || inputs.mode != 'diagnose'
     environment: mac-app-store
     runs-on: xcode-27
     timeout-minutes: 60
@@ -134,13 +105,14 @@ jobs:
         with:
           dotnet-version: '10.0.401'
       - run: dotnet workload install maui-maccatalyst --version 10.0.401.1
-      - uses: actions/download-artifact@v8
-        with:
-          name: mac-store-beta-media
-          path: artifacts/mac-media
-      - name: Restore executable modes and validate transferred media before signing
+      - name: Build and validate pinned beta media before importing signing keys
         run: |
-          chmod 755 artifacts/mac-media/payload/bin/ffmpeg artifacts/mac-media/payload/bin/ffprobe
+          mkdir -p artifacts/mac-media
+          curl --fail --location --retry 3 https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz -o artifacts/mac-media/ffmpeg-9.0.2.tar.xz
+          bash scripts/mac/build-proof-media.sh artifacts/mac-media/ffmpeg-9.0.2.tar.xz artifacts/mac-media/media arm64
+          mkdir -p artifacts/mac-media/payload
+          cp -R artifacts/mac-media/media/arm64/bin artifacts/mac-media/payload/
+          cp artifacts/mac-media/media/arm64/{COPYING.LGPLv2.1,LICENSE.md,configure-flags.txt,source.txt,binaries.sha256,dependencies.txt,xcode.txt} artifacts/mac-media/payload/
           python3 - <<'PY'
           from pathlib import Path
           import sys

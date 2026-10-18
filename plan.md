@@ -1,9 +1,15 @@
 # LocalMorph desktop app plan
 
 ## Current status
+- Preparing the owner-authorized merge and first **1.0.0 TestFlight** dispatch. Simplified Mac
+  packaging to build media in place before key import, keeping the signed-package handoff and
+  both approvals. Website CI/Pages now use input-path filters; desktop jobs route by component.
+- Outstanding decisions and acceptance are tracked in #39 (media/components), #41 (installed
+  TestFlight/native grants), #38 (listing/privacy/export/product), #40 (real captures/videos),
+  and #37 (beta exit, review and public launch). None authorizes automatic public release.
 - The initial Mac beta pipeline is implemented and locally validated, including real ad-hoc
   Release staging, minimal entitlements, bundled SDK privacy reasons and matching native symbols.
-  Thirty-nine offline helper tests pass; real distribution signing/API/upload and installed
+  Forty-nine offline helper tests pass; real distribution signing/API/upload and installed
   TestFlight behavior remain first-run gates, not inferred from these checks.
 - The .NET MAUI desktop app is a full batch conversion workspace (Windows verified end-to-end; the normal Mac workspace still needs end-to-end verification). An isolated signed Mac sandbox proof has exercised shared Core inspection, H.264 conversion, staging/commit, cancellation, and native input/output grants on Apple Silicon.
 - `LocalMorph.Core` holds the engine-agnostic conversion model: tool discovery, FFmpeg capability detection, the format catalog, presets, command builders, the queue, and history.

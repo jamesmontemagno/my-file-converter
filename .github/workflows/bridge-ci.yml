@@ -5,32 +5,78 @@ on:
     branches: ['main']
     paths:
       - 'dotnet/**'
-      - 'README.md'
+      - '!dotnet/**/*.md'
+      - 'global.json'
+      - 'NuGet.config'
+      - 'nuget.config'
+      - 'Directory.*.props'
+      - 'Directory.*.targets'
+      - 'scripts/ci_paths.py'
       - 'scripts/windows/**'
       - 'scripts/mac/**'
       - 'scripts/tests/**'
       - 'scripts/create-release-tags.*'
       - 'Casks/**'
       - 'public/appcast*.xml'
-      - '.github/workflows/**'
+      - '.github/workflows/bridge-ci.yml'
+      - '.github/workflows/bridge-release.yml'
+      - '.github/workflows/windows-store-publish.yml'
+      - '.github/workflows/mac-store-publish.yml'
+      - '.github/workflows/mac-release.yml'
+      - '.github/workflows/windows-release.yml'
+      - '.github/workflows/winget-submit.yml'
   pull_request:
     branches: ['main']
     paths:
       - 'dotnet/**'
-      - 'README.md'
+      - '!dotnet/**/*.md'
+      - 'global.json'
+      - 'NuGet.config'
+      - 'nuget.config'
+      - 'Directory.*.props'
+      - 'Directory.*.targets'
+      - 'scripts/ci_paths.py'
       - 'scripts/windows/**'
       - 'scripts/mac/**'
       - 'scripts/tests/**'
       - 'scripts/create-release-tags.*'
       - 'Casks/**'
       - 'public/appcast*.xml'
-      - '.github/workflows/**'
+      - '.github/workflows/bridge-ci.yml'
+      - '.github/workflows/bridge-release.yml'
+      - '.github/workflows/windows-store-publish.yml'
+      - '.github/workflows/mac-store-publish.yml'
+      - '.github/workflows/mac-release.yml'
+      - '.github/workflows/windows-release.yml'
+      - '.github/workflows/winget-submit.yml'
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    name: Detect affected desktop components
+    runs-on: ubuntu-latest
+    outputs:
+      distribution: ${{ steps.paths.outputs.distribution }}
+      tests: ${{ steps.paths.outputs.tests }}
+      windows: ${{ steps.paths.outputs.windows }}
+      mac: ${{ steps.paths.outputs.mac }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: paths
+        run: python3 scripts/ci_paths.py
+
   distribution:
+    needs: changes
+    if: needs.changes.outputs.distribution == 'true'
     name: Store-only distribution guards
     runs-on: ubuntu-latest
     permissions:
@@ -46,6 +92,8 @@ jobs:
         run: python3 scripts/mac/store_release.py approval
 
   test:
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -72,6 +120,8 @@ jobs:
       - run: dotnet pack dotnet/src/LocalMorph.Bridge/LocalMorph.Bridge.csproj --configuration Release
 
   desktop-app:
+    needs: changes
+    if: needs.changes.outputs.windows == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -93,6 +143,8 @@ jobs:
           Assert-PdbMatchesBinary -Binary artifacts\native-shell\ARM64\LocalMorph.Shell.dll -Pdb artifacts\native-shell\ARM64\LocalMorph.Shell.pdb
 
   desktop-app-mac:
+    needs: changes
+    if: needs.changes.outputs.mac == 'true'
     runs-on: xcode-27
     timeout-minutes: 30
     steps:
