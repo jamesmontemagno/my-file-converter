@@ -11,6 +11,15 @@
   Actual installed TestFlight build 3 now passes signature validation and native startup on
   the owner's Mac: visible workspace, loaded/initialized marker and a live process.
   Broader #41 conversion/permission/relaunch acceptance remains open.
+- #46 added Mac-native ImageIO/Core Graphics/text converters and Markdig for supported photo and
+  document workflows. #47 added pinned, source-built libass and zimg to FFmpeg and verified
+  subtitle burn-in and HDR-to-SDR in the sandbox. #48 merged the en-US listing/privacy kit and
+  desktop privacy-page copy. #49 is merged with the initial screenshots and both Mac videos.
+- Added `store/mac-app-store/en-us/metadata.md` as the Markdown copy/paste guide matching the
+  Windows listing-copy handoff. Its promotional text, description and keywords exactly match
+  `listing.json` and pass current field-limit checks. App Store Connect values remain owner-
+  reported rather than independently audited; the public privacy-policy URL still needs a live
+  check before submission.
 - Merged #36 and focused distribution-profile fix #42. **1.0.0 / build 2** from `8f47ec2`
   uploaded and processed successfully in Mac Store Release run `39182791350`, attempt 2.
   Apple build `10f323ab-7fa3-4fa1-869b-e84cdb584f19` is confirmed in **Internal Test Group**
@@ -20,9 +29,35 @@
   capabilities. The group-selection retry reused the exact signed package without rebuilding.
 - Simplified Mac packaging to build media in place before key import, keeping the signed-package handoff and
   both approvals. Website CI/Pages now use input-path filters; desktop jobs route by component.
-- Outstanding decisions and acceptance are tracked in #39 (media/components), #41 (installed
-  TestFlight/native grants), #38 (listing/privacy/export/product), #40 (real captures/videos),
-  and #37 (beta exit, review and public launch). None authorizes automatic public release.
+- #38 and #39 were closed on October 19, 2026 after the owner confirmed the account/listing status
+  and approved the pinned media scope. #41 (installed TestFlight/native grants) and #37 (beta exit,
+  review and public launch) remain open. #40's initial asset deliverables are complete; final-
+  candidate recapture remains a submission gate. None authorizes automatic public release.
+- **#38 decision checkpoint (October 19, 2026):** LocalMorph's App Store record/API access and
+  Internal Test Group are verified. The owner-selected product settings are Free, all available
+  territories, Utilities / Photo & Video, and age rating 4+. #48 contains the listing, review
+  notes, Data Not Collected draft, export answer, and desktop privacy-page copy. The owner supplied
+  SKU `localmorph` and reports the remaining App Store Connect fields and applicable agreements
+  complete to their best knowledge; this was not independently verified through App Store Connect.
+  No review submission or public release is approved.
+- **#39 decision checkpoint (October 19, 2026):** Mac v1 uses Apple-native converters and Markdig;
+  ImageMagick, LibreOffice, Pandoc, and Ghostscript are not bundled. libass and zimg are now
+  included in the pinned LGPL FFmpeg build; MP3/Opus/VP9/AV1 encoders remain unavailable. The
+  owner approved the exact v1 component scope. A real iPhone HEIC sample decoded and converted to
+  JPEG with macOS image tooling at 4032x3024; the app already routes HEIC/HEIF through ImageIO.
+  This was a platform API smoke, not a full TestFlight UI conversion or legal opinion.
+- Initial #40 assets are merged in PR #49, not entered in App Store Connect: five 2560x1600
+  captures, a separate 30-second 1920x1080 App Store preview, and an animated website film with captions,
+  transcript, poster, and storyboard. The owner confirmed demo-media rights on October 19, 2026;
+  original source provenance is not recorded. The screenshots are clean app captures without
+  marketing headlines/callouts, and the App Store preview is a screen recording; the separate
+  website film is the marketing-led artwork. In response to the owner's October 19 request,
+  added five 2560x1600 promotional layouts under
+  `store/mac-app-store/en-us/screenshots/marketing/`, using the genuine screenshots with
+  headlines and decorative artwork outside the app UI. The original clean captures are
+  unchanged. The optional separate App Store Creative Assets placements have not been created.
+  These variants still use the isolated asset-capture build; recapture against the final
+  TestFlight candidate before submission.
 - The initial Mac beta pipeline is implemented and locally validated, including real ad-hoc
   Release staging, minimal entitlements, bundled SDK privacy reasons and matching native symbols.
   Fifty-eight offline helper tests pass. Real distribution/profile/API/package/upload evidence now
@@ -49,11 +84,11 @@
 - Added `Mac Store Release` (`mac-store-publish.yml`): protected package, read-only diagnose and separately approved TestFlight modes using the six existing Apple secrets. Tags package only; merges never upload. The owner authorized the protected `mac-app-store` environment and the current pinned beta payload. Package hashes/source/symbols and Apple processing/internal-group confirmation are separate checks; review/public release are not automated.
 
 ## Remaining work
-- Complete full source/component approval, installed Release runtime and codec/filter coverage. Release builds require the explicit beta flag and pinned media path; default Release remains blocked. Initial distribution signing/profile/API access is verified, not final public-shipping approval. Do not replace source-built arm64 tools with a copied Homebrew installation.
+- Complete source/component approval, remaining codec/HEIC coverage, and installed normal-workspace/TestFlight acceptance. Release builds require the explicit beta flag and pinned media path; default Release remains blocked. Initial distribution signing/profile/API access is verified, not final public-shipping approval. Do not replace source-built arm64 tools with a copied Homebrew installation.
 - Verify the implemented grant layer in the normal isolated workspace: external files after actual process relaunch, iCloud/external/network volumes, denied/read-only destinations, preview/remove/cancel/quit, Finder opening and Dock reopen. Native bookmark create/resolve with a container fixture passes locally, but that does not prove persistent external access. The diagnostic app now saves selected grants and has an explicit Restore action that distinguishes same-process from restarted-process evidence.
-- Verify shared feature parity, native Mac behavior, and actual bundled codec/filter capabilities before finalizing claims and assets. The minimal source-built proof still lacks libass/zscale and external codecs; it is not an approved shipping payload.
+- Verify shared feature parity, native Mac behavior, and actual bundled codec/filter capabilities before finalizing claims. libass subtitle burn-in and zimg HDR tone mapping are now in the pinned bundle; MP3/Opus/VP9/AV1 encoders remain unavailable. Representative iPhone HEIC/HEIF coverage and final source/component approval remain open.
 - Install and validate the processed TestFlight build on supported Macs, then retain separate review approval and manual public release. Mac tags invoke package-only builds; future TestFlight versions still need explicit dispatch and approvals.
 - The six Apple Actions secrets worked in the approved beta run; see the [Mac configuration runbook](docs/release-setup.md#actions-signing-and-upload-configuration). The `mac-app-store` environment requires owner approval, disables administrator bypass, and restricts main/Mac tags with self-review explicitly allowed. The optional internal-group variable now selects the owner-provided Internal Test Group.
-- Prepare Mac-specific metadata/privacy, genuine screenshots, website film, and a separate App Store preview. Keep public Mac launch messaging gated on actual availability.
+- The initial Mac listing/privacy kit is in #48 and the clean screenshots, screen-recorded App Store preview, and held website-film draft are in merged #49. Five additional marketing-treated screenshot layouts are in the current worktree at `store/mac-app-store/en-us/screenshots/marketing/`; the optional separate App Store Creative Assets are not included. The owner confirmed demo-media rights; recapture the assets from the final TestFlight candidate before App Store submission and keep public launch messaging gated on actual availability.
 - Complete Windows Store certification and native x64/ARM64 checks without changing its external-media-tool policy.
-- See [release setup](docs/release-setup.md) and the [shipping checklist](docs/shipping-checklist.md) for current gates. Public-submission account/product decisions remain open; Intel support/testing is no longer in scope.
+- See [release setup](docs/release-setup.md) and the [shipping checklist](docs/shipping-checklist.md) for current gates. The core product settings and media scope are decided; normal-workspace/TestFlight acceptance, final asset recapture, and separate review/public-release gates remain. Intel support/testing is no longer in scope.

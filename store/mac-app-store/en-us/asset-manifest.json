@@ -14,8 +14,8 @@
   },
   "renderer": {
     "path": "scripts/render-mac-launch-video.py",
-    "sha256": "6c62c6d9debf00a02dd8086c619561af63ed1740e232c71c3c1b107b3fd23ccf",
-    "bytes": 21289,
+    "sha256": "27892f7537402daa10588b135934c391dd7108eafd30c31c20c2bc68786deeda",
+    "bytes": 21865,
     "pythonVersion": "3.9.6",
     "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers"
   },
@@ -64,6 +64,73 @@
       "mode": "RGB",
       "hasIccProfile": true,
       "sha256": "c3e658515c0639f20d85843656a53d75dd928e54c2323eac1f218e462012eb9e"
+    }
+  ],
+  "marketingScreenshotRenderer": {
+    "path": "scripts/render-mac-marketing-screenshots.py",
+    "sha256": "fdf83ead83b219cbef367ba9e2f60b7603f8b192694b7986a37d412ae8fa33ed"
+  },
+  "marketingScreenshotTreatment": "Each layout uses an unaltered, genuine app capture inside a promotional frame. Headlines and decorative artwork remain outside the app UI.",
+  "marketingScreenshots": [
+    {
+      "path": "store/mac-app-store/en-us/screenshots/marketing/01-your-files-your-mac.png",
+      "sourceScreenshot": "store/mac-app-store/en-us/screenshots/01-local-workspace.png",
+      "sourceSha256": "badf916a7c88cb20d4b121559c60a8dee2da6e6a5a4d354b9f42ea573734747e",
+      "headline": "Your files. Your Mac.",
+      "supportingCopy": "Convert video, audio, photos and documents right on your Mac.",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB",
+      "hasIccProfile": true,
+      "sha256": "05caef25ddbdf9bf2173a6bd7914c97e4898ed5c63edade56631e42edd3c7e8a"
+    },
+    {
+      "path": "store/mac-app-store/en-us/screenshots/marketing/02-set-a-size-target.png",
+      "sourceScreenshot": "store/mac-app-store/en-us/screenshots/02-video-presets.png",
+      "sourceSha256": "09695982fe9005f99ee62b336a93c5f9dd2bd534ddb758d21338303ac0ddb3c1",
+      "headline": "Set a target. Keep control.",
+      "supportingCopy": "Choose a file-size target before you convert. Your originals stay untouched.",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB",
+      "hasIccProfile": true,
+      "sha256": "a5ece79cb593557c3a571450e027dbcfda3981ccd879d3b695efd7677be9d3f5"
+    },
+    {
+      "path": "store/mac-app-store/en-us/screenshots/marketing/03-progress-you-can-follow.png",
+      "sourceScreenshot": "store/mac-app-store/en-us/screenshots/03-conversion-complete.png",
+      "sourceSha256": "1d843ee0a38cb94c66f91d35ba2ddff19bfc921d589db78508dad4a95f5c584f",
+      "headline": "Progress you can follow.",
+      "supportingCopy": "Track each job, review completed work and cancel when you need to.",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB",
+      "hasIccProfile": true,
+      "sha256": "ab128244e6173d74e01d04a07d58e983f15a3b6ac03950911eb2faa27309ca96"
+    },
+    {
+      "path": "store/mac-app-store/en-us/screenshots/marketing/04-your-conversions-in-history.png",
+      "sourceScreenshot": "store/mac-app-store/en-us/screenshots/04-conversion-history.png",
+      "sourceSha256": "ade948940df2034a418d196488b24d01a61eb7164d435e7dc639ec8dbd9e37a5",
+      "headline": "Recent work. Right at hand.",
+      "supportingCopy": "Reopen, reveal or repeat a completed conversion from History.",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB",
+      "hasIccProfile": true,
+      "sha256": "04fc61a32009e05eb9f02e3b89479a21c2b0a2ab61e5c2d476ffa84bbd449f2b"
+    },
+    {
+      "path": "store/mac-app-store/en-us/screenshots/marketing/05-photos-in-the-right-format.png",
+      "sourceScreenshot": "store/mac-app-store/en-us/screenshots/05-photo-conversion.png",
+      "sourceSha256": "c3e658515c0639f20d85843656a53d75dd928e54c2323eac1f218e462012eb9e",
+      "headline": "The right format. No detour.",
+      "supportingCopy": "Preview a photo, choose an output and convert in one workspace.",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB",
+      "hasIccProfile": true,
+      "sha256": "a9408278b34c7829796e2523f41b7fd58bf141d484a37916d388c15a396e1675"
     }
   ],
   "appStorePreview": {
@@ -132,10 +199,10 @@
     "publication": "Held in the App Store kit; not wired into the public website and makes no availability claim."
   },
   "provenance": {
-    "appScreenshots": "Native captures; no added UI, device frame, or personal filesystem path.",
+    "appScreenshots": "Root screenshots are genuine native captures; marketing variants add copy and artwork only around the unaltered app capture.",
     "brandMark": "Existing LocalMorph app-tile source asset in store/microsoft-store/logos/.",
     "typeface": "Open Sans files already bundled in the application font resources.",
     "music": "Original instrumental synthesized by this renderer; no third-party recording.",
-    "demoMedia": "Coastline demonstration photo/video origin is not recorded; owner rights clearance is required before public or App Store use."
+    "demoMedia": "Owner confirmed on 2026-10-19 that the coastline demonstration photo/video may be used in these assets. The original source is not recorded; recapture and review against the final TestFlight candidate before App Store submission."
   }
 }

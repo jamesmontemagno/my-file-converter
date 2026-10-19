@@ -356,6 +356,8 @@ def source_record(path):
 
 
 def build_manifest():
+    existing_manifest = json.loads(MANIFEST.read_text(encoding="utf-8")) if MANIFEST.exists() else {}
+    existing_provenance = existing_manifest.get("provenance", {})
     screenshots = []
     for name in CAPTURE_FILES:
         path = SCREENSHOTS / name
@@ -403,6 +405,9 @@ def build_manifest():
         },
         "appPreviewRenderer": file_record(APP_PREVIEW_RENDERER),
         "screenshots": screenshots,
+        "marketingScreenshotRenderer": existing_manifest.get("marketingScreenshotRenderer"),
+        "marketingScreenshotTreatment": existing_manifest.get("marketingScreenshotTreatment"),
+        "marketingScreenshots": existing_manifest.get("marketingScreenshots", []),
         "appStorePreview": {
             **app_preview,
             "poster": file_record(APP_PREVIEW_POSTER),
@@ -419,11 +424,14 @@ def build_manifest():
             "publication": "Held in the App Store kit; not wired into the public website and makes no availability claim.",
         },
         "provenance": {
-            "appScreenshots": "Native captures; no added UI, device frame, or personal filesystem path.",
+            "appScreenshots": "Root screenshots are genuine native captures; marketing variants add copy and artwork only around the unaltered app capture.",
             "brandMark": "Existing LocalMorph app-tile source asset in store/microsoft-store/logos/.",
             "typeface": "Open Sans files already bundled in the application font resources.",
             "music": "Original instrumental synthesized by this renderer; no third-party recording.",
-            "demoMedia": "Coastline demonstration photo/video origin is not recorded; owner rights clearance is required before public or App Store use.",
+            "demoMedia": existing_provenance.get(
+                "demoMedia",
+                "Coastline demonstration photo/video origin is not recorded; owner rights clearance is required before public or App Store use.",
+            ),
         },
     }
     MANIFEST.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
