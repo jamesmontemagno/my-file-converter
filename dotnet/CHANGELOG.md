@@ -6,6 +6,10 @@ desktop installers are not distributed through GitHub Releases.
 ## Unreleased
 
 ### Added
+- Mac: bundled FFmpeg now statically includes libass (CoreText fonts, FreeType, FriBidi,
+  HarfBuzz) and zimg, enabling subtitle burn-in and HDR-to-SDR tone mapping. Pinned,
+  hash-verified dependency sources and licenses ship with every package; Tools → Licenses
+  shows all third-party notices, including Markdig.
 - Mac: macOS built-in converters (ImageIO, Core Graphics, UIKit text) replace the optional
   ImageMagick/LibreOffice/Pandoc/Ghostscript engines that the sandbox cannot run. Images
   (incl. HEIC, RAW, PSD) convert to PNG/JPEG/TIFF/HEIC/AVIF/GIF/BMP/ICO/PDF; PDFs render their

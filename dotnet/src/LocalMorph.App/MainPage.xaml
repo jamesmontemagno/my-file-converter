@@ -404,6 +404,11 @@
                                         <Label Text="{Binding CategoryLabel}" Style="{StaticResource Muted}" TextColor="#8FA3C0" HorizontalTextAlignment="Center" />
                                         <Label Text="{Binding Summary}" Style="{StaticResource Muted}" TextColor="#8FA3C0" HorizontalTextAlignment="Center" />
                                     </VerticalStackLayout>
+                                    <VerticalStackLayout x:Name="PreviewUnavailable" AutomationId="PreviewUnavailable" IsVisible="False" VerticalOptions="Center" HorizontalOptions="Center" Spacing="8" Padding="16">
+                                        <Label Style="{StaticResource Icon}" Text="{Binding Icon}" FontSize="54" TextColor="#8FA3C0" HorizontalTextAlignment="Center" />
+                                        <Label Text="Preview isn't available for this format on this device." Style="{StaticResource Muted}" TextColor="#8FA3C0" HorizontalTextAlignment="Center" />
+                                        <Label Text="It still converts normally." Style="{StaticResource Muted}" TextColor="#8FA3C0" HorizontalTextAlignment="Center" />
+                                    </VerticalStackLayout>
                                 </Grid>
                             </Border>
 
@@ -994,7 +999,7 @@
                 <CollectionView ItemsSource="{Binding Tools}" ItemTemplate="{StaticResource ToolTemplate}" SelectionMode="None" AutomationId="ToolList" />
                 <Button Text="Forget file permissions" Style="{StaticResource SecondaryButton}" IsVisible="{Binding IsMacStoreBuild}"
                         Command="{Binding ForgetFilePermissionsCommand}" HorizontalOptions="Start" />
-                <Button Text="Bundled media licenses" Style="{StaticResource SecondaryButton}" IsVisible="{Binding IsMacStoreBuild}"
+                <Button Text="Third-party licenses" Style="{StaticResource SecondaryButton}" IsVisible="{Binding IsMacStoreBuild}"
                         Command="{Binding ShowBundledLicensesCommand}" HorizontalOptions="Start" />
                 <Editor Text="{Binding BundledLicenseText}" IsReadOnly="True" HeightRequest="240"
                         IsVisible="{Binding BundledLicenseText, Converter={StaticResource HasText}}" FontSize="12" />

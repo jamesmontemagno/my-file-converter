@@ -119,6 +119,12 @@ public partial class MainPage : ContentPage
         else if (file.IsVideo || file.IsAudio)
         {
             PreviewImage.IsVisible = false;
+            if (!CanPlayNatively(file.Path))
+            {
+                Player.IsVisible = false;
+                PreviewUnavailable.IsVisible = true;
+                return;
+            }
             Player.IsVisible = true;
             try
             {
@@ -137,11 +143,32 @@ public partial class MainPage : ContentPage
         }
     }
 
+    // AVFoundation cannot open containers such as MKV/WebM/AVI; MediaElement then faults on a
+    // background task, so show a placeholder instead. Conversion is unaffected.
+    private static bool CanPlayNatively(string path)
+    {
+#if MACCATALYST || IOS
+        var extension = Path.GetExtension(path).TrimStart('.');
+        if (extension.Length == 0) return false;
+        var type = UniformTypeIdentifiers.UTType.CreateFromExtension(extension);
+        if (type is null) return false;
+        if (OperatingSystem.IsMacCatalystVersionAtLeast(26) || OperatingSystem.IsIOSVersionAtLeast(26))
+            return AVFoundation.AVUrlAsset.AudiovisualContentTypes.Any(type.ConformsTo);
+#pragma warning disable CA1422 // Replacement above is only available on 26.0+.
+        return AVFoundation.AVUrlAsset.AudiovisualTypes.Any(identifier =>
+            UniformTypeIdentifiers.UTType.CreateFromIdentifier(identifier) is { } playable && type.ConformsTo(playable));
+#pragma warning restore CA1422
+#else
+        return true;
+#endif
+    }
+
     private void StopPreview()
     {
         Player.Stop();
         Player.Source = null;
         PreviewImage.Source = null;
+        PreviewUnavailable.IsVisible = false;
         PositionLabel.Text = string.Empty;
         previewed = null;
         previewAccess?.Dispose();

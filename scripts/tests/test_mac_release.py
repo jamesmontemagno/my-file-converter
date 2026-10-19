@@ -144,6 +144,16 @@ class MacReleaseTests(unittest.TestCase):
             (media / "configure-flags.txt").write_text("\n".join((
                 "--disable-gpl", "--disable-nonfree", "--disable-autodetect",
                 "--disable-network", "--enable-videotoolbox", "--enable-zlib")))
+            with self.assertRaisesRegex(ValueError, "Unexpected media build configuration"):
+                release.validate_media(media)
+            (media / "configure-flags.txt").write_text("\n".join((
+                "--disable-gpl", "--disable-nonfree", "--disable-autodetect", "--disable-network",
+                "--enable-videotoolbox", "--enable-zlib", "--enable-libass", "--enable-libzimg")))
+            with self.assertRaisesRegex(ValueError, "Missing bundled component license"):
+                release.validate_media(media)
+            (media / "licenses").mkdir()
+            for name in release.DEPENDENCY_LICENSES:
+                (media / "licenses" / name).write_text("license fixture")
             for name in ("ffmpeg", "ffprobe"):
                 (media / "bin" / name).chmod(0o755)
             def native_run(command, *args):
@@ -166,7 +176,11 @@ class MacReleaseTests(unittest.TestCase):
             (app / "Contents/Info.plist").write_bytes(plistlib.dumps({"CFBundleExecutable": "LocalMorph"}))
             media = directory / "payload"
             media.mkdir()
-            (media / "source.txt").write_text("source fixture")
+            (media / "sources").mkdir()
+            dependency = media / "sources" / "libass-0.17.4.tar.xz"
+            dependency.write_bytes(b"libass source fixture")
+            (media / "source.txt").write_text(
+                "Source: fixture\n" + release.digest(dependency) + "  libass-0.17.4.tar.xz  https://example.invalid/libass\n")
             archive = directory / "ffmpeg-9.0.2.tar.xz"
             archive.write_bytes(b"source archive fixture")
             symbol_root = directory / "build-symbols"
@@ -210,6 +224,17 @@ class MacReleaseTests(unittest.TestCase):
             self.assertIn("symbols/LocalMorph.pdb", actual)
             self.assertIn(archive.name, actual)
             self.assertIn("build-proof-media.sh", actual)
+            self.assertIn("sources/libass-0.17.4.tar.xz", actual)
+            self.assertNotIn("media-evidence/sources/libass-0.17.4.tar.xz", actual)
+            dependency.write_bytes(b"tampered")
+            with patch.object(release, "stage", return_value=metadata), \
+                 patch.object(release, "entitlements", return_value={"com.apple.developer.team-identifier": "TEAM123456"}), \
+                 patch.object(release, "run", side_effect=native_run), \
+                 patch.object(release, "SOURCE_SHA256", release.digest(archive)), \
+                 patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output)}):
+                shutil.rmtree(output)
+                with self.assertRaisesRegex(ValueError, "corresponding source"):
+                    release.package(args)
             self.assertEqual("sha256=" + manifest["sha256"] + "\n", github_output.read_text())
 
     def test_cleanup_removes_only_its_installed_profile_and_temporary_material(self):

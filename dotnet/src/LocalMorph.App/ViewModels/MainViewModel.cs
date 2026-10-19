@@ -614,9 +614,11 @@ public partial class MainViewModel : ObservableObject
         foreach (var tool in Tools) tool.Apply(inventory.Get(tool.Kind));
         if (Tools.FirstOrDefault(tool => tool.Kind == ToolKind.Ffmpeg) is { } ffmpegTool)
         {
-            ffmpegTool.Extra = inventory.HasFfmpeg
-                ? $"{inventory.Ffmpeg.Encoders.Count} encoders · {inventory.Ffmpeg.HardwareSummary}"
-                : null;
+            var filters = inventory.Ffmpeg.Filters;
+            var extras = new List<string> { $"{inventory.Ffmpeg.Encoders.Count} encoders", inventory.Ffmpeg.HardwareSummary };
+            if (filters.Contains("subtitles")) extras.Add("subtitle burn-in");
+            if (filters.Contains("zscale") && filters.Contains("tonemap")) extras.Add("HDR to SDR");
+            ffmpegTool.Extra = inventory.HasFfmpeg ? string.Join(" · ", extras) : null;
         }
 
         if (inventory.HasFfmpeg && !inventory.HasMediaTools)
@@ -1334,9 +1336,15 @@ public partial class MainViewModel : ObservableObject
             directory = Path.Combine(Foundation.NSBundle.MainBundle.BundlePath, "Contents", "Resources", "FFmpeg");
 #endif
             if (directory is null) throw new PlatformNotSupportedException("Bundled Mac media notices require Mac Catalyst.");
-            var paths = new[] { "FFmpeg-proof-NOTICE.txt", "LICENSE.md", "COPYING.LGPLv2.1" }
-                .Select(name => Path.Combine(directory, name));
-            BundledLicenseText = string.Join("\n\n", await Task.WhenAll(paths.Select(path => File.ReadAllTextAsync(path))));
+            var thirdParty = Path.Combine(directory, "..", "ThirdPartyNotices.txt");
+            var componentLicenses = Path.Combine(directory, "licenses");
+            var paths = (File.Exists(thirdParty) ? new[] { thirdParty } : [])
+                .Concat(new[] { "FFmpeg-proof-NOTICE.txt", "LICENSE.md", "COPYING.LGPLv2.1" }.Select(name => Path.Combine(directory, name)))
+                .Concat(Directory.Exists(componentLicenses)
+                    ? Directory.GetFiles(componentLicenses).Order(StringComparer.Ordinal)
+                    : []);
+            BundledLicenseText = string.Join("\n\n", await Task.WhenAll(paths.Select(async path =>
+                $"── {Path.GetFileName(path)} ──\n{await File.ReadAllTextAsync(path)}")));
         }
         catch (Exception ex) { ReportError($"Bundled media notices could not be read. Repair or update this build: {ex.Message}"); }
     }
