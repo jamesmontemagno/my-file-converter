@@ -11,6 +11,16 @@ APP = ROOT / "dotnet/src/LocalMorph.App"
 
 
 class MacWorkspaceTests(unittest.TestCase):
+    def test_startup_theme_bindings_target_the_page_not_an_onplatform_default(self):
+        for name in ("AppShell.xaml", "MainPage.xaml"):
+            with self.subTest(page=name):
+                background = ET.parse(APP / name).getroot().attrib["Background"]
+                self.assertTrue(background.startswith("{AppThemeBinding "))
+                self.assertNotIn("Default={AppThemeBinding", background)
+                self.assertEqual(2, background.count("WinUI=Transparent"))
+                self.assertIn("StaticResource PageLight", background)
+                self.assertIn("StaticResource PageDark", background)
+
     def test_store_entitlements_do_not_inherit_development_exceptions(self):
         with (APP / "Platforms/MacCatalyst/Store.entitlements").open("rb") as source:
             self.assertEqual(plistlib.load(source), {

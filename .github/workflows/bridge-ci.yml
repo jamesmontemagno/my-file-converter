@@ -188,7 +188,7 @@ jobs:
             --filter 'FullyQualifiedName~AppleEncoder|FullyQualifiedName~FfmpegEngineTests|FullyQualifiedName~FileAccessRegistryTests|FullyQualifiedName~BundledToolTests|FullyQualifiedName~QueueFileAccessTests|FullyQualifiedName~FileImportTests' \
             --logger 'trx;LogFileName=apple-encoders.trx' \
             --results-directory artifacts/mac-proof/tests
-      - name: Build and stage Release Store beta without Store credentials or launch
+      - name: Build and stage Release Store beta without Store credentials
         run: |
           dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-maccatalyst -c Release \
             -p:MacOnly=true -p:LocalMorphMacStoreBuild=true -p:LocalMorphMacStoreBetaRelease=true \
@@ -199,6 +199,11 @@ jobs:
             --app dotnet/src/LocalMorph.App/bin/mac-store/Release/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph.app \
             --media artifacts/mac-proof/media/arm64 --version 1.0.0 --build 1 \
             --source "$(git rev-parse HEAD)" --identity=-
+      - name: Launch actual Release workspace in an isolated sandbox (light, dark and system)
+        run: |
+          python3 scripts/mac/smoke_sandbox.py \
+            dotnet/src/LocalMorph.App/bin/mac-store/Release/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph.app \
+            artifacts/mac-proof/workspace-startup --workspace
       - name: Ad-hoc sign isolated proof without Store credentials
         env:
           LOCALMORPH_PROOF_SIGNING_IDENTITY: '-'
@@ -214,12 +219,18 @@ jobs:
             "artifacts/mac-proof/proof/app/Debug/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph Sandbox Proof.app" \
             artifacts/mac-proof/sandbox-app.zip
           (cd artifacts/mac-proof && shasum -a 256 sandbox-app.zip > sandbox-app.sha256)
+          ditto -c -k --sequesterRsrc --keepParent \
+            "artifacts/mac-proof/workspace-startup/LocalMorph Workspace Startup.app" \
+            artifacts/mac-proof/workspace-app.zip
+          (cd artifacts/mac-proof && shasum -a 256 workspace-app.zip > workspace-app.sha256)
       - uses: actions/upload-artifact@v7
         with:
           name: mac-sandbox-app
           path: |
             artifacts/mac-proof/sandbox-app.zip
             artifacts/mac-proof/sandbox-app.sha256
+            artifacts/mac-proof/workspace-app.zip
+            artifacts/mac-proof/workspace-app.sha256
             artifacts/mac-proof/ffmpeg-9.0.2.tar.xz
             artifacts/mac-proof/media/arm64/COPYING.LGPLv2.1
             artifacts/mac-proof/media/arm64/LICENSE.md
@@ -237,6 +248,9 @@ jobs:
           if-no-files-found: warn
           path: |
             artifacts/mac-proof/runtime/
+            artifacts/mac-proof/workspace-startup/Light/
+            artifacts/mac-proof/workspace-startup/Dark/
+            artifacts/mac-proof/workspace-startup/Unspecified/
             artifacts/mac-proof/tests/
             artifacts/mac-proof/proof/proof-source/
             artifacts/mac-proof/proof/*.txt
@@ -272,6 +286,13 @@ jobs:
           codesign --verify --strict "$APP/Contents/MacOS/ffmpeg"
           codesign --verify --strict "$APP/Contents/MacOS/ffprobe"
           python3 scripts/mac/smoke_sandbox.py "$APP" artifacts/mac-baseline/runtime
+      - name: Verify and launch the same Release workspace on the baseline (all themes)
+        run: |
+          (cd artifacts/mac-baseline && shasum -a 256 -c workspace-app.sha256)
+          ditto -x -k artifacts/mac-baseline/workspace-app.zip artifacts/mac-baseline/workspace
+          python3 scripts/mac/smoke_sandbox.py \
+            "artifacts/mac-baseline/workspace/LocalMorph Workspace Startup.app" \
+            artifacts/mac-baseline/workspace-runtime --workspace
       - name: Retain minimum-OS runtime evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -282,3 +303,5 @@ jobs:
             artifacts/mac-baseline/system.txt
             artifacts/mac-baseline/sandbox-app.sha256
             artifacts/mac-baseline/runtime/
+            artifacts/mac-baseline/workspace-app.sha256
+            artifacts/mac-baseline/workspace-runtime/

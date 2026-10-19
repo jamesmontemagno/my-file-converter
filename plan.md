@@ -1,6 +1,13 @@
 # LocalMorph desktop app plan
 
 ## Current status
+- Installed TestFlight **1.0.0 / build 2 fails at launch**: `AppThemeBinding.ProvideValue`
+  throws while constructing `AppShell`. The normal page uses the same nested
+  platform/theme pattern. Fix both roots without changing Windows transparency or Mac themes.
+  The fixed native Release workspace passes light/dark/system startup locally in a separate
+  sandbox identity; installed TestFlight acceptance still needs a replacement build.
+  CI now launches the actual Release workspace, not only the separate diagnostic app, and
+  transfers that same signed workspace to the minimum-OS runner. This gate awaits PR CI.
 - Merged #36 and focused distribution-profile fix #42. **1.0.0 / build 2** from `8f47ec2`
   uploaded and processed successfully in Mac Store Release run `39182791350`, attempt 2.
   Apple build `10f323ab-7fa3-4fa1-869b-e84cdb584f19` is confirmed in **Internal Test Group**

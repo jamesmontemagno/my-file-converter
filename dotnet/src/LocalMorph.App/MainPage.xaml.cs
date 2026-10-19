@@ -12,6 +12,7 @@ public partial class MainPage : ContentPage
     private readonly MainViewModel viewModel;
     private FileItemViewModel? previewed;
     private bool initialized;
+    private bool startupReady;
     private bool previewExpanded;
     private IDisposable? previewAccess;
 
@@ -22,6 +23,7 @@ public partial class MainPage : ContentPage
         BindingContext = viewModel;
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Unloaded += (_, _) => StopPreview();
+        Loaded += (_, _) => ReportWorkspaceStartup();
     }
 
     protected override async void OnAppearing()
@@ -44,8 +46,19 @@ public partial class MainPage : ContentPage
         });
         if (initialized) { UpdatePreview(); return; }
         initialized = true;
-        try { await viewModel.InitializeAsync(); }
+        try
+        {
+            await viewModel.InitializeAsync();
+            startupReady = true;
+            ReportWorkspaceStartup();
+        }
         catch (Exception ex) { viewModel.ReportError($"Could not discover conversion tools: {ex.Message}"); }
+    }
+
+    private void ReportWorkspaceStartup()
+    {
+        if (Distribution.IsMacStoreBuild && startupReady && IsLoaded)
+            Console.WriteLine($"MAC_WORKSPACE_STARTUP_PASSED:{Application.Current?.UserAppTheme}");
     }
 
     protected override void OnDisappearing()
