@@ -29,6 +29,7 @@ IDENTITY_ENTITLEMENTS = {
     "com.apple.application-identifier", "application-identifier",
     "com.apple.developer.team-identifier", "keychain-access-groups",
 }
+DISABLED_DEBUG_ENTITLEMENTS = {"get-task-allow", "com.apple.security.get-task-allow"}
 
 
 def require(condition, message):
@@ -172,8 +173,14 @@ def cleanup(directory):
 def validate_entitlements(entitlements, helper=False):
     expected = {"com.apple.security.app-sandbox": True, "com.apple.security.inherit": True} if helper else PARENT_ENTITLEMENTS
     require(all(entitlements.get(key) is value for key, value in expected.items()), "Required sandbox entitlements are missing.")
-    require(set(entitlements) <= set(expected) | (set() if helper else IDENTITY_ENTITLEMENTS),
-            "Unexpected sandbox/runtime entitlements; no broad exceptions are permitted.")
+    allowed = set(expected)
+    if not helper:
+        allowed |= IDENTITY_ENTITLEMENTS | DISABLED_DEBUG_ENTITLEMENTS
+        require(all(key not in entitlements or entitlements[key] is False for key in DISABLED_DEBUG_ENTITLEMENTS),
+                "Store distribution debugging entitlements must be Boolean false.")
+    unexpected = set(entitlements) - allowed
+    require(not unexpected, "Unexpected sandbox/runtime entitlements; no broad exceptions are permitted: "
+            + ", ".join(sorted(unexpected)))
 
 
 def entitlements(path):
