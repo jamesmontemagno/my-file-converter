@@ -11,8 +11,21 @@ namespace LocalMorph.App;
 
 public static class MauiProgram
 {
+	private static void ConfigureDiagnostics()
+	{
+		try { LocalMorph.Core.Diagnostics.DiagnosticLog.Configure(Path.Combine(FileSystem.AppDataDirectory, "Logs")); }
+		catch (Exception ex) { Console.Error.WriteLine($"Diagnostic log unavailable: {ex.Message}"); return; }
+		AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+			LocalMorph.Core.Diagnostics.DiagnosticLog.Error("Unhandled exception (terminating: " + e.IsTerminating + ")", e.ExceptionObject as Exception);
+		TaskScheduler.UnobservedTaskException += (_, e) =>
+			LocalMorph.Core.Diagnostics.DiagnosticLog.Error("Unobserved task exception", e.Exception);
+		LocalMorph.Core.Diagnostics.DiagnosticLog.Info(
+			$"LocalMorph {AppInfo.Current.VersionString} ({AppInfo.Current.BuildString}) starting on {DeviceInfo.Current.Platform} {DeviceInfo.Current.VersionString}, {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}, Mac Store build: {Distribution.IsMacStoreBuild}");
+	}
+
 	public static MauiApp CreateMauiApp()
 	{
+		ConfigureDiagnostics();
 		var builder = MauiApp.CreateBuilder();
 		builder
 #if LOCALMORPH_MAC_SANDBOX_PROOF

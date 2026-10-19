@@ -46,11 +46,21 @@ public sealed class ConversionService : IDisposable
         {
             var verified = await DiscoverToolsAsync(verifyHardware: true, token);
             tools = verified;
+            LogInventory(verified);
             ToolsChanged?.Invoke(verified);
             return verified;
         }
 
+        LogInventory(quick);
         return quick;
+    }
+
+    private static void LogInventory(ToolInventory inventory)
+    {
+        var tools = inventory.Tools.Values.Select(tool => $"{tool.Kind} {tool.ShortVersion} [{tool.Source}] {tool.Path}");
+        var hardware = string.Join(", ", inventory.Ffmpeg.WorkingHardwareEncoders.Select(encoder => encoder.Encoder));
+        LocalMorph.Core.Diagnostics.DiagnosticLog.Info(
+            $"Tools: {(inventory.Tools.Count == 0 ? "none found" : string.Join("; ", tools))}. FFmpeg encoders: {inventory.Ffmpeg.Encoders.Count}; hardware: {(hardware.Length == 0 ? "none" : hardware)}");
     }
 
     private static Task<ToolInventory> DiscoverToolsAsync(bool verifyHardware, CancellationToken token)

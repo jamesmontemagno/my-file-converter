@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using LocalMorph.Core.Diagnostics;
 using LocalMorph.Core.Formats;
 
 namespace LocalMorph.Core.Jobs;
@@ -141,6 +142,7 @@ public sealed class ConversionJob
             Result = result;
             EstimatedSecondsRemaining = null;
         }
+        DiagnosticLog.Info($"Conversion completed: {Source.FileName} -> {Format.Id} ({result.AllOutputs.Count} output(s), {result.OutputBytes} bytes, {stopwatch.Elapsed.TotalSeconds:0.0}s)");
 
         Changed?.Invoke(this);
     }
@@ -164,7 +166,19 @@ public sealed class ConversionJob
             Error = error;
             EstimatedSecondsRemaining = null;
         }
+        DiagnosticLog.Error(DescribeForLog($"Conversion failed: {error}"));
         Changed?.Invoke(this);
+    }
+
+    private string DescribeForLog(string headline)
+    {
+        string tail;
+        lock (gate) tail = LogTail;
+        var lines = tail.Split('\n');
+        if (lines.Length > 40) tail = string.Join('\n', lines[^40..]);
+        return $"{headline}\n  job: {Id:N} {Operation.Kind} {Engine}\n  source: {Source.Path} ({Source.Category})\n  format: {Format.Id}\n  output: {OutputPath}"
+            + (CommandLine is null ? string.Empty : $"\n  command:\n{CommandLine}")
+            + (tail.Length == 0 ? string.Empty : $"\n  tool output (tail):\n{tail}");
     }
 
     internal void MarkCanceled()
