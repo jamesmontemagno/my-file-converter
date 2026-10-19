@@ -18,7 +18,10 @@ Rebuild on Apple Silicon macOS with the recorded Xcode version:
 GPL, nonfree, network and automatic external-library discovery are disabled.
 Apple system frameworks are not included in the source archive.
 
-This initial beta does not include libass, zscale or optional external engines.
-Availability follows the bundled capabilities; installing host tools does not
-enable missing features. Full shipping-component and distribution review remains
+FFmpeg is statically linked with libass 0.17.4 (ISC), FreeType 2.13.3 (FreeType
+License), FriBidi 1.0.16 (LGPL-2.1+), HarfBuzz 11.2.1 (MIT) and zimg 3.0.6 (WTFPL)
+for subtitle burn-in and HDR tone mapping; their licenses are in licenses/ and
+their exact source archives are retained beside the package. Subtitles render with
+macOS system fonts through CoreText. No optional external engines are included;
+installing host tools does not enable missing features. Full shipping-component and distribution review remains
 a separate prerequisite before App Store review and public release.

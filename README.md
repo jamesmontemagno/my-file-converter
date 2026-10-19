@@ -188,7 +188,8 @@ build so `ffmpeg.exe` and `ffprobe.exe` are together in `C:\ffmpeg\bin`, then se
 Manual installations on other platforms must be on PATH. Tool installation may require internet
 access and acceptance of the tool publisher's licenses.
 
-On macOS, HDR tone mapping and the full Core integration suite require `brew install ffmpeg-full`.
+The Mac App Store build bundles its own FFmpeg (with libass and zscale); nothing needs installing.
+For development on macOS, HDR tone mapping and the full Core integration suite require `brew install ffmpeg-full`.
 Its keg-only binaries must be on PATH: `export PATH="$(brew --prefix ffmpeg-full)/bin:$PATH"`.
 The standard Homebrew `ffmpeg` build does not include the required `zscale` filter.
 

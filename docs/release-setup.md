@@ -258,8 +258,9 @@ Target-size Apple jobs use software encoding with at most three attempts, reduci
 after an oversized staged result. The final byte check is authoritative: an oversized result
 is discarded without replacing an existing destination. Existing libx264 two-pass behavior
 is unchanged. Core tests and the isolated signed sandbox app exercise this path; they do not
-establish full shipping parity. The minimal proof still lacks libass/subtitle rendering,
-zscale/HDR tone mapping and other external codecs.
+establish full shipping parity. The bundled payload statically links libass (CoreText fonts)
+and zimg for subtitle burn-in and `zscale` HDR tone mapping; external GPL/nonfree codecs
+(libx264/libx265 and similar) remain excluded.
 
 Free/open-source distribution is not component, patent or App Store licensing approval.
 The proof disables FFmpeg GPL/nonfree components, including libx264/libx265. Review the exact
@@ -445,8 +446,10 @@ upload approval and is revalidated there. Offline helper regression tests run in
 being repeated in every release dispatch.
 
 This is the owner's explicitly selected **initial TestFlight beta payload**, not a claim of
-full Windows parity: libass subtitle burn-in, zscale HDR mapping and optional external engines
-are still absent and must stay unavailable according to actual capabilities. No full shipping
+full Windows parity. libass subtitle burn-in and zscale HDR mapping are bundled (pinned,
+hash-verified dependency sources; licenses in `Contents/Resources/FFmpeg/licenses`). Optional
+external engines are replaced by macOS built-in converters; unsupported outputs stay unavailable
+according to actual capabilities. No full shipping
 component/legal review, external-bookmark/native workspace acceptance or TestFlight installation
 is implied by compilation, ad-hoc staging or helper tests.
 
@@ -503,7 +506,7 @@ Intel runtime testing is no longer a release requirement.
 | Ordinary H.264 | Actual sandboxed Core conversion passed using Apple VideoToolbox |
 | HEVC and explicit Apple software modes | Shared Core and the scene-enabled sandbox app produce H.264/HEVC with `-require_sw 1` and an explicit bitrate. Unsupported quality/constant-bitrate flags are not used |
 | Target-size modes | Shared Core and sandbox tests verify Apple software with at most three bitrate-adjusted attempts, decimal-MB hard-cap checks and safe commit. Existing x264 two-pass behavior remains. Nominal bitrate alone is not a file-size guarantee; oversize failure preserves an existing destination |
-| HDR / subtitle burn-in | This minimal proof lacks zscale and libass; build and verify approved dependency sources rather than deleting the features |
+| HDR / subtitle burn-in | Bundled: static libass 0.17.4 (FreeType/FriBidi/HarfBuzz, CoreText fonts) and zimg 3.0.6. The builder fails if `subtitles`, `ass` or `zscale` is missing; dependency source archives ship beside each package |
 | Other formats / optional engines | Not proven by this minimal dependency configuration; complete the codec/filter and optional-engine inventory before making listing claims |
 | Persistent access | Grant registry and workspace wiring implemented; native container bookmark round trip passes. External selection/relaunch, revoked grants, cloud volumes and all normal workspace entry points still need native verification |
 

@@ -87,7 +87,8 @@ Mac delivery is not yet enabled. Do not tag or advertise a public Mac release un
   native dependencies and necessary entitlements before approving a tool payload.
 - Inspect the `mac-sandbox-proof` CI evidence independently from host-FFmpeg test results.
   The minimal Debug proof checks Apple software H.264/HEVC, target-size caps and cancellation,
-  but lacks libass/zscale and is not the shipping payload. Verify explicit software bitrate,
+  and now includes libass/zscale. Confirm `subtitles`, `ass` and `zscale` appear on the Tools
+  page and that the dependency `sources/` archives and `licenses/` ship with the package. Verify explicit software bitrate,
   at most three size attempts, and rejection without destination replacement if the cap is missed.
 - Verify persistent file/folder authorization for pickers, Finder, drag/drop, subtitles,
   replacement audio, preview, conversion, history and reauthorization after relaunch.
@@ -96,7 +97,7 @@ Mac delivery is not yet enabled. Do not tag or advertise a public Mac release un
   its automated native container-bookmark round trip is a separate, narrower check.
 - Keep default `LocalMorphMacStoreBuild` Release blocked. The owner-selected TestFlight beta
   requires `LocalMorphMacStoreBetaRelease`, pinned media and verified application/installer
-  signing. Its current libass/zscale/optional-engine gaps remain explicit. Preserve the separate
+  signing. Optional external engines are replaced by macOS built-in converters. Preserve the separate
   Debug workspace identity/output/container; beta permission is not final shipping approval.
 - Request an output folder before first conversion and remember authorized access. Source-file
   selection alone must not be treated as permission to create sibling outputs.

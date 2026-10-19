@@ -53,6 +53,7 @@ done
 mkdir -p "$APP/Contents/Resources/FFmpeg"
 cp "$MEDIA/arm64/COPYING.LGPLv2.1" "$MEDIA/arm64/LICENSE.md" \
   dotnet/packaging/mac/FFmpeg-proof-NOTICE.txt "$APP/Contents/Resources/FFmpeg/"
+cp -R "$MEDIA/arm64/licenses" "$APP/Contents/Resources/FFmpeg/licenses"
 codesign --force --sign "$IDENTITY" --timestamp=none \
   --entitlements dotnet/src/LocalMorph.App/Platforms/MacCatalyst/SandboxProof.entitlements "$APP"
 codesign --verify --strict "$APP"

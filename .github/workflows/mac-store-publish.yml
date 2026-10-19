@@ -113,6 +113,7 @@ jobs:
           mkdir -p artifacts/mac-media/payload
           cp -R artifacts/mac-media/media/arm64/bin artifacts/mac-media/payload/
           cp artifacts/mac-media/media/arm64/{COPYING.LGPLv2.1,LICENSE.md,configure-flags.txt,source.txt,binaries.sha256,dependencies.txt,xcode.txt} artifacts/mac-media/payload/
+          cp -R artifacts/mac-media/media/arm64/licenses artifacts/mac-media/media/sources artifacts/mac-media/payload/
           python3 - <<'PY'
           from pathlib import Path
           import sys

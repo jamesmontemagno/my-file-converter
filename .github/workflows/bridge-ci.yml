@@ -176,7 +176,7 @@ jobs:
         run: dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-maccatalyst -p:MacOnly=true -p:LocalMorphMacSandboxProof=true -p:EnableCodeSigning=false
       - name: Validate sandbox proof architecture, minimum OS and scenes
         run: python3 scripts/mac/validate_app.py "dotnet/src/LocalMorph.App/bin/Debug/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph Sandbox Proof.app"
-      - name: Build pinned source-only proof media (not shipping payload)
+      - name: Build pinned source-only media with libass/zimg
         run: |
           mkdir -p artifacts/mac-proof
           curl --fail --location --retry 3 https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz -o artifacts/mac-proof/ffmpeg-9.0.2.tar.xz
@@ -238,6 +238,8 @@ jobs:
             artifacts/mac-proof/media/arm64/source.txt
             artifacts/mac-proof/media/arm64/dependencies.txt
             artifacts/mac-proof/media/arm64/xcode.txt
+            artifacts/mac-proof/media/arm64/licenses/
+            artifacts/mac-proof/media/sources/
             artifacts/mac-proof/proof/proof-source/build-proof-media.sh
             artifacts/mac-proof/proof/proof-source/FFmpeg-proof-NOTICE.txt
       - name: Retain proof evidence (not Store certification)

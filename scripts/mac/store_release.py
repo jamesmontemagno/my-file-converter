@@ -20,6 +20,8 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 BUNDLE_ID = "com.refractored.localmorph"
 SOURCE_SHA256 = "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
+DEPENDENCY_LICENSES = ("FreeType-FTL.txt", "FriBidi-COPYING.txt", "HarfBuzz-COPYING.txt",
+                       "libass-COPYING.txt", "zimg-COPYING.txt")
 PARENT_ENTITLEMENTS = {
     "com.apple.security.app-sandbox": True,
     "com.apple.security.files.user-selected.read-write": True,
@@ -199,8 +201,11 @@ def validate_media(media):
     require(checked == {"ffmpeg", "ffprobe"}, "Both raw media hashes are required.")
     flags = (media / "configure-flags.txt").read_text().splitlines()
     require(all(flag in flags for flag in ("--disable-gpl", "--disable-nonfree", "--disable-autodetect",
-                                         "--disable-network", "--enable-videotoolbox", "--enable-zlib")),
+                                         "--disable-network", "--enable-videotoolbox", "--enable-zlib",
+                                         "--enable-libass", "--enable-libzimg")),
             "Unexpected media build configuration.")
+    for name in DEPENDENCY_LICENSES:
+        require((media / "licenses" / name).is_file(), f"Missing bundled component license {name}.")
     for name in ("ffmpeg", "ffprobe"):
         tool = media / "bin" / name
         require(tool.is_file() and not tool.is_symlink() and os.access(tool, os.X_OK), "Missing regular media executable.")
@@ -239,12 +244,16 @@ def stage(app, media, version, build, source, identity, keychain=None):
     notices.mkdir(parents=True, exist_ok=False)
     for name in ("LICENSE.md", "COPYING.LGPLv2.1", "configure-flags.txt", "source.txt"):
         shutil.copyfile(media / name, notices / name)
+    shutil.copytree(media / "licenses", notices / "licenses")
     shutil.copyfile(ROOT / "dotnet/packaging/mac/FFmpeg-beta-NOTICE.txt", notices / "FFmpeg-proof-NOTICE.txt")
+    shutil.copyfile(ROOT / "dotnet/packaging/mac/ThirdPartyNotices.txt", app / "Contents/Resources/ThirdPartyNotices.txt")
     metadata = {"schema": 1, "channel": "mac-testflight-beta", "bundle_id": BUNDLE_ID,
                 "version": version, "build": build, "source_commit": source,
                 "ffmpeg_source_sha256": SOURCE_SHA256,
                 "tools": {name: digest(native / name) for name in ("ffmpeg", "ffprobe")},
-                "limitations": ["No libass subtitle burn-in", "No zscale HDR tone mapping", "No optional external engines"]}
+                "components": ["FFmpeg 9.0.2", "libass 0.17.4", "FreeType 2.13.3", "FriBidi 1.0.16",
+                               "HarfBuzz 11.2.1", "zimg 3.0.6"],
+                "limitations": ["No external engines; macOS built-in converters replace ImageMagick/LibreOffice/Pandoc/Ghostscript"]}
     (app / "Contents/Resources/localmorph-build.json").write_text(json.dumps(metadata, indent=2) + "\n")
     # The SDK already signed the runtime libraries and merged profile entitlements.
     # Re-sign only the enclosing app after adding the separately signed media tools.
@@ -286,10 +295,19 @@ def package(args):
     require(args.installer in signature and team in signature, "Installer signature does not match the selected identity.")
     metadata.update({"package": name, "sha256": digest(destination), "team": team})
     (args.output / "manifest.json").write_text(json.dumps(metadata, indent=2) + "\n")
-    shutil.copytree(args.media, args.output / "media-evidence", ignore=shutil.ignore_patterns("ffmpeg-*", "bin", "install"))
+    shutil.copytree(args.media, args.output / "media-evidence", ignore=shutil.ignore_patterns("ffmpeg-*", "bin", "install", "sources"))
     archive = args.media.parent / "ffmpeg-9.0.2.tar.xz"
     require(archive.is_file() and digest(archive) == SOURCE_SHA256, "Missing exact corresponding FFmpeg source archive.")
     shutil.copyfile(archive, args.output / archive.name)
+    for line in (args.media / "source.txt").read_text().splitlines():
+        match = re.fullmatch(r"([0-9a-f]{64})  (\S+\.tar\.(?:xz|gz))  (https://\S+)", line)
+        if not match:
+            continue
+        dependency = args.media / "sources" / match[2]
+        require(dependency.is_file() and digest(dependency) == match[1],
+                f"Missing exact corresponding source for {match[2]}.")
+        (args.output / "sources").mkdir(exist_ok=True)
+        shutil.copyfile(dependency, args.output / "sources" / match[2])
     shutil.copyfile(ROOT / "scripts/mac/build-proof-media.sh", args.output / "build-proof-media.sh")
     symbols = args.output / "symbols"
     symbols.mkdir()
