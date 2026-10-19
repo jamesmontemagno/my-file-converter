@@ -6,7 +6,7 @@
     xmlns:local="clr-namespace:LocalMorph.App"
     Title="LocalMorph"
     Shell.NavBarIsVisible="False"
-    Background="{OnPlatform WinUI=Transparent, Default={AppThemeBinding Light=#F3F5F9, Dark=#0D1117}}">
+    Background="{AppThemeBinding Light={OnPlatform WinUI=Transparent, Default={StaticResource PageLight}}, Dark={OnPlatform WinUI=Transparent, Default={StaticResource PageDark}}}">
 
     <ShellContent
         Title="Home"

@@ -10,7 +10,7 @@
              x:Name="DesktopPage"
              x:DataType="vm:MainViewModel"
              Title="LocalMorph"
-             Background="{OnPlatform WinUI=Transparent, Default={AppThemeBinding Light={StaticResource PageLight}, Dark={StaticResource PageDark}}}">
+             Background="{AppThemeBinding Light={OnPlatform WinUI=Transparent, Default={StaticResource PageLight}}, Dark={OnPlatform WinUI=Transparent, Default={StaticResource PageDark}}}">
 
     <ContentPage.Resources>
         <toolkit:InvertedBoolConverter x:Key="Not" />
