@@ -22,7 +22,8 @@ No successful package, helper test, or compilation establishes certification or 
 - Confirm exactly one existing package flight named **Internal Testing**, with intended testers.
   The scripts discover it by name; they do not create it or fall back to production.
 - Confirm category, pricing/markets, support and published desktop privacy policy, age ratings,
-  and the [Microsoft Store listing kit](../store/microsoft-store/README.md).
+  and the [Microsoft Store listing kit](../store/microsoft-store/README.md). The published
+  privacy page at `https://localmorph.com/#/privacy` now has a desktop apps section.
 - Keep the FFmpeg/FFprobe external requirement at the beginning of the listing and in review notes.
   The Windows package bundles .NET but not media tools. Tool installation may require internet
   access and acceptance of the tool publisher's licenses.
@@ -114,8 +115,10 @@ Mac delivery is not yet enabled. Do not tag or advertise a public Mac release un
 - Validate build-number monotonicity and retry behavior; retain the exact package hash, version,
   build number and source before upload. Review submission must select the same processed build
   tested through TestFlight, not a rebuilt package.
-- Audit applicable privacy manifests and data declarations; publish reviewed desktop privacy
-  and support information. Local media processing alone does not answer every privacy question.
+- Privacy audit is recorded in the [Mac App Store kit](../store/mac-app-store/README.md)
+  (`app-privacy.md`: Data Not Collected, no network entitlement, privacy manifest, export
+  compliance, age rating). The desktop section of the website privacy policy covers Windows and
+  Mac; it must be deployed before review. Paste listing copy and review notes from the kit.
 - Capture genuine Mac screenshots at accepted dimensions, with build/tool/output evidence.
   Produce a website launch film and a separate screen-recording-led App Store preview; validate
   each against its own requirements. Do not reuse Windows captures or fabricate UI/history.

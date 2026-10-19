@@ -1,0 +1,32 @@
+{
+  "locale": "en-US",
+  "note": "Copy-review handoff for App Store Connect fields. Paste each field manually; this is not an API payload. Limits are Apple's current character limits. Claims are limited to formats the bundled FFmpeg (scripts/mac/build-proof-media.sh) and macOS built-in converters actually produce.",
+  "name": { "value": "LocalMorph", "limit": 30 },
+  "subtitle": { "value": "Private file converter", "limit": 30 },
+  "promotionalText": {
+    "value": "Convert video, audio, photos, and documents right on your Mac. Nothing is uploaded, and FFmpeg is built in, so there is nothing else to install.",
+    "limit": 170
+  },
+  "description": {
+    "limit": 4000,
+    "value": "Your files. Your Mac. The format you need.\n\nLocalMorph is a file converter that works entirely on your Mac. Turn a screen recording into a shareable MP4, shrink a clip to fit a size limit, extract the audio from a video, convert a folder of iPhone photos, or turn a Markdown file into a PDF. Your files are never uploaded to a conversion server.\n\nEVERYTHING INCLUDED\nLocalMorph includes its own FFmpeg and FFprobe and uses converters built into macOS for photos, PDF pages, and documents. There is nothing else to download or install, and it works offline.\n\nSTART SIMPLE, GO DEEPER WHEN YOU NEED TO\nAdd files or folders, or drop them on the window. Pick a quick preset or an output format, and LocalMorph checks the whole batch before converting. Preview video, audio, and images, then trim, grab a frame, or choose tracks.\n\nVIDEO\nConvert to MP4, MOV, or MKV with H.264, HEVC, or ProRes, using Apple's hardware video encoder when available. Fit a clip under a target file size for sharing. Change resolution, frame rate, rotation, and speed, or crop, fade, deinterlace, and denoise. Burn subtitles into the picture, or keep, convert, and extract subtitle tracks. Tone-map HDR video to SDR for wider compatibility.\n\nAUDIO\nExtract or convert audio to AAC, Apple Lossless, FLAC, or WAV. Choose tracks, replace audio, normalize loudness to a measured target, and trim silence at the start and end.\n\nPHOTOS AND DOCUMENTS\nConvert HEIC, RAW, PSD, WebP, and other photos to PNG, JPEG, HEIC, AVIF, TIFF, GIF, BMP, ICO, or PDF. Render the first page of a PDF as an image. Convert Markdown, HTML, RTF, and text to PDF, RTF, HTML, or plain text.\n\nJOIN, SPLIT, AND MORE\nJoin compatible clips without re-encoding, split a video into equal parts, or make a contact sheet or audio waveform image.\n\nA QUEUE YOU CAN FOLLOW\nImport up to 2,000 files at a time, follow progress, and cancel a single job or the whole batch. Your originals are never overwritten. History lets you reopen, reveal, or repeat completed conversions.\n\nPRIVATE BY DESIGN\nLocalMorph does not collect data, has no accounts, and does not connect to the internet. You choose which files and folders it can read and where it saves results."
+  },
+  "keywords": {
+    "value": "video,audio,image,convert,converter,ffmpeg,mp4,heic,compress,batch,offline,subtitle,trim,hevc",
+    "limit": 100
+  },
+  "whatsNew": { "value": "", "note": "Not shown for the first version." },
+  "supportUrl": "https://github.com/jamesmontemagno/my-file-converter/issues",
+  "marketingUrl": "https://localmorph.com",
+  "privacyPolicyUrl": "https://localmorph.com/#/privacy",
+  "copyright": "2026 Refractored LLC",
+  "primaryCategory": "Utilities",
+  "secondaryCategory": "Photo & Video",
+  "price": "Free (owner decision, #38)",
+  "availability": "All available territories (owner decision, #38)",
+  "macOS": { "minimum": "15.0", "architectures": ["arm64"], "note": "Apple silicon only" },
+  "notClaimed": [
+    "MP3, Opus, WebM (VP9), and AV1 output: the bundled LGPL FFmpeg has no libmp3lame, libopus, libvpx, or AV1 encoder; these formats are shown as unavailable in the app.",
+    "Office documents and EPUB: LibreOffice and Pandoc are not available in the sandbox."
+  ]
+}

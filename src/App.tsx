@@ -992,7 +992,7 @@ function PrivacyPage() {
   return (
     <LegalLayout
       title="Privacy Policy"
-      summary={`${APP_NAME} is built for local conversion. This policy explains what stays on your device in browser and optional bridge workflows, plus what limited technical data hosting providers may process.`}
+      summary={`${APP_NAME} is built for local conversion. This policy explains what stays on your device in the browser, the optional bridge, and the Windows and Mac desktop apps, plus what limited technical data hosting providers may process.`}
     >
       <section>
         <h2>1. Local file processing</h2>
@@ -1046,7 +1046,42 @@ function PrivacyPage() {
       </section>
 
       <section>
-        <h2>5. Cookies and storage</h2>
+        <h2>5. Desktop apps for Windows and Mac</h2>
+        <p>
+          {APP_NAME} for Windows (Microsoft Store) and Mac (Mac App Store) convert files on your
+          computer. They have no accounts, analytics, advertising, or crash-reporting services,
+          and they do not upload your files or send us any information. The Mac App Store edition
+          has no network access at all.
+        </p>
+        <p>The apps keep the following only on your computer, in their private app storage:</p>
+        <ul>
+          <li>
+            Conversion history: original and result file paths, formats, options, sizes, and times,
+            so you can reopen or repeat a conversion. Removing an entry does not delete any file.
+          </li>
+          <li>Preferences such as the theme, output folder, and last-used formats.</li>
+          <li>
+            On Mac, file and folder access permissions you grant, so the app can keep using them
+            after it restarts.
+          </li>
+          <li>
+            A local diagnostics log with file paths and error details. It is never sent anywhere;
+            review it before sharing it in a support request.
+          </li>
+          <li>Temporary working files, which are removed after each conversion.</li>
+        </ul>
+        <p>
+          The Mac edition includes FFmpeg and FFprobe. The Windows edition uses FFmpeg, FFprobe,
+          and other tools you install separately, for example with Windows Package Manager; those
+          tools and services have their own licenses and privacy policies. Updates come only
+          through the Microsoft Store or the Mac App Store. Links to our website, support, or tool
+          documentation open in your browser only when you click them. Uninstalling the app
+          removes its private storage but not files you converted.
+        </p>
+      </section>
+
+      <section>
+        <h2>6. Cookies and storage</h2>
         <p>
           {APP_NAME} does not require an account and does not intentionally rely on advertising
           cookies. The current app experience primarily uses in-memory session state while the page
@@ -1055,7 +1090,7 @@ function PrivacyPage() {
       </section>
 
       <section>
-        <h2>6. Your choices</h2>
+        <h2>7. Your choices</h2>
         <p>
           You can stop using the app at any time by closing the page. You should avoid using the app
           with sensitive files unless you have reviewed the hosting setup and browser environment.
