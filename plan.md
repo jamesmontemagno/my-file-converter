@@ -1,21 +1,22 @@
 # LocalMorph desktop app plan
 
 ## Current status
-- Merged #36 as `ca1c1e4` after all checks passed; dispatched **1.0.0 / build 1** in Mac Store
-  Release run `39166182120`. After owner approval, real distribution certificate/profile validation
-  and app compilation passed. Packaging stopped at the strict entitlement check; signing material
-  cleanup succeeded and upload never ran. A focused follow-up preserves Boolean-false SDK/profile
-  debug flags while still rejecting enabled debugging and all unapproved capabilities.
-- Simplified Mac
-  packaging to build media in place before key import, keeping the signed-package handoff and
+- Merged #36 and focused distribution-profile fix #42. **1.0.0 / build 2** from `8f47ec2`
+  uploaded and processed successfully in Mac Store Release run `39182791350`, attempt 2.
+  Apple build `10f323ab-7fa3-4fa1-869b-e84cdb584f19` is confirmed in **Internal Test Group**
+  (`5e573fb7-8a0f-4446-956d-78f615808373`). No App Review or public release occurred.
+- The first attempt caught a strict-check incompatibility with disabled SDK/profile debug flags.
+  The fix preserves only Boolean-false flags and still rejects enabled debugging and unapproved
+  capabilities. The group-selection retry reused the exact signed package without rebuilding.
+- Simplified Mac packaging to build media in place before key import, keeping the signed-package handoff and
   both approvals. Website CI/Pages now use input-path filters; desktop jobs route by component.
 - Outstanding decisions and acceptance are tracked in #39 (media/components), #41 (installed
   TestFlight/native grants), #38 (listing/privacy/export/product), #40 (real captures/videos),
   and #37 (beta exit, review and public launch). None authorizes automatic public release.
 - The initial Mac beta pipeline is implemented and locally validated, including real ad-hoc
   Release staging, minimal entitlements, bundled SDK privacy reasons and matching native symbols.
-  Forty-nine offline helper tests pass; real distribution signing/API/upload and installed
-  TestFlight behavior remain first-run gates, not inferred from these checks.
+  Fifty-one offline helper tests pass. Real distribution/profile/API/package/upload evidence now
+  passes too; an installed TestFlight build and native end-to-end behavior remain separate gates.
 - The .NET MAUI desktop app is a full batch conversion workspace (Windows verified end-to-end; the normal Mac workspace still needs end-to-end verification). An isolated signed Mac sandbox proof has exercised shared Core inspection, H.264 conversion, staging/commit, cancellation, and native input/output grants on Apple Silicon.
 - `LocalMorph.Core` holds the engine-agnostic conversion model: tool discovery, FFmpeg capability detection, the format catalog, presets, command builders, the queue, and history.
 - `LocalMorph.Core.Tests` covers command building and real FFmpeg integration, including target size, loudness, subtitles, HDR, join/split, cancellation, and source-file protection.
@@ -38,11 +39,11 @@
 - Added `Mac Store Release` (`mac-store-publish.yml`): protected package, read-only diagnose and separately approved TestFlight modes using the six existing Apple secrets. Tags package only; merges never upload. The owner authorized the protected `mac-app-store` environment and the current pinned beta payload. Package hashes/source/symbols and Apple processing/internal-group confirmation are separate checks; review/public release are not automated.
 
 ## Remaining work
-- Complete full source/component approval, native Release runtime and codec/filter coverage. Release builds require the explicit beta flag and pinned media path; default Release remains blocked. The first approved workflow still must validate actual distribution signing/profile/API access. Do not replace source-built arm64 tools with a copied Homebrew installation.
+- Complete full source/component approval, installed Release runtime and codec/filter coverage. Release builds require the explicit beta flag and pinned media path; default Release remains blocked. Initial distribution signing/profile/API access is verified, not final public-shipping approval. Do not replace source-built arm64 tools with a copied Homebrew installation.
 - Verify the implemented grant layer in the normal isolated workspace: external files after actual process relaunch, iCloud/external/network volumes, denied/read-only destinations, preview/remove/cancel/quit, Finder opening and Dock reopen. Native bookmark create/resolve with a container fixture passes locally, but that does not prove persistent external access. The diagnostic app now saves selected grants and has an explicit Restore action that distinguishes same-process from restarted-process evidence.
 - Verify shared feature parity, native Mac behavior, and actual bundled codec/filter capabilities before finalizing claims and assets. The minimal source-built proof still lacks libass/zscale and external codecs; it is not an approved shipping payload.
-- Run the protected Mac Store workflow after merge, validate the actual signed package/TestFlight installation, then retain separate review approval and manual public release. Mac tags now invoke package-only builds; TestFlight needs an explicit dispatch and approvals.
-- The six Apple Actions secret names are present at repository scope; see the [Mac configuration runbook](docs/release-setup.md#actions-signing-and-upload-configuration). The owner-approved `mac-app-store` environment now requires owner approval, disables administrator bypass, and restricts main/Mac tags with self-review explicitly allowed. Secret contents and account readiness are not yet verified.
+- Install and validate the processed TestFlight build on supported Macs, then retain separate review approval and manual public release. Mac tags invoke package-only builds; future TestFlight versions still need explicit dispatch and approvals.
+- The six Apple Actions secrets worked in the approved beta run; see the [Mac configuration runbook](docs/release-setup.md#actions-signing-and-upload-configuration). The `mac-app-store` environment requires owner approval, disables administrator bypass, and restricts main/Mac tags with self-review explicitly allowed. The optional internal-group variable now selects the owner-provided Internal Test Group.
 - Prepare Mac-specific metadata/privacy, genuine screenshots, website film, and a separate App Store preview. Keep public Mac launch messaging gated on actual availability.
 - Complete Windows Store certification and native x64/ARM64 checks without changing its external-media-tool policy.
-- See [release setup](docs/release-setup.md) and the [shipping checklist](docs/shipping-checklist.md) for current gates. Apple account/signing readiness remains unverified; Intel support/testing is no longer in scope.
+- See [release setup](docs/release-setup.md) and the [shipping checklist](docs/shipping-checklist.md) for current gates. Public-submission account/product decisions remain open; Intel support/testing is no longer in scope.

@@ -365,8 +365,17 @@ is a separate owner-controlled action, not an automatic cleanup.
 Keep signing and API material scoped to the steps that need it, use an isolated temporary
 keychain, and clean up keys/profiles even on cancellation or failure.
 
-No credential values were read locally or moved. Distribution signing, App Store API diagnostics
-and upload using these secrets still require the first approved workflow execution.
+No Apple private-key/secret values were read locally or moved. The first approved beta completed
+real profile/certificate validation, app/installer signing, API access and upload in
+run `39182791350` (1.0.0/build 2, source `8f47ec2`). Apple processing is `VALID` and membership
+in the owner-selected **Internal Test Group** (`5e573fb7-8a0f-4446-956d-78f615808373`) is confirmed.
+The optional `MAC_APP_STORE_INTERNAL_GROUP` variable selects that existing group. The upload-only
+retry reused the same signed artifact; it did not rebuild or submit review/release.
+
+Apple build ID: `10f323ab-7fa3-4fa1-869b-e84cdb584f19`.
+Package SHA256: `3c8f287a1e3719c4876197f01bf3b2f1505004fda7bd2cbdac6072787a5d07c2`.
+Matching source/build evidence and symbols are retained with the package. Installed TestFlight
+acceptance, full component/privacy/product review and public release remain separate gates.
 
 ### Mac Store release and TestFlight
 

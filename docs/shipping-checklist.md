@@ -104,9 +104,10 @@ Mac delivery is not yet enabled. Do not tag or advertise a public Mac release un
   against real sandbox permissions and the actual bundled codec/filter set.
 - Configure application distribution and installer signing, provisioning, package validation,
   architecture checks and matching crash symbols. Notarized direct downloads are not the channel.
-  The new Mac Store Release workflow implements these checks; its first approved credentialed
-  run and genuine TestFlight install remain required evidence. Package mode and tag pushes do
-  not upload; TestFlight requires explicit dispatch and separate upload approval.
+  Initial credentialed evidence passes in run `39182791350`: 1.0.0/build 2 is signed, uploaded,
+  processed and confirmed in the selected internal group. A genuine TestFlight install remains
+  required evidence. Package mode and tag pushes do not upload; future TestFlight uploads
+  still require explicit dispatch and separate upload approval.
 - Validate build-number monotonicity and retry behavior; retain the exact package hash, version,
   build number and source before upload. Review submission must select the same processed build
   tested through TestFlight, not a rebuilt package.
