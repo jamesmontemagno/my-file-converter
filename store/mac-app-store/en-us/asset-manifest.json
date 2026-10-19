@@ -1,0 +1,141 @@
+{
+  "status": "owner-review; not submitted to App Store Connect or published on the website",
+  "capture": {
+    "appBundleId": "com.refractored.localmorph.assetcapture",
+    "appVersion": "1.0.0",
+    "buildNumber": "1",
+    "sourceCommit": "40267fa557da8c08e28fb70949409f9895dff6e7",
+    "host": "macOS 26.6.2, Xcode 26.6, .NET SDK 10.0.401",
+    "notes": [
+      "Genuine app captures from an isolated asset-capture build, not a TestFlight or App Store build.",
+      "The capture-only app used the network.server entitlement for local DevFlow automation; shipping Store entitlements were not changed.",
+      "Recapture and review the set against the final TestFlight candidate before App Store submission."
+    ]
+  },
+  "renderer": {
+    "path": "scripts/render-mac-launch-video.py",
+    "sha256": "6c62c6d9debf00a02dd8086c619561af63ed1740e232c71c3c1b107b3fd23ccf",
+    "bytes": 21289,
+    "pythonVersion": "3.9.6",
+    "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers"
+  },
+  "appPreviewRenderer": {
+    "path": "scripts/render-mac-app-preview.py",
+    "sha256": "0b5fae3a3b53d0ab21b6bf8baf98f859d70f649eaa63b1eef5c24bf066e32536",
+    "bytes": 3732
+  },
+  "screenshots": [
+    {
+      "path": "store/mac-app-store/en-us/screenshots/01-local-workspace.png",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB",
+      "hasIccProfile": true,
+      "sha256": "badf916a7c88cb20d4b121559c60a8dee2da6e6a5a4d354b9f42ea573734747e"
+    },
+    {
+      "path": "store/mac-app-store/en-us/screenshots/02-video-presets.png",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB",
+      "hasIccProfile": true,
+      "sha256": "09695982fe9005f99ee62b336a93c5f9dd2bd534ddb758d21338303ac0ddb3c1"
+    },
+    {
+      "path": "store/mac-app-store/en-us/screenshots/03-conversion-complete.png",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB",
+      "hasIccProfile": true,
+      "sha256": "1d843ee0a38cb94c66f91d35ba2ddff19bfc921d589db78508dad4a95f5c584f"
+    },
+    {
+      "path": "store/mac-app-store/en-us/screenshots/04-conversion-history.png",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB",
+      "hasIccProfile": true,
+      "sha256": "ade948940df2034a418d196488b24d01a61eb7164d435e7dc639ec8dbd9e37a5"
+    },
+    {
+      "path": "store/mac-app-store/en-us/screenshots/05-photo-conversion.png",
+      "width": 2560,
+      "height": 1600,
+      "mode": "RGB",
+      "hasIccProfile": true,
+      "sha256": "c3e658515c0639f20d85843656a53d75dd928e54c2323eac1f218e462012eb9e"
+    }
+  ],
+  "appStorePreview": {
+    "path": "store/mac-app-store/en-us/app-previews/localmorph-mac-app-preview.mp4",
+    "sha256": "6b7e7c384b23e2246121d793bcc298c951c72debd6ad1caef9bfd45d2503ac63",
+    "bytes": 1251643,
+    "width": 1920,
+    "height": 1080,
+    "durationSeconds": 30.0,
+    "frameRate": "30/1",
+    "videoCodec": "h264",
+    "pixelFormat": "yuv420p",
+    "audioCodec": "aac",
+    "audioChannels": 2,
+    "audioSampleRate": 48000,
+    "poster": {
+      "path": "store/mac-app-store/en-us/app-previews/localmorph-mac-app-preview-poster.png",
+      "sha256": "33eeae5558edb21a84ae3fbe6da917de633484d924b916bf5180afc85a5ced0b",
+      "bytes": 704807
+    },
+    "sourceRecording": {
+      "path": "store/mac-app-store/en-us/app-previews/source/localmorph-mac-app-preview-source.mov",
+      "sha256": "e762dd9baca7db3cc08a22cda28fe37f08d42c58ff90a4ef9ee4e7d97bbce427",
+      "bytes": 3089954,
+      "width": 2560,
+      "height": 1440,
+      "durationSeconds": 34.152,
+      "frameRate": "70800/20491"
+    },
+    "source": "Genuine 2560x1440 app-window recording, encoded at 1920x1080/30fps.",
+    "audioNote": "Silent stereo AAC compatibility track; no music or narration."
+  },
+  "websiteLaunchFilm": {
+    "path": "store/mac-app-store/en-us/website-launch/localmorph-mac-launch.mp4",
+    "sha256": "445247b3f15a25d96557fd5b4298d49844d79494e1656bf341dcea108ab098c9",
+    "bytes": 2526429,
+    "width": 1920,
+    "height": 1080,
+    "durationSeconds": 30.0,
+    "frameRate": "30/1",
+    "videoCodec": "h264",
+    "pixelFormat": "yuv420p",
+    "audioCodec": "aac",
+    "audioChannels": 2,
+    "audioSampleRate": 48000,
+    "poster": {
+      "path": "store/mac-app-store/en-us/website-launch/localmorph-mac-poster.webp",
+      "sha256": "f542c27191f041c1044248b1cd82f14679568e58fe0bb962c09411d120f4caf0",
+      "bytes": 102184
+    },
+    "captions": {
+      "path": "store/mac-app-store/en-us/website-launch/captions.vtt",
+      "sha256": "27eb62228870885a870dbd31008577868ae14038354a6ccb1623258c486d0cff",
+      "bytes": 627
+    },
+    "transcript": {
+      "path": "store/mac-app-store/en-us/website-launch/transcript.md",
+      "sha256": "7413564c8e56a52a269a9aaceb58415e83fc06d9608bdd3d9fb2f047389a4332",
+      "bytes": 1500
+    },
+    "storyboard": {
+      "path": "store/mac-app-store/en-us/website-launch/storyboard.jpg",
+      "sha256": "f4156f96d9cbc3cd0662e3517318129069025593999a23a4d5d841b348427542",
+      "bytes": 137558
+    },
+    "publication": "Held in the App Store kit; not wired into the public website and makes no availability claim."
+  },
+  "provenance": {
+    "appScreenshots": "Native captures; no added UI, device frame, or personal filesystem path.",
+    "brandMark": "Existing LocalMorph app-tile source asset in store/microsoft-store/logos/.",
+    "typeface": "Open Sans files already bundled in the application font resources.",
+    "music": "Original instrumental synthesized by this renderer; no third-party recording.",
+    "demoMedia": "Coastline demonstration photo/video origin is not recorded; owner rights clearance is required before public or App Store use."
+  }
+}
