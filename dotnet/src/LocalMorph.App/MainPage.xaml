@@ -61,7 +61,7 @@
                 <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="6">
                     <!-- Keyboard/switch-access path to selection: the icon tile is a real button with an accessible name. -->
                     <Button Grid.RowSpan="2" WidthRequest="40" HeightRequest="40" Padding="0" CornerRadius="8" VerticalOptions="Start"
-                            FontFamily="FluentIcons" FontSize="20" Text="{Binding Icon}" TextColor="{StaticResource Accent}"
+                            FontFamily="FluentIcons" FontSize="20" Text="{Binding Icon}" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}"
                             BackgroundColor="{AppThemeBinding Light={StaticResource AccentSoftLight}, Dark={StaticResource AccentSoftDark}}"
                             Command="{Binding SelectCommand}" SemanticProperties.Description="{Binding FileName, StringFormat='Select {0}'}"
                             ToolTipProperties.Text="Select this file" AutomationId="SelectFileButton" />
@@ -69,10 +69,10 @@
                     <Label Grid.Column="1" Text="{Binding FileName}" Style="{StaticResource BodyStrong}" LineBreakMode="MiddleTruncation" MaxLines="1" />
                     <HorizontalStackLayout Grid.Column="1" Grid.Row="1" Spacing="8">
                         <Border Style="{StaticResource Pill}" Padding="8,2">
-                            <Label Text="{Binding CategoryLabel}" FontSize="10.5" FontFamily="OpenSansSemibold" TextColor="{StaticResource Accent}" />
+                            <Label Text="{Binding CategoryLabel}" FontSize="10.5" FontFamily="OpenSansSemibold" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
                         </Border>
                         <Label Text="{Binding Summary}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" MaxLines="1" VerticalOptions="Center" />
-                        <Label Text="{Binding TrimSummary, StringFormat='· Trim {0}'}" Style="{StaticResource Muted}" IsVisible="{Binding HasTrim}" VerticalOptions="Center" TextColor="{StaticResource Accent}" />
+                        <Label Text="{Binding TrimSummary, StringFormat='· Trim {0}'}" Style="{StaticResource Muted}" IsVisible="{Binding HasTrim}" VerticalOptions="Center" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
                     </HorizontalStackLayout>
 
                     <!-- Row actions -->
@@ -114,7 +114,7 @@
 
         <!-- ============ Preset chip ============ -->
         <DataTemplate x:Key="PresetTemplate" x:DataType="vm:PresetOption">
-            <Border Style="{StaticResource CardAlt}" Padding="12,10" WidthRequest="168" HeightRequest="96" Margin="0,0,8,0" AutomationId="PresetCard">
+            <Border Style="{StaticResource CardAlt}" Padding="12,10" WidthRequest="{OnPlatform Default=168, MacCatalyst=184}" HeightRequest="{OnPlatform Default=96, MacCatalyst=108}" Margin="0,0,8,0" AutomationId="PresetCard">
                 <Border.Triggers>
                     <DataTrigger TargetType="Border" Binding="{Binding IsActive}" Value="True">
                         <Setter Property="Stroke" Value="{StaticResource Accent}" />
@@ -130,11 +130,11 @@
                             Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ApplyPresetCommand}" CommandParameter="{Binding .}"
                             SemanticProperties.Description="{Binding Name, StringFormat='Apply preset {0}'}" SemanticProperties.Hint="{Binding Description}" AutomationId="PresetButton" />
                 <Grid RowDefinitions="Auto,Auto,*" RowSpacing="4" InputTransparent="True" CascadeInputTransparent="True">
-                    <HorizontalStackLayout Spacing="8">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
                         <Label Style="{StaticResource IconAccent}" Text="{Binding Icon}" FontSize="18" />
-                        <Label Text="{Binding Name}" Style="{StaticResource BodyStrong}" LineBreakMode="TailTruncation" VerticalOptions="Center" />
-                    </HorizontalStackLayout>
-                    <Label Grid.Row="1" Text="{Binding FormatLabel}" Style="{StaticResource Eyebrow}" TextColor="{StaticResource Accent}" />
+                        <Label Grid.Column="1" Text="{Binding Name}" Style="{StaticResource BodyStrong}" LineBreakMode="TailTruncation" MaxLines="1" VerticalOptions="Center" />
+                    </Grid>
+                    <Label Grid.Row="1" Text="{Binding FormatLabel}" Style="{StaticResource Eyebrow}" LineBreakMode="TailTruncation" MaxLines="1" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
                     <Label Grid.Row="2" Text="{Binding Description}" Style="{StaticResource Muted}" FontSize="11" LineBreakMode="TailTruncation" MaxLines="2" />
                 </Grid>
                 </Grid>
@@ -157,7 +157,7 @@
                     <HorizontalStackLayout Spacing="8">
                         <Label Text="{Binding DisplayName}" Style="{StaticResource BodyStrong}" VerticalOptions="Center" />
                         <Border Style="{StaticResource Pill}" Padding="7,1" IsVisible="{Binding HasBadge}" VerticalOptions="Center">
-                            <Label Text="{Binding Badge}" FontSize="10" FontFamily="OpenSansSemibold" TextColor="{StaticResource Accent}" />
+                            <Label Text="{Binding Badge}" FontSize="10" FontFamily="OpenSansSemibold" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
                         </Border>
                     </HorizontalStackLayout>
                     <Label Grid.Column="1" Text="{Binding Extension}" Style="{StaticResource Muted}" FontFamily="OpenSansSemibold" VerticalOptions="Center" />
@@ -222,7 +222,7 @@
                     <HorizontalStackLayout Grid.Column="1" Spacing="8">
                         <Label Text="{Binding Name}" Style="{StaticResource SectionTitle}" />
                         <Border Style="{StaticResource Pill}" Padding="7,1" IsVisible="{Binding IsCore}" VerticalOptions="Center">
-                            <Label Text="Core" FontSize="10" FontFamily="OpenSansSemibold" TextColor="{StaticResource Accent}" />
+                            <Label Text="Core" FontSize="10" FontFamily="OpenSansSemibold" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
                         </Border>
                     </HorizontalStackLayout>
                     <Label Grid.Column="1" Grid.Row="1" Text="{Binding Purpose}" Style="{StaticResource Muted}" />
@@ -258,26 +258,32 @@
         <Grid Grid.Row="0" Padding="24,10,24,4" ColumnDefinitions="*,Auto,*" ColumnSpacing="12">
             <Border Grid.Column="1" Padding="3" StrokeThickness="1" StrokeShape="RoundRectangle 9" VerticalOptions="Center"
                     Stroke="{AppThemeBinding Light={StaticResource StrokeLight}, Dark={StaticResource StrokeDark}}"
-                    Background="{AppThemeBinding Light=#B3FFFFFF, Dark=#66161B22}">
+                    Background="{AppThemeBinding Light={StaticResource SegmentTrackLight}, Dark={StaticResource SegmentTrackDark}}">
                 <HorizontalStackLayout Spacing="2">
                     <Button Text="Convert" Command="{Binding ShowConvertCommand}" AutomationId="ConvertTab" Style="{StaticResource TabButton}">
                         <Button.Triggers>
                             <DataTrigger TargetType="Button" Binding="{Binding IsConvertView}" Value="True">
-                                <Setter Property="Style" Value="{StaticResource TabButtonActive}" />
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SegmentActiveLight}, Dark={StaticResource SegmentActiveDark}}" />
+                                <Setter Property="Shadow" Value="{StaticResource SegmentShadow}" />
                             </DataTrigger>
                         </Button.Triggers>
                     </Button>
                     <Button Text="History" Command="{Binding ShowHistoryCommand}" AutomationId="HistoryTab" Style="{StaticResource TabButton}">
                         <Button.Triggers>
                             <DataTrigger TargetType="Button" Binding="{Binding IsHistoryView}" Value="True">
-                                <Setter Property="Style" Value="{StaticResource TabButtonActive}" />
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SegmentActiveLight}, Dark={StaticResource SegmentActiveDark}}" />
+                                <Setter Property="Shadow" Value="{StaticResource SegmentShadow}" />
                             </DataTrigger>
                         </Button.Triggers>
                     </Button>
                     <Button Text="Tools" Command="{Binding ShowToolsCommand}" AutomationId="ToolsTab" Style="{StaticResource TabButton}">
                         <Button.Triggers>
                             <DataTrigger TargetType="Button" Binding="{Binding IsToolsView}" Value="True">
-                                <Setter Property="Style" Value="{StaticResource TabButtonActive}" />
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SegmentActiveLight}, Dark={StaticResource SegmentActiveDark}}" />
+                                <Setter Property="Shadow" Value="{StaticResource SegmentShadow}" />
                             </DataTrigger>
                         </Button.Triggers>
                     </Button>
@@ -344,11 +350,11 @@
                             <Label Text="Drop files here" Style="{StaticResource Title}" HorizontalTextAlignment="Center" />
                             <Label Text="or click to browse. Add up to 2,000 files per import; they'll convert in parallel." Style="{StaticResource Muted}" HorizontalTextAlignment="Center" />
                             <FlexLayout Wrap="Wrap" JustifyContent="Center" Margin="0,10,0,0">
-                                <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Video · MP4, MKV, MOV, WebM, AVI" FontSize="11" TextColor="{StaticResource Accent}" FontFamily="OpenSansSemibold" /></Border>
-                                <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Audio · MP3, FLAC, WAV, M4A, Opus" FontSize="11" TextColor="{StaticResource Accent}" FontFamily="OpenSansSemibold" /></Border>
-                                <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Images · PNG, JPEG, WebP, HEIC, AVIF" FontSize="11" TextColor="{StaticResource Accent}" FontFamily="OpenSansSemibold" /></Border>
-                                <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Documents · PDF, DOCX, XLSX, PPTX, MD" FontSize="11" TextColor="{StaticResource Accent}" FontFamily="OpenSansSemibold" /></Border>
-                                <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Subtitles · SRT, VTT, ASS" FontSize="11" TextColor="{StaticResource Accent}" FontFamily="OpenSansSemibold" /></Border>
+                                <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Video · MP4, MKV, MOV, WebM, AVI" FontSize="11" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" FontFamily="OpenSansSemibold" /></Border>
+                                <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Audio · MP3, FLAC, WAV, M4A, Opus" FontSize="11" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" FontFamily="OpenSansSemibold" /></Border>
+                                <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Images · PNG, JPEG, WebP, HEIC, AVIF" FontSize="11" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" FontFamily="OpenSansSemibold" /></Border>
+                                <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Documents · PDF, DOCX, XLSX, PPTX, MD" FontSize="11" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" FontFamily="OpenSansSemibold" /></Border>
+                                <Border Style="{StaticResource Pill}" Margin="3"><Label Text="Subtitles · SRT, VTT, ASS" FontSize="11" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" FontFamily="OpenSansSemibold" /></Border>
                             </FlexLayout>
                         </VerticalStackLayout>
                     </Border>
@@ -358,7 +364,7 @@
                                     SelectionMode="None" AutomationId="FileList" />
 
                     <!-- Drop hint when list has items -->
-                    <Border Grid.Row="1" Padding="12" StrokeThickness="1" StrokeDashArray="5,4" StrokeShape="RoundRectangle 10"
+                    <Border Grid.Row="1" Padding="12" StrokeThickness="1" StrokeDashArray="5,4" StrokeShape="RoundRectangle 10" IsVisible="{Binding ShowImportStatus}"
                             Stroke="{AppThemeBinding Light=#C7D2E2, Dark=#334054}" Background="Transparent">
                         <Border.Triggers>
                             <DataTrigger TargetType="Border" Binding="{Binding IsDragOver}" Value="True">
@@ -411,7 +417,7 @@
                                         <Label Style="{StaticResource IconAccent}" Text="{x:Static local:Icons.Cut}" FontSize="16" />
                                         <Label Text="Trim" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
                                         <Label Text="{Binding TrimSummary}" Style="{StaticResource Muted}" VerticalOptions="Center" />
-                                        <Label x:Name="PositionLabel" Text="" Style="{StaticResource Muted}" VerticalOptions="Center" TextColor="{StaticResource Accent}" />
+                                        <Label x:Name="PositionLabel" Text="" Style="{StaticResource Muted}" VerticalOptions="Center" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
                                     </HorizontalStackLayout>
                                     <Button Grid.Column="1" Style="{StaticResource GhostButton}" Text="Reset" Command="{Binding ResetTrimCommand}" IsVisible="{Binding HasTrim}" />
                                 </Grid>
@@ -531,7 +537,7 @@
                                 <Picker Style="{StaticResource Select}" ItemsSource="{Binding SplitModeOptions}" SelectedItem="{Binding SelectedSplitMode}" AutomationId="SplitModePicker" SemanticProperties.Description="Split accuracy mode" />
                                 <Label Text="Fast mode requires a Remux / stream-copy format. Boundaries move to the next source keyframe and may be farther apart than requested." Style="{StaticResource Muted}" />
                             </VerticalStackLayout>
-                            <Label Text="{Binding PreflightSummary}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" AutomationId="PreflightSummary" />
+                            <Label Text="{Binding PreflightSummary}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" AutomationId="PreflightSummary" IsVisible="{Binding HasFiles}" />
                         </VerticalStackLayout>
                     </Border>
 
@@ -542,7 +548,7 @@
                                 <Label Style="{StaticResource IconAccent}" Text="{x:Static local:Icons.Sparkle}" FontSize="16" />
                                 <Label Text="Quick presets" Style="{StaticResource SectionTitle}" VerticalOptions="Center" />
                             </HorizontalStackLayout>
-                            <CollectionView ItemsSource="{Binding PresetOptions}" ItemTemplate="{StaticResource PresetTemplate}" HeightRequest="100" SelectionMode="None" AutomationId="PresetList">
+                            <CollectionView ItemsSource="{Binding PresetOptions}" ItemTemplate="{StaticResource PresetTemplate}" HeightRequest="{OnPlatform Default=100, MacCatalyst=112}" SelectionMode="None" AutomationId="PresetList">
                                 <CollectionView.ItemsLayout>
                                     <LinearItemsLayout Orientation="Horizontal" />
                                 </CollectionView.ItemsLayout>
@@ -562,7 +568,7 @@
                                     <HorizontalStackLayout Spacing="8">
                                         <Label Text="{Binding DisplayName}" Style="{StaticResource SectionTitle}" AutomationId="SelectedFormatName" />
                                         <Border Style="{StaticResource Pill}" Padding="7,1" IsVisible="{Binding HasBadge}" VerticalOptions="Center">
-                                            <Label Text="{Binding Badge}" FontSize="10" FontFamily="OpenSansSemibold" TextColor="{StaticResource Accent}" />
+                                            <Label Text="{Binding Badge}" FontSize="10" FontFamily="OpenSansSemibold" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
                                         </Border>
                                     </HorizontalStackLayout>
                                     <Label Grid.Column="1" Text="{Binding Extension}" Style="{StaticResource Muted}" FontFamily="OpenSansSemibold" VerticalOptions="Center" />
@@ -571,7 +577,7 @@
                                     <Label Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding EngineLabel}" Style="{StaticResource Muted}" TextColor="{StaticResource Danger}" IsVisible="{Binding IsAvailable, Converter={StaticResource Not}}" Margin="0,18,0,0" />
                                 </Grid>
                             </Border>
-                            <Label Text="{Binding ApplicabilityLabel}" Style="{StaticResource Muted}" TextColor="{StaticResource Accent}" IsVisible="{Binding ApplicabilityLabel, Converter={StaticResource HasText}}" AutomationId="ApplicabilityLabel" />
+                            <Label Text="{Binding ApplicabilityLabel}" Style="{StaticResource Muted}" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" IsVisible="{Binding ApplicabilityLabel, Converter={StaticResource HasText}}" AutomationId="ApplicabilityLabel" />
 
                         </VerticalStackLayout>
                     </Border>
@@ -604,7 +610,7 @@
                             <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowQuality}">
                                 <Grid ColumnDefinitions="*,Auto">
                                     <Label Text="Quality" Style="{StaticResource FieldLabel}" />
-                                    <Label Grid.Column="1" Text="{Binding QualityLabel}" Style="{StaticResource Muted}" TextColor="{StaticResource Accent}" />
+                                    <Label Grid.Column="1" Text="{Binding QualityLabel}" Style="{StaticResource Muted}" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
                                 </Grid>
                                 <Slider Style="{StaticResource AccentSlider}" Minimum="1" Maximum="100" Value="{Binding Quality}" AutomationId="QualitySlider" />
                             </VerticalStackLayout>
@@ -862,7 +868,7 @@
                     <Border IsVisible="{Binding HasDecoderHint}" Padding="12" StrokeThickness="1" StrokeShape="RoundRectangle 8"
                             Stroke="{StaticResource Accent}" Background="{AppThemeBinding Light={StaticResource AccentSoftLight}, Dark={StaticResource AccentSoftDark}}" AutomationId="DecoderHint">
                         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                            <Label Style="{StaticResource Icon}" Text="{x:Static local:Icons.Image}" FontSize="16" TextColor="{StaticResource Accent}" VerticalOptions="Center" />
+                            <Label Style="{StaticResource Icon}" Text="{x:Static local:Icons.Image}" FontSize="16" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" VerticalOptions="Center" />
                             <Label Grid.Column="1" Text="{Binding DecoderHint}" Style="{StaticResource Body}" LineBreakMode="WordWrap" VerticalOptions="Center" />
                             <Button Grid.Column="2" Style="{StaticResource PrimaryButton}" HeightRequest="34" FontSize="12" Text="{Binding DecoderHintAction}" Command="{Binding ResolveDecoderHintCommand}" VerticalOptions="Center" AutomationId="DecoderHintButton" />
                         </Grid>
@@ -1027,7 +1033,7 @@
                 <Label Text="{Binding EngineDetail}" Style="{StaticResource Muted}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
             </HorizontalStackLayout>
             <Border Grid.Column="3" Style="{StaticResource Pill}" Padding="12,6" IsVisible="{Binding Toast, Converter={StaticResource HasText}}" AutomationId="Toast">
-                <Label Text="{Binding Toast}" FontSize="12" FontFamily="OpenSansSemibold" TextColor="{StaticResource Accent}" />
+                <Label Text="{Binding Toast}" FontSize="12" FontFamily="OpenSansSemibold" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
             </Border>
         </Grid>
     </Grid>

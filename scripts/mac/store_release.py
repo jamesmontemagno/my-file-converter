@@ -199,7 +199,8 @@ def validate_media(media):
     require(checked == {"ffmpeg", "ffprobe"}, "Both raw media hashes are required.")
     flags = (media / "configure-flags.txt").read_text().splitlines()
     require(all(flag in flags for flag in ("--disable-gpl", "--disable-nonfree", "--disable-autodetect",
-                                         "--disable-network", "--enable-videotoolbox")), "Unexpected media build configuration.")
+                                         "--disable-network", "--enable-videotoolbox", "--enable-zlib")),
+            "Unexpected media build configuration.")
     for name in ("ffmpeg", "ffprobe"):
         tool = media / "bin" / name
         require(tool.is_file() and not tool.is_symlink() and os.access(tool, os.X_OK), "Missing regular media executable.")

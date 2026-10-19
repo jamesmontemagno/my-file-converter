@@ -41,6 +41,21 @@ public static class MauiProgram
 #endif
 
 #if MACCATALYST
+		builder.Services.AddSingleton<IFontManager>(services => new Platforms.MacCatalyst.MacFontManager(services.GetRequiredService<IFontRegistrar>(), services));
+		// iPad-idiom pickers render as bare text fields; a trailing chevron makes them read as menus.
+		Microsoft.Maui.Handlers.PickerHandler.Mapper.AppendToMapping("LocalMorphChevron", (handler, _) =>
+		{
+			var chevron = new UIKit.UIImageView(UIKit.UIImage.GetSystemImage("chevron.up.chevron.down",
+				UIKit.UIImageSymbolConfiguration.Create(UIKit.UIFont.SystemFontOfSize(11, UIKit.UIFontWeight.Semibold))))
+			{
+				TintColor = UIKit.UIColor.SecondaryLabel,
+				ContentMode = UIKit.UIViewContentMode.Center,
+				Frame = new CoreGraphics.CGRect(0, 0, 28, 20)
+			};
+			handler.PlatformView.RightView = chevron;
+			handler.PlatformView.RightViewMode = UIKit.UITextFieldViewMode.Always;
+		});
+
 		// Finder "Open with" / double-click: files arrive as URL contexts on the scene, either at
 		// connect time (cold start) or later while the app is running.
 		builder.ConfigureLifecycleEvents(events => events.AddiOS(ios => ios

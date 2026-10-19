@@ -125,6 +125,17 @@ public sealed class FormatCatalogTests
     }
 
     [Fact]
+    public void Png_and_ico_need_the_png_encoder()
+    {
+        // Minimal bundles built without zlib have no png encoder; don't offer PNG/ICO there.
+        var noPng = new FfmpegCapabilities(new HashSet<string> { "mjpeg", "aac" }, new HashSet<string>(), [], null);
+        Assert.Null(FormatCatalog.ResolveEngine(TestData.Format("png"), "/a.jpg", TestData.Tools(noPng)));
+        Assert.Null(FormatCatalog.ResolveEngine(TestData.Format("ico"), "/a.jpg", TestData.Tools(noPng)));
+        var withPng = new FfmpegCapabilities(new HashSet<string> { "mjpeg", "png", "aac" }, new HashSet<string>(), [], null);
+        Assert.Equal(EngineKind.Ffmpeg, FormatCatalog.ResolveEngine(TestData.Format("png"), "/a.jpg", TestData.Tools(withPng)));
+    }
+
+    [Fact]
     public void Compiled_but_broken_hardware_encoder_does_not_make_format_available()
     {
         // h264_nvenc is compiled in but failed its test encode (not in WorkingHardwareEncoders) and there is no libx264.

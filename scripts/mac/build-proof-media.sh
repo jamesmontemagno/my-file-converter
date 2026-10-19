@@ -47,6 +47,7 @@ FLAGS=(
   --disable-x86asm
   --enable-videotoolbox
   --enable-audiotoolbox
+  --enable-zlib
   --extra-cflags="-arch $ARCH -mmacosx-version-min=15.0"
   --extra-ldflags="-arch $ARCH -mmacosx-version-min=15.0"
 )
