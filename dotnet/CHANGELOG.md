@@ -5,6 +5,16 @@ desktop installers are not distributed through GitHub Releases.
 
 ## Unreleased
 
+### Added
+- Mac: macOS built-in converters (ImageIO, Core Graphics, UIKit text) replace the optional
+  ImageMagick/LibreOffice/Pandoc/Ghostscript engines that the sandbox cannot run. Images
+  (incl. HEIC, RAW, PSD) convert to PNG/JPEG/TIFF/HEIC/AVIF/GIF/BMP/ICO/PDF; PDFs render their
+  first page to an image; Markdown/HTML/RTF/TXT convert to PDF/RTF/HTML/TXT (Markdown via
+  Markdig, BSD-2). The Tools page lists them as built in. Windows behavior is unchanged.
+
+### Fixed
+- Gridded HEIC photos showed the 512×512 tile size; Mac now reads the real image size natively.
+
 ### Changed
 - Added a protected Mac Store beta pipeline with package-only, read-only diagnostics and
   approved TestFlight delivery using the existing Apple secrets. Release bundles contain

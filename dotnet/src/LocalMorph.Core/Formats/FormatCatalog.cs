@@ -1,4 +1,5 @@
 using LocalMorph.Core.Imaging;
+using LocalMorph.Core.Native;
 using LocalMorph.Core.Tools;
 
 namespace LocalMorph.Core.Formats;
@@ -11,7 +12,9 @@ public enum EngineKind
     Pandoc,
     Ghostscript,
     /// <summary>In-process Windows Imaging Component decode (HEIC/HEIF via the Store HEIF Image Extensions codec).</summary>
-    WindowsImaging
+    WindowsImaging,
+    /// <summary>In-process macOS frameworks: ImageIO photos, Core Graphics PDF pages, and UIKit text documents.</summary>
+    AppleNative
 }
 
 [Flags]
@@ -153,31 +156,31 @@ public static class FormatCatalog
 
         // ---- Image ----
         new("png", "PNG", "png", "Lossless with transparency.", MediaCategory.Image, FromVideoOrImage,
-            ImageCommon, [EngineKind.Ffmpeg, EngineKind.ImageMagick], "png", Badge: "Lossless", RequiredEncoders: ["png"]),
+            ImageCommon, [EngineKind.Ffmpeg, EngineKind.ImageMagick, EngineKind.AppleNative], "png", Badge: "Lossless", RequiredEncoders: ["png"]),
         new("jpg", "JPEG", "jpg", "Small photos, no transparency.", MediaCategory.Image, FromVideoOrImage,
-            ImageCommon, [EngineKind.Ffmpeg, EngineKind.ImageMagick], "mjpeg", Badge: "Popular"),
+            ImageCommon, [EngineKind.Ffmpeg, EngineKind.ImageMagick, EngineKind.AppleNative], "mjpeg", Badge: "Popular"),
         new("webp", "WebP", "webp", "Modern web images, 25–35% smaller than JPEG.", MediaCategory.Image, FromVideoOrImage,
             ImageCommon | FormatFeatures.Lossless, [EngineKind.Ffmpeg, EngineKind.ImageMagick], "libwebp", RequiredEncoders: ["libwebp"]),
         new("avif", "AVIF", "avif", "Next-gen image format with excellent compression.", MediaCategory.Image, FromVideoOrImage,
-            ImageCommon | FormatFeatures.Lossless, [EngineKind.Ffmpeg, EngineKind.ImageMagick], "libaom-av1", RequiredEncoders: ["libaom-av1"]),
+            ImageCommon | FormatFeatures.Lossless, [EngineKind.Ffmpeg, EngineKind.ImageMagick, EngineKind.AppleNative], "libaom-av1", RequiredEncoders: ["libaom-av1"]),
         new("jxl", "JPEG XL", "jxl", "High quality, supports lossless JPEG recompression.", MediaCategory.Image, FromVideoOrImage,
             ImageCommon | FormatFeatures.Lossless, [EngineKind.Ffmpeg, EngineKind.ImageMagick], "libjxl", RequiredEncoders: ["libjxl"]),
         new("gif-still", "GIF (still)", "gif", "256-color single frame.", MediaCategory.Image, FromImage,
-            FormatFeatures.Resolution | FormatFeatures.Rotate, [EngineKind.Ffmpeg, EngineKind.ImageMagick], "gif"),
+            FormatFeatures.Resolution | FormatFeatures.Rotate, [EngineKind.Ffmpeg, EngineKind.ImageMagick, EngineKind.AppleNative], "gif"),
         new("bmp", "BMP", "bmp", "Uncompressed Windows bitmap.", MediaCategory.Image, FromVideoOrImage,
-            FormatFeatures.Resolution | FormatFeatures.Rotate | FormatFeatures.FrameExtract, [EngineKind.Ffmpeg, EngineKind.ImageMagick], "bmp"),
+            FormatFeatures.Resolution | FormatFeatures.Rotate | FormatFeatures.FrameExtract, [EngineKind.Ffmpeg, EngineKind.ImageMagick, EngineKind.AppleNative], "bmp"),
         new("tiff", "TIFF", "tiff", "Print and archival quality.", MediaCategory.Image, FromVideoOrImage,
-            FormatFeatures.Resolution | FormatFeatures.Rotate | FormatFeatures.FrameExtract, [EngineKind.Ffmpeg, EngineKind.ImageMagick], "tiff", Badge: "Lossless"),
+            FormatFeatures.Resolution | FormatFeatures.Rotate | FormatFeatures.FrameExtract, [EngineKind.Ffmpeg, EngineKind.ImageMagick, EngineKind.AppleNative], "tiff", Badge: "Lossless"),
         new("ico", "ICO (Windows icon)", "ico", "Multi-size icon for apps and favicons.", MediaCategory.Image, FromImage,
-            FormatFeatures.None, [EngineKind.ImageMagick, EngineKind.Ffmpeg], "bmp", RequiredEncoders: ["png"]),
+            FormatFeatures.None, [EngineKind.ImageMagick, EngineKind.Ffmpeg, EngineKind.AppleNative], "bmp", RequiredEncoders: ["png"]),
         new("heic", "HEIC", "heic", "Apple's high-efficiency photo format.", MediaCategory.Image, FromImage,
-            FormatFeatures.Quality | FormatFeatures.Resolution | FormatFeatures.Rotate, [EngineKind.ImageMagick]),
+            FormatFeatures.Quality | FormatFeatures.Resolution | FormatFeatures.Rotate, [EngineKind.ImageMagick, EngineKind.AppleNative]),
         new("contact-sheet", "Contact sheet", "jpg", "A 4×4 grid of thumbnails spread across the whole clip.", MediaCategory.Image, FromVideo,
             FormatFeatures.Quality | FormatFeatures.Trim, [EngineKind.Ffmpeg], "mjpeg", RequiredEncoders: ["mjpeg"]),
         new("waveform", "Waveform image", "png", "A picture of the soundtrack for thumbnails, podcasts, and edits.", MediaCategory.Image, FromVideoOrAudio,
             FormatFeatures.Trim | FormatFeatures.AudioTracks, [EngineKind.Ffmpeg], "png", RequiredEncoders: ["png"]),
         new("pdf-image", "PDF (from image)", "pdf", "Wrap an image into a single-page PDF.", MediaCategory.Document, FromImage,
-            FormatFeatures.Quality | FormatFeatures.Resolution, [EngineKind.ImageMagick]),
+            FormatFeatures.Quality | FormatFeatures.Resolution, [EngineKind.ImageMagick, EngineKind.AppleNative]),
 
         // ---- Subtitles (FFmpeg's text subtitle encoders are built into every build) ----
         new("subtitles-srt", "SubRip (SRT)", "srt", "Plain-text subtitles every player and editor understands.", MediaCategory.Subtitle, FromVideoOrSubtitle,
@@ -190,7 +193,7 @@ public static class FormatCatalog
         // ---- Documents ----
         // Pandoc needs an external PDF engine (wkhtmltopdf/LaTeX) that we do not manage, so PDF is LibreOffice-only.
         new("pdf", "PDF", "pdf", "Fixed layout for sharing and printing.", MediaCategory.Document, FromDocument,
-            FormatFeatures.None, [EngineKind.LibreOffice], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Spreadsheet, DocumentFlavor.Presentation, DocumentFlavor.Markup], Badge: "Popular"),
+            FormatFeatures.None, [EngineKind.LibreOffice, EngineKind.AppleNative], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Spreadsheet, DocumentFlavor.Presentation, DocumentFlavor.Markup], Badge: "Popular"),
         new("pdf-compress", "PDF · Compressed", "pdf", "Shrink a PDF by downsampling images.", MediaCategory.Document, FromDocument,
             FormatFeatures.Quality, [EngineKind.Ghostscript], AcceptsDocumentFlavors: [DocumentFlavor.Pdf]),
         new("docx", "Word (DOCX)", "docx", "Editable Microsoft Word document.", MediaCategory.Document, FromDocument,
@@ -198,15 +201,15 @@ public static class FormatCatalog
         new("odt", "OpenDocument Text (ODT)", "odt", "Open standard word processing file.", MediaCategory.Document, FromDocument,
             FormatFeatures.None, [EngineKind.LibreOffice, EngineKind.Pandoc], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Markup]),
         new("rtf", "Rich Text (RTF)", "rtf", "Widely compatible formatted text.", MediaCategory.Document, FromDocument,
-            FormatFeatures.None, [EngineKind.LibreOffice, EngineKind.Pandoc], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Markup]),
+            FormatFeatures.None, [EngineKind.LibreOffice, EngineKind.Pandoc, EngineKind.AppleNative], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Markup]),
         new("html", "HTML", "html", "Web page.", MediaCategory.Document, FromDocument,
-            FormatFeatures.None, [EngineKind.Pandoc, EngineKind.LibreOffice], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Markup, DocumentFlavor.Spreadsheet]),
+            FormatFeatures.None, [EngineKind.Pandoc, EngineKind.LibreOffice, EngineKind.AppleNative], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Markup, DocumentFlavor.Spreadsheet]),
         new("md", "Markdown", "md", "Plain text with lightweight formatting.", MediaCategory.Document, FromDocument,
             FormatFeatures.None, [EngineKind.Pandoc], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Markup]),
         new("epub", "EPUB", "epub", "E-book for readers and tablets.", MediaCategory.Document, FromDocument,
             FormatFeatures.None, [EngineKind.Pandoc, EngineKind.LibreOffice], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Markup]),
         new("txt", "Plain text", "txt", "Just the words.", MediaCategory.Document, FromDocument,
-            FormatFeatures.None, [EngineKind.LibreOffice, EngineKind.Pandoc], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Markup]),
+            FormatFeatures.None, [EngineKind.LibreOffice, EngineKind.Pandoc, EngineKind.AppleNative], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Markup]),
         new("xlsx", "Excel (XLSX)", "xlsx", "Editable Microsoft Excel workbook.", MediaCategory.Document, FromDocument,
             FormatFeatures.None, [EngineKind.LibreOffice], AcceptsDocumentFlavors: [DocumentFlavor.Spreadsheet]),
         new("ods", "OpenDocument Spreadsheet (ODS)", "ods", "Open standard spreadsheet.", MediaCategory.Document, FromDocument,
@@ -218,9 +221,9 @@ public static class FormatCatalog
         new("odp", "OpenDocument Presentation (ODP)", "odp", "Open standard presentation.", MediaCategory.Document, FromDocument,
             FormatFeatures.None, [EngineKind.LibreOffice], AcceptsDocumentFlavors: [DocumentFlavor.Presentation]),
         new("doc-png", "PNG (first page)", "png", "Render the first page as an image.", MediaCategory.Image, FromDocument,
-            FormatFeatures.Resolution, [EngineKind.LibreOffice, EngineKind.ImageMagick, EngineKind.Ghostscript], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Spreadsheet, DocumentFlavor.Presentation, DocumentFlavor.Pdf]),
+            FormatFeatures.Resolution, [EngineKind.LibreOffice, EngineKind.ImageMagick, EngineKind.Ghostscript, EngineKind.AppleNative], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Spreadsheet, DocumentFlavor.Presentation, DocumentFlavor.Pdf]),
         new("doc-jpg", "JPEG (first page)", "jpg", "Render the first page as a photo-style image.", MediaCategory.Image, FromDocument,
-            FormatFeatures.Quality | FormatFeatures.Resolution, [EngineKind.LibreOffice, EngineKind.ImageMagick, EngineKind.Ghostscript], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Spreadsheet, DocumentFlavor.Presentation, DocumentFlavor.Pdf])
+            FormatFeatures.Quality | FormatFeatures.Resolution, [EngineKind.LibreOffice, EngineKind.ImageMagick, EngineKind.Ghostscript, EngineKind.AppleNative], AcceptsDocumentFlavors: [DocumentFlavor.Text, DocumentFlavor.Spreadsheet, DocumentFlavor.Presentation, DocumentFlavor.Pdf])
     ];
 
     public static OutputFormat? Find(string id) => All.FirstOrDefault(format => format.Id == id);
@@ -249,6 +252,9 @@ public static class FormatCatalog
         // faster than ImageMagick and far more reliable than FFmpeg's HEIF demuxer.
         if (CanUseWindowsImaging(format, sourcePath, tools)) return EngineKind.WindowsImaging;
 
+        // On Mac, ImageIO reads HEIC, RAW, PSD, WebP, and AVIF and keeps color profiles, so still photos prefer it.
+        if (sourceCategory == MediaCategory.Image && CanUseAppleNative(format, sourcePath, tools)) return EngineKind.AppleNative;
+
         // Image inputs FFmpeg cannot decode go to ImageMagick first if it exists.
         var ordered = format.Engines.AsEnumerable();
         if (sourceCategory == MediaCategory.Image && SourceClassifier.ImageMagickPreferredInputs.Contains(extension) && format.Engines.Contains(EngineKind.ImageMagick))
@@ -269,7 +275,7 @@ public static class FormatCatalog
 
         foreach (var engine in ordered)
         {
-            if (EngineAvailable(engine, format, tools)) return engine;
+            if (engine == EngineKind.AppleNative ? CanUseAppleNative(format, sourcePath, tools) : EngineAvailable(engine, format, tools)) return engine;
         }
 
         return null;
@@ -283,6 +289,7 @@ public static class FormatCatalog
         EngineKind.Pandoc => tools.Has(ToolKind.Pandoc),
         EngineKind.Ghostscript => tools.Has(ToolKind.Ghostscript),
         EngineKind.WindowsImaging => tools.Has(ToolKind.WindowsHeif),
+        EngineKind.AppleNative => tools.Has(ToolKind.AppleNative) && NativeConverter.Current?.WritableFormats.Contains(format.Id) == true,
         _ => false
     };
 
@@ -292,13 +299,18 @@ public static class FormatCatalog
         PlatformImageCodec.EncodableFormats.Contains(format.Id) &&
         tools.Has(ToolKind.WindowsHeif);
 
+    /// <summary>True when the Mac's built-in frameworks can read this source and write <paramref name="format"/>.</summary>
+    public static bool CanUseAppleNative(OutputFormat format, string sourcePath, ToolInventory tools) =>
+        tools.Has(ToolKind.AppleNative) && NativeConverter.CanConvert(NativeConverter.Current, sourcePath, format);
+
     /// <summary>
     /// Decoders the user could install to read this source reliably. HEIC/HEIF on Windows wants the Store HEIF codec
     /// (or ImageMagick); FFmpeg is only a best-effort fallback for those files.
     /// </summary>
     public static IEnumerable<ToolKind> MissingDecodersFor(string sourcePath, ToolInventory tools)
     {
-        if (!PlatformImageCodec.IsHeif(sourcePath) || tools.Has(ToolKind.ImageMagick) || tools.Has(ToolKind.WindowsHeif)) yield break;
+        if (!PlatformImageCodec.IsHeif(sourcePath) || tools.Has(ToolKind.ImageMagick) || tools.Has(ToolKind.WindowsHeif) ||
+            tools.Has(ToolKind.AppleNative)) yield break;
         yield return OperatingSystem.IsWindows() ? ToolKind.WindowsHeif : ToolKind.ImageMagick;
     }
 
@@ -314,7 +326,8 @@ public static class FormatCatalog
 
     /// <summary>Tools the user could install to unlock this format.</summary>
     public static IEnumerable<ToolKind> MissingToolsFor(OutputFormat format, ToolInventory tools) =>
-        format.Engines.Where(engine => !EngineAvailable(engine, format, tools)).Select(ToToolKind).Distinct();
+        format.Engines.Where(engine => !EngineAvailable(engine, format, tools)).Select(ToToolKind).Distinct()
+            .Where(kind => ToolCatalog.All.Any(descriptor => descriptor.Kind == kind && !descriptor.IsSystemFramework));
 
     public static ToolKind ToToolKind(EngineKind engine) => engine switch
     {
@@ -324,6 +337,7 @@ public static class FormatCatalog
         EngineKind.Pandoc => ToolKind.Pandoc,
         EngineKind.Ghostscript => ToolKind.Ghostscript,
         EngineKind.WindowsImaging => ToolKind.WindowsHeif,
+        EngineKind.AppleNative => ToolKind.AppleNative,
         _ => ToolKind.Ffmpeg
     };
 }

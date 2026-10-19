@@ -1,3 +1,4 @@
+using LocalMorph.Core.Native;
 using LocalMorph.Bridge;
 using LocalMorph.Core.Formats;
 using LocalMorph.Core.Tools;
@@ -77,6 +78,23 @@ public static class SourceInspector
             }
             catch (OperationCanceledException) { throw; }
             catch { media = null; }
+        }
+
+        // FFprobe reports only the first tile of gridded HEIC/AVIF photos (often 512x512) and cannot read RAW or PSD;
+        // the OS image decoder knows the real, orientation-corrected size.
+        if (category == MediaCategory.Image && tools.Has(ToolKind.AppleNative) && NativeConverter.Current is { } native &&
+            native.ReadableImageExtensions.Contains(Path.GetExtension(path).ToLowerInvariant()))
+        {
+            try
+            {
+                if (native.ReadImageSize(path) is var (width, height))
+                {
+                    media = media is null
+                        ? new SourceMediaInfo(SourceMediaKind.Image, null, width, height, null, null, null, null, null, null, null)
+                        : media with { Width = width, Height = height };
+                }
+            }
+            catch { }
         }
 
         // Let ffprobe reclassify unknown extensions it understands.

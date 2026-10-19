@@ -84,7 +84,8 @@ public static class EngineRegistry
         [EngineKind.LibreOffice] = new LibreOfficeEngine(),
         [EngineKind.Pandoc] = new PandocEngine(),
         [EngineKind.Ghostscript] = new GhostscriptEngine(),
-        [EngineKind.WindowsImaging] = new WindowsImagingEngine()
+        [EngineKind.WindowsImaging] = new WindowsImagingEngine(),
+        [EngineKind.AppleNative] = new AppleNativeEngine()
     };
 
     public static IConversionEngine Get(EngineKind kind) => Engines[kind];

@@ -75,15 +75,17 @@ public sealed partial class ToolItemViewModel : ObservableObject
     public string Purpose => Descriptor.Purpose;
     public bool IsCore => Descriptor.IsCore;
     public bool IsStoreCodec => Descriptor.IsStoreCodec;
+    public bool IsSystemFramework => Descriptor.IsSystemFramework;
     public string InstallCommand => ToolCatalog.InstallCommand(Kind);
     /// <summary>Mono text under a missing tool: the package-manager command, or where the codec comes from.</summary>
-    public string InstallHint => Distribution.IsMacStoreBuild ? Distribution.BundledToolRepair
+    public string InstallHint => IsSystemFramework ? "Built into macOS; update macOS if this is unavailable."
+        : Distribution.IsMacStoreBuild ? Distribution.BundledToolRepair
         : IsStoreCodec ? "Free from the Microsoft Store" : InstallCommand;
     public string InstallActionLabel => IsStoreCodec ? "Get from Store" : OperatingSystem.IsWindows() ? "Install with WinGet" : "Install";
     public string WebsiteUrl => Descriptor.WebsiteUrl;
-    public bool CanLaunchInstaller => PlatformActions.CanLaunchInstaller;
-    public bool CanCopyCommand => !Distribution.IsMacStoreBuild && !IsStoreCodec;
-    public bool CanOpenWebsite => !Distribution.IsMacStoreBuild;
+    public bool CanLaunchInstaller => PlatformActions.CanLaunchInstaller && !IsSystemFramework;
+    public bool CanCopyCommand => !Distribution.IsMacStoreBuild && !IsStoreCodec && !IsSystemFramework;
+    public bool CanOpenWebsite => !Distribution.IsMacStoreBuild && !IsSystemFramework;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusIcon))]
@@ -106,9 +108,10 @@ public sealed partial class ToolItemViewModel : ObservableObject
     public partial string? Extra { get; set; }
 
     public bool IsMissing => !IsInstalled;
-    public bool CanRevealPath => !Distribution.IsMacStoreBuild && IsInstalled && !IsStoreCodec;
+    public bool CanRevealPath => !Distribution.IsMacStoreBuild && IsInstalled && !IsStoreCodec && !IsSystemFramework;
     public string StatusIcon => IsInstalled ? Icons.CheckCircle : Icons.Download;
-    public string StatusText => IsInstalled ? $"{(Distribution.IsMacStoreBuild ? "Bundled" : "Installed")} · {Version}"
+    public string StatusText => IsInstalled ? $"{(IsSystemFramework ? "Built in" : Distribution.IsMacStoreBuild ? "Bundled" : "Installed")} · {Version}"
+        : IsSystemFramework ? "Unavailable on this Mac"
         : Distribution.IsMacStoreBuild ? "Bundled tool missing · repair required"
         : IsCore ? "Required · not found" : "Optional · not installed";
 
@@ -123,7 +126,7 @@ public sealed partial class ToolItemViewModel : ObservableObject
             ToolSource.Bundled => "Bundled with LocalMorph",
             ToolSource.Path => "Found on PATH",
             ToolSource.KnownLocation => "Found in a known install location",
-            ToolSource.System => "Provided by Windows",
+            ToolSource.System => OperatingSystem.IsWindows() ? "Provided by Windows" : "Provided by macOS",
             _ => null
         };
     }

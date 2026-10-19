@@ -138,6 +138,11 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 	</ItemGroup>
 
+	<!-- Markdown → HTML for the built-in macOS document converter (BSD-2-Clause, fully managed). -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+		<PackageReference Include="Markdig" Version="0.45.0" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<ProjectReference Include="..\LocalMorph.Core\LocalMorph.Core.csproj" />
 	</ItemGroup>
