@@ -49,6 +49,25 @@ public static class PlatformActions
         }
     }
 
+    /// <summary>Reveals a file inside the app's own data folder, which needs no user-granted access.</summary>
+    public static async Task<bool> RevealOwnFileAsync(string path)
+    {
+        if (!Distribution.IsMacStoreBuild) return RevealInFolder(path);
+#if MACCATALYST
+        try
+        {
+            var folder = Path.GetDirectoryName(path);
+            if (folder is null) return false;
+            using var url = Foundation.NSUrl.FromFilename(folder);
+            return await UIKit.UIApplication.SharedApplication.OpenUrlAsync(url, new UIKit.UIApplicationOpenUrlOptions());
+        }
+        catch (Exception) { return false; }
+#else
+        await Task.CompletedTask;
+        return false;
+#endif
+    }
+
     public static async Task<bool> RevealInFolderAsync(string path)
     {
         if (!Distribution.IsMacStoreBuild) return (File.Exists(path) || Directory.Exists(path)) && RevealInFolder(path);

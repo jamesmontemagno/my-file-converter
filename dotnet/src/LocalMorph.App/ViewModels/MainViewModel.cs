@@ -802,6 +802,7 @@ public partial class MainViewModel : ObservableObject
 
     public void ReportError(string message)
     {
+        LocalMorph.Core.Diagnostics.DiagnosticLog.Warn(message);
         ValidationMessage = message;
         ShowToast(message);
     }
@@ -1302,6 +1303,24 @@ public partial class MainViewModel : ObservableObject
             ShowToast("Saved file permissions forgotten.");
         }
         catch (Exception ex) { ReportError($"Could not forget file permissions: {ex.Message}"); }
+    }
+
+    [RelayCommand]
+    private async Task CopyDiagnosticLogAsync()
+    {
+        var text = LocalMorph.Core.Diagnostics.DiagnosticLog.ReadAll();
+        if (text.Length == 0) { ShowToast("The diagnostic log is empty."); return; }
+        await Clipboard.Default.SetTextAsync(text);
+        ShowToast("Diagnostic log copied. It includes file names and paths; review before sharing.");
+    }
+
+    [RelayCommand]
+    private async Task ShowDiagnosticLogAsync()
+    {
+        var path = LocalMorph.Core.Diagnostics.DiagnosticLog.FilePath;
+        if (path is null) { ReportError("The diagnostic log is unavailable on this device."); return; }
+        if (!File.Exists(path)) LocalMorph.Core.Diagnostics.DiagnosticLog.Info("Diagnostic log opened.");
+        if (!await PlatformActions.RevealOwnFileAsync(path)) ReportError($"Could not show the log. It is at {path}");
     }
 
     [RelayCommand]

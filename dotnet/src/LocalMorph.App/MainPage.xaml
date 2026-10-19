@@ -998,6 +998,14 @@
                         Command="{Binding ShowBundledLicensesCommand}" HorizontalOptions="Start" />
                 <Editor Text="{Binding BundledLicenseText}" IsReadOnly="True" HeightRequest="240"
                         IsVisible="{Binding BundledLicenseText, Converter={StaticResource HasText}}" FontSize="12" />
+                <HorizontalStackLayout Spacing="8">
+                    <Button Text="Copy diagnostic log" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding CopyDiagnosticLogCommand}" AutomationId="CopyDiagnosticLog" />
+                    <Button Text="Show log file" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding ShowDiagnosticLogCommand}" AutomationId="ShowDiagnosticLog" />
+                </HorizontalStackLayout>
+                <Label Text="Errors and failed conversions are logged on this device only, including file names and paths. Nothing is sent anywhere."
+                       Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
 
                 <!-- About & updates -->
                 <Border Style="{StaticResource Card}" Padding="16,14" AutomationId="AboutPanel">

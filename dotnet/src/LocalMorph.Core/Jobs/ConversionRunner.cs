@@ -181,12 +181,27 @@ public static class ConversionRunner
         return process.ExitCode;
     }
 
-    private static string DescribeFailure(ConversionJob job, int exitCode)
+    private static readonly string[] SpecificCauses =
+    [
+        "no decoder found", "Unknown encoder", "Encoder not found", "No such filter", "Filter not found",
+        "Permission denied", "No space left", "Invalid data found", "moov atom not found", "not divisible",
+        "does not contain any stream", "matches no streams"
+    ];
+
+    private static readonly System.Text.RegularExpressions.Regex NoDecoder =
+        new(@"no decoder found for:?\s*(\w+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private static string DescribeFailure(ConversionJob job, int exitCode) => DescribeToolFailure(job.LogTail, exitCode);
+
+    /// <summary>Turns captured tool output into a one-line, user-facing failure reason.</summary>
+    public static string DescribeToolFailure(string log, int exitCode)
     {
-        var lines = job.LogTail.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        var lines = log.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(line => !line.StartsWith('$'))
             .ToList();
-        var relevant = lines.LastOrDefault(line =>
+        // FFmpeg often ends with a generic "Error opening output files: Invalid argument"; the root cause is earlier.
+        var relevant = lines.FirstOrDefault(line => SpecificCauses.Any(cause => line.Contains(cause, StringComparison.OrdinalIgnoreCase)))
+            ?? lines.LastOrDefault(line =>
             line.Contains("error", StringComparison.OrdinalIgnoreCase) ||
             line.Contains("invalid", StringComparison.OrdinalIgnoreCase) ||
             line.Contains("not found", StringComparison.OrdinalIgnoreCase) ||
@@ -196,6 +211,7 @@ public static class ConversionRunner
         var friendly = relevant switch
         {
             null => $"The converter exited with code {exitCode}.",
+            _ when NoDecoder.Match(relevant) is { Success: true } decoder => $"This build of FFmpeg can't read {decoder.Groups[1].Value.ToUpperInvariant()} input. Update LocalMorph or convert a different file.",
             _ when relevant.Contains("Unknown encoder", StringComparison.OrdinalIgnoreCase) => "This FFmpeg build does not include the required encoder. Try a different format or update FFmpeg.",
             _ when relevant.Contains("Permission denied", StringComparison.OrdinalIgnoreCase) => "Permission denied writing the output. Choose another output folder.",
             _ when relevant.Contains("No space left", StringComparison.OrdinalIgnoreCase) => "The disk is full.",
