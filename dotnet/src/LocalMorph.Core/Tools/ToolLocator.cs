@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using LocalMorph.Core.Imaging;
+using LocalMorph.Core.Native;
 
 namespace LocalMorph.Core.Tools;
 
@@ -28,6 +29,7 @@ public static class ToolLocator
                 throw new IOException($"The bundled {name} could not start correctly. Repair or update LocalMorph.");
             found.Add(kind, new ToolInfo(kind, path, version, ToolSource.Bundled));
         }
+        if (ToolCatalog.All.Any(descriptor => descriptor.IsSystemFramework) && Find(ToolKind.AppleNative) is { } native) found.Add(ToolKind.AppleNative, native);
         return found;
     }
 
@@ -37,6 +39,12 @@ public static class ToolLocator
         if (descriptor.IsStoreCodec)
         {
             try { return PlatformImageCodec.Current?.Probe(); }
+            catch { return null; }
+        }
+
+        if (descriptor.IsSystemFramework)
+        {
+            try { return NativeConverter.Current?.Probe(); }
             catch { return null; }
         }
 

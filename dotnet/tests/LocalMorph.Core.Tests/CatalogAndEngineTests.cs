@@ -148,10 +148,10 @@ public sealed class FormatCatalogTests
     }
 
     [Fact]
-    public void Pdf_is_libreoffice_only_because_pandoc_needs_an_external_pdf_engine()
+    public void Pdf_excludes_pandoc_because_it_needs_an_external_pdf_engine()
     {
         var pdf = TestData.Format("pdf");
-        Assert.Equal([EngineKind.LibreOffice], pdf.Engines);
+        Assert.Equal([EngineKind.LibreOffice, EngineKind.AppleNative], pdf.Engines);
         Assert.Null(FormatCatalog.ResolveEngine(pdf, @"C:\docs\notes.md", TestData.Tools(extra: ToolKind.Pandoc)));
         Assert.Equal(EngineKind.LibreOffice, FormatCatalog.ResolveEngine(pdf, @"C:\docs\notes.md", TestData.Tools(extra: ToolKind.LibreOffice)));
     }

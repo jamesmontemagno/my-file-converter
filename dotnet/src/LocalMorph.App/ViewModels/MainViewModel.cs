@@ -82,7 +82,7 @@ public partial class MainViewModel : ObservableObject
         SelectedAudioDelay = AudioDelayOptions[DefaultAudioDelayIndex];
 
         foreach (var descriptor in ToolCatalog.All.Where(descriptor => Distribution.IsMacStoreBuild
-            ? descriptor.Kind is ToolKind.Ffmpeg or ToolKind.Ffprobe : descriptor.Kind != ToolKind.Ffprobe))
+            ? descriptor.Kind is ToolKind.Ffmpeg or ToolKind.Ffprobe or ToolKind.AppleNative : descriptor.Kind != ToolKind.Ffprobe))
         {
             Tools.Add(new ToolItemViewModel(descriptor));
         }

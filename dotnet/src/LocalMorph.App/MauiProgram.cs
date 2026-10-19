@@ -54,6 +54,8 @@ public static class MauiProgram
 #endif
 
 #if MACCATALYST
+		// Photos, PDF pages, and text documents through ImageIO/Core Graphics/UIKit; works inside the App Store sandbox.
+		LocalMorph.Core.Native.NativeConverter.Current = new Platforms.MacCatalyst.MacNativeConverter();
 		builder.Services.AddSingleton<IFontManager>(services => new Platforms.MacCatalyst.MacFontManager(services.GetRequiredService<IFontRegistrar>(), services));
 		// iPad-idiom pickers render as bare text fields; a trailing chevron makes them read as menus.
 		Microsoft.Maui.Handlers.PickerHandler.Mapper.AppendToMapping("LocalMorphChevron", (handler, _) =>

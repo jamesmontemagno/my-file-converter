@@ -9,7 +9,9 @@ public enum ToolKind
     Pandoc,
     Ghostscript,
     /// <summary>Microsoft Store "HEIF Image Extensions" codec used by the Windows Imaging Component to decode HEIC/HEIF.</summary>
-    WindowsHeif
+    WindowsHeif,
+    /// <summary>The Mac's built-in ImageIO, Core Graphics, and UIKit text conversions (no executable).</summary>
+    AppleNative
 }
 
 public enum ToolSource
@@ -35,7 +37,8 @@ public sealed record ToolDescriptor(
     string BrewFormula,
     string WebsiteUrl,
     bool IsCore,
-    string? StoreProductId = null)
+    string? StoreProductId = null,
+    bool IsSystemFramework = false)
 {
     /// <summary>True for codecs delivered through the Microsoft Store rather than an executable on disk.</summary>
     public bool IsStoreCodec => StoreProductId is not null;
@@ -79,6 +82,12 @@ public static class ToolCatalog
                 StoreProductId: HeifImageExtensionsProductId));
         }
 
+        if (OperatingSystem.IsMacCatalyst() || OperatingSystem.IsMacOS())
+        {
+            tools.Add(new(ToolKind.AppleNative, "macOS built-in converters", "HEIC, RAW, PSD, WebP, and AVIF photos; PDF pages; rich text, HTML, and Markdown",
+                [], string.Empty, string.Empty, "https://developer.apple.com/documentation/imageio", IsCore: false, IsSystemFramework: true));
+        }
+
         return tools;
     }
 
@@ -92,6 +101,7 @@ public static class ToolCatalog
     {
         var descriptor = Get(kind);
         if (descriptor.IsStoreCodec) return StoreUri(descriptor);
+        if (descriptor.IsSystemFramework) return string.Empty;
         if (OperatingSystem.IsWindows()) return $"winget install --id {descriptor.WingetId} -e";
         if (OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst()) return $"brew install {descriptor.BrewFormula}";
         return $"sudo apt install {descriptor.BrewFormula.Replace("--cask ", string.Empty)}";

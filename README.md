@@ -144,6 +144,12 @@ levels. Further imports can extend the queue; duplicates do not consume the impo
 - **Development/Windows Tools view** — finds FFmpeg, ImageMagick, LibreOffice, Pandoc, and Ghostscript on PATH, in
   winget/Homebrew/Program Files locations, or bundled with the app; one-click install via
   `winget`/`brew` for anything missing.
+- **macOS built-in converters (Mac App Store)** — the sandboxed Mac app can't run user-installed
+  tools, so it uses Apple's ImageIO, Core Graphics, and text system instead of ImageMagick,
+  LibreOffice, Pandoc, and Ghostscript. It converts HEIC/HEIF, RAW, PSD, WebP, AVIF, and common
+  images to PNG/JPEG/TIFF/HEIC/AVIF/GIF/BMP/ICO/PDF; renders the first page of a PDF to an image;
+  and turns Markdown/HTML/RTF/TXT into PDF/RTF/HTML/TXT. DOCX/ODT/EPUB/Markdown output, WebP/JXL
+  output, PDF compression, and SVG/EPS input stay unavailable on Mac and are labeled as such.
 - **HEIC on Windows** — HEIC/HEIF photos decode natively through the Windows **HEIF Image
   Extensions** codec (Windows Imaging Component), no ImageMagick needed for PNG/JPEG/BMP/TIFF/GIF
   output. If the codec is missing, the Tools view and the queue show a *Get from Store* action that
