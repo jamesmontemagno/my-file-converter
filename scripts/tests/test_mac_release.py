@@ -71,6 +71,28 @@ class MacReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.validate_entitlements({**helper, "com.apple.security.files.user-selected.read-write": True}, helper=True)
 
+    def test_store_profile_disabled_debug_flags_are_preserved_but_never_enabled(self):
+        for key in release.DISABLED_DEBUG_ENTITLEMENTS:
+            with self.subTest(key=key):
+                parent = {**release.PARENT_ENTITLEMENTS,
+                          "com.apple.application-identifier": "TEAM123456." + release.BUNDLE_ID,
+                          "com.apple.developer.team-identifier": "TEAM123456", key: False}
+                release.validate_entitlements(parent)
+                for value in (True, 0, "false", None):
+                    with self.subTest(value=value), self.assertRaisesRegex(ValueError, "Boolean false"):
+                        release.validate_entitlements({**parent, key: value})
+                helper = {"com.apple.security.app-sandbox": True, "com.apple.security.inherit": True, key: False}
+                with self.assertRaisesRegex(ValueError, key):
+                    release.validate_entitlements(helper, helper=True)
+
+    def test_unknown_entitlement_error_names_the_key_without_disclosing_its_value(self):
+        key = "com.apple.unexpected-capability"
+        value = "do-not-log-entitlement-values"
+        with self.assertRaises(ValueError) as failure:
+            release.validate_entitlements({**release.PARENT_ENTITLEMENTS, key: value})
+        self.assertIn(key, str(failure.exception))
+        self.assertNotIn(value, str(failure.exception))
+
     def test_package_hash_source_version_and_single_artifact_are_authoritative(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

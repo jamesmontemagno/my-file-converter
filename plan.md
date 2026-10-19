@@ -1,7 +1,12 @@
 # LocalMorph desktop app plan
 
 ## Current status
-- Preparing the owner-authorized merge and first **1.0.0 TestFlight** dispatch. Simplified Mac
+- Merged #36 as `ca1c1e4` after all checks passed; dispatched **1.0.0 / build 1** in Mac Store
+  Release run `39166182120`. After owner approval, real distribution certificate/profile validation
+  and app compilation passed. Packaging stopped at the strict entitlement check; signing material
+  cleanup succeeded and upload never ran. A focused follow-up preserves Boolean-false SDK/profile
+  debug flags while still rejecting enabled debugging and all unapproved capabilities.
+- Simplified Mac
   packaging to build media in place before key import, keeping the signed-package handoff and
   both approvals. Website CI/Pages now use input-path filters; desktop jobs route by component.
 - Outstanding decisions and acceptance are tracked in #39 (media/components), #41 (installed
