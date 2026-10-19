@@ -8,7 +8,9 @@
   Native Release workspace startup passes light/dark/system on Xcode 27 and the unchanged
   signed workspace on macOS 15.7.9; both PR and merged-source CI pass. The new native gate
   rejects the retained pre-fix Release with the original AppShell exception.
-  Actual installation/launch of TestFlight build 3 and broader #41 acceptance remain separate.
+  Actual installed TestFlight build 3 now passes signature validation and native startup on
+  the owner's Mac: visible workspace, loaded/initialized marker and a live process.
+  Broader #41 conversion/permission/relaunch acceptance remains open.
 - Merged #36 and focused distribution-profile fix #42. **1.0.0 / build 2** from `8f47ec2`
   uploaded and processed successfully in Mac Store Release run `39182791350`, attempt 2.
   Apple build `10f323ab-7fa3-4fa1-869b-e84cdb584f19` is confirmed in **Internal Test Group**

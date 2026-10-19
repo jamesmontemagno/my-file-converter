@@ -379,6 +379,9 @@ acceptance, full component/privacy/product review and public release remain sepa
 Build 3 replaces build 2's startup theme-binding failure (#43). CI now launches the actual
 Release workspace in an isolated sandbox identity under light/dark/system themes, including
 the unchanged signed workspace on macOS 15.7.9. This is not installed TestFlight acceptance.
+Separately, the actual installed Apple-distributed build 3 has passed signature validation
+and native workspace startup on the owner's Mac, with a visible window and the loaded/initialized
+marker. Clean supported-OS, conversion, permission and relaunch acceptance in #41 remains open.
 
 ### Mac Store release and TestFlight
 
