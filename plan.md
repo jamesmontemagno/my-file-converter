@@ -1,13 +1,14 @@
 # LocalMorph desktop app plan
 
 ## Current status
-- Installed TestFlight **1.0.0 / build 2 fails at launch**: `AppThemeBinding.ProvideValue`
-  throws while constructing `AppShell`. The normal page uses the same nested
-  platform/theme pattern. Fix both roots without changing Windows transparency or Mac themes.
-  The fixed native Release workspace passes light/dark/system startup locally in a separate
-  sandbox identity; installed TestFlight acceptance still needs a replacement build.
-  CI now launches the actual Release workspace, not only the separate diagnostic app, and
-  transfers that same signed workspace to the minimum-OS runner. This gate awaits PR CI.
+- Fixed the installed build 2 launch crash in #43, merged as `1a4cb71`: theme bindings now
+  target the shell/page background directly, preserving Windows transparency and Mac themes.
+  **1.0.0 / build 3** is uploaded, processed and confirmed in Internal Test Group by
+  run `39197645028`. Apple build ID: `9a5ae49a-9664-4290-ad32-c7e69826c38d`.
+  Native Release workspace startup passes light/dark/system on Xcode 27 and the unchanged
+  signed workspace on macOS 15.7.9; both PR and merged-source CI pass. The new native gate
+  rejects the retained pre-fix Release with the original AppShell exception.
+  Actual installation/launch of TestFlight build 3 and broader #41 acceptance remain separate.
 - Merged #36 and focused distribution-profile fix #42. **1.0.0 / build 2** from `8f47ec2`
   uploaded and processed successfully in Mac Store Release run `39182791350`, attempt 2.
   Apple build `10f323ab-7fa3-4fa1-869b-e84cdb584f19` is confirmed in **Internal Test Group**
@@ -22,7 +23,7 @@
   and #37 (beta exit, review and public launch). None authorizes automatic public release.
 - The initial Mac beta pipeline is implemented and locally validated, including real ad-hoc
   Release staging, minimal entitlements, bundled SDK privacy reasons and matching native symbols.
-  Fifty-one offline helper tests pass. Real distribution/profile/API/package/upload evidence now
+  Fifty-eight offline helper tests pass. Real distribution/profile/API/package/upload evidence now
   passes too; an installed TestFlight build and native end-to-end behavior remain separate gates.
 - The .NET MAUI desktop app is a full batch conversion workspace (Windows verified end-to-end; the normal Mac workspace still needs end-to-end verification). An isolated signed Mac sandbox proof has exercised shared Core inspection, H.264 conversion, staging/commit, cancellation, and native input/output grants on Apple Silicon.
 - `LocalMorph.Core` holds the engine-agnostic conversion model: tool discovery, FFmpeg capability detection, the format catalog, presets, command builders, the queue, and history.
