@@ -143,7 +143,7 @@ class MacReleaseTests(unittest.TestCase):
                 for name in ("ffmpeg", "ffprobe")))
             (media / "configure-flags.txt").write_text("\n".join((
                 "--disable-gpl", "--disable-nonfree", "--disable-autodetect",
-                "--disable-network", "--enable-videotoolbox")))
+                "--disable-network", "--enable-videotoolbox", "--enable-zlib")))
             for name in ("ffmpeg", "ffprobe"):
                 (media / "bin" / name).chmod(0o755)
             def native_run(command, *args):

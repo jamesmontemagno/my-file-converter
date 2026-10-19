@@ -45,12 +45,18 @@ public partial class MainViewModel : ObservableObject
     private CancellationTokenSource inspectionCancellation = new();
     private TaskCompletionSource? inspectionsStopped;
 
+    private const string IdleImportSummary = "Drop more files here, or use Add files";
+
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanConvert))]
+    [NotifyPropertyChangedFor(nameof(CanConvert), nameof(ShowImportStatus))]
     public partial bool IsImporting { get; set; }
 
     [ObservableProperty]
-    public partial string ImportSummary { get; set; } = "Drop more files here, or use Add files";
+    [NotifyPropertyChangedFor(nameof(ShowImportStatus))]
+    public partial string ImportSummary { get; set; } = IdleImportSummary;
+
+    /// <summary>The empty-state drop zone already invites drops; only show the strip once it adds information.</summary>
+    public bool ShowImportStatus => HasFiles || IsImporting || ImportSummary != IdleImportSummary;
 
     public MainViewModel(ConversionService service, AppSettings settings)
     {
@@ -121,7 +127,7 @@ public partial class MainViewModel : ObservableObject
     public string OperationHint => IsJoin
         ? "Joins pending video clips in queue order, without re-encoding. Use the row menus to change order. Streams must match; chapters are excluded."
         : IsSplit ? "Split each pending source into duration-based clips. Accurate mode re-encodes; fast mode copies streams at source keyframes. Completed clips survive a later failure or cancellation."
-        : "One output format for the batch. Trim and track choices apply to the selected file; other settings apply to the batch.";
+        : "One format for the whole batch. Trim and track choices apply to the selected file.";
     private OperationRequest Operation => new(SelectedOperation?.Value ?? MediaOperation.Convert, IsSplit ? ParseNumber(SegmentSecondsText) : 60, SelectedSplitMode?.Value ?? SplitMode.Accurate);
     private bool IsReadingFiles => addingFiles || IsImporting || inspectionsPending > 0;
 
@@ -137,7 +143,7 @@ public partial class MainViewModel : ObservableObject
             if (IsReadingFiles) return "Reading files before checking this batch…";
             if (NeedsOutputAuthorization) return HasCustomOutputDirectory
                 ? "Output-folder access will be restored or requested before conversion."
-                : "Choose an output folder before converting. Selecting an input file does not authorize writing beside it.";
+                : "You'll choose an output folder when you convert. LocalMorph only writes where you allow it.";
             var plan = PreparedBatch;
             var excluded = plan.Entries.Where(entry => !entry.CanRun).ToArray();
             return $"{plan.RunnableCount} operation(s) ready · {excluded.Length} will be skipped"
@@ -903,6 +909,7 @@ public partial class MainViewModel : ObservableObject
         for (var index = 0; index < Files.Count; index++) { Files[index].QueueIndex = index; Files[index].QueueCount = Files.Count; }
         OnPropertyChanged(nameof(HasFiles));
         OnPropertyChanged(nameof(HasNoFiles));
+        OnPropertyChanged(nameof(ShowImportStatus));
         OnPropertyChanged(nameof(TitleSubtitle));
         OnPropertyChanged(nameof(HasFailed));
         OnPropertyChanged(nameof(FilesSummary));
@@ -1092,7 +1099,7 @@ public partial class MainViewModel : ObservableObject
         PresetOptions.Clear();
         List<MediaCategory> presetSource = categories.Count == 0 ? [MediaCategory.Video] : IsMixedBatch ? categories.Take(1).ToList() : categories;
         var presets = IsMixedBatch ? categories.SelectMany(category => Presets.For(category)).Distinct() : Presets.For(presetSource);
-        foreach (var preset in presets)
+        var built = presets.Select(preset =>
         {
             var option = all.FirstOrDefault(candidate => candidate.Id == preset.FormatId);
             var available = option?.IsAvailable == true;
@@ -1100,8 +1107,10 @@ public partial class MainViewModel : ObservableObject
                 && Inventory.Ffmpeg.UsesAppleSoftwareEncoder(preset.Format.VideoCodec, useHardware: false)
                 ? "Apple software encoding with up to three bitrate-adjusted attempts; oversized results are rejected."
                 : null;
-            PresetOptions.Add(new PresetOption(preset, available, available ? null : option is null ? "Not valid for this mix of files" : option.EngineLabel, description));
-        }
+            return new PresetOption(preset, available, available ? null : option is null ? "Not valid for this mix of files" : option.EngineLabel, description);
+        });
+        // Usable presets lead; unavailable ones stay visible (with their reason) at the end.
+        foreach (var preset in built.OrderBy(preset => preset.IsAvailable ? 0 : 1)) PresetOptions.Add(preset);
         OnPropertyChanged(nameof(HasPresets));
         OnPropertyChanged(nameof(ApplicabilityLabel));
     }

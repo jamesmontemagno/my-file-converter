@@ -153,7 +153,7 @@ public static class FormatCatalog
 
         // ---- Image ----
         new("png", "PNG", "png", "Lossless with transparency.", MediaCategory.Image, FromVideoOrImage,
-            ImageCommon, [EngineKind.Ffmpeg, EngineKind.ImageMagick], "png", Badge: "Lossless"),
+            ImageCommon, [EngineKind.Ffmpeg, EngineKind.ImageMagick], "png", Badge: "Lossless", RequiredEncoders: ["png"]),
         new("jpg", "JPEG", "jpg", "Small photos, no transparency.", MediaCategory.Image, FromVideoOrImage,
             ImageCommon, [EngineKind.Ffmpeg, EngineKind.ImageMagick], "mjpeg", Badge: "Popular"),
         new("webp", "WebP", "webp", "Modern web images, 25–35% smaller than JPEG.", MediaCategory.Image, FromVideoOrImage,
@@ -169,7 +169,7 @@ public static class FormatCatalog
         new("tiff", "TIFF", "tiff", "Print and archival quality.", MediaCategory.Image, FromVideoOrImage,
             FormatFeatures.Resolution | FormatFeatures.Rotate | FormatFeatures.FrameExtract, [EngineKind.Ffmpeg, EngineKind.ImageMagick], "tiff", Badge: "Lossless"),
         new("ico", "ICO (Windows icon)", "ico", "Multi-size icon for apps and favicons.", MediaCategory.Image, FromImage,
-            FormatFeatures.None, [EngineKind.ImageMagick, EngineKind.Ffmpeg], "bmp"),
+            FormatFeatures.None, [EngineKind.ImageMagick, EngineKind.Ffmpeg], "bmp", RequiredEncoders: ["png"]),
         new("heic", "HEIC", "heic", "Apple's high-efficiency photo format.", MediaCategory.Image, FromImage,
             FormatFeatures.Quality | FormatFeatures.Resolution | FormatFeatures.Rotate, [EngineKind.ImageMagick]),
         new("contact-sheet", "Contact sheet", "jpg", "A 4×4 grid of thumbnails spread across the whole clip.", MediaCategory.Image, FromVideo,

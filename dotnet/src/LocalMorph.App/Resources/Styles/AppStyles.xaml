@@ -7,6 +7,9 @@
     <Color x:Key="AccentHover">#0F47B5</Color>
     <Color x:Key="AccentSoftLight">#E8F0FD</Color>
     <Color x:Key="AccentSoftDark">#12264A</Color>
+    <!-- Accent used as text/icon color: the brand blue is too dark to read on dark surfaces. -->
+    <Color x:Key="AccentTextLight">#1356D8</Color>
+    <Color x:Key="AccentTextDark">#7DA9FF</Color>
     <Color x:Key="Success">#2E8B57</Color>
     <Color x:Key="SuccessSoftLight">#E7F6EC</Color>
     <Color x:Key="SuccessSoftDark">#143322</Color>
@@ -28,6 +31,10 @@
     <Color x:Key="TextDark">#F3F6FA</Color>
     <Color x:Key="MutedLight">#5B6778</Color>
     <Color x:Key="MutedDark">#A3B0C2</Color>
+    <Color x:Key="SegmentTrackLight">#E7EBF1</Color>
+    <Color x:Key="SegmentTrackDark">#1C2330</Color>
+    <Color x:Key="SegmentActiveLight">#FFFFFF</Color>
+    <Color x:Key="SegmentActiveDark">#344055</Color>
 
     <x:Double x:Key="CardRadius">10</x:Double>
 
@@ -104,7 +111,7 @@
     </Style>
 
     <Style x:Key="IconAccent" TargetType="Label" BasedOn="{StaticResource Icon}">
-        <Setter Property="TextColor" Value="{StaticResource Accent}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
     </Style>
 
     <Style x:Key="Mono" TargetType="Label">
@@ -178,7 +185,7 @@
 
     <Style x:Key="GhostButton" TargetType="Button">
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="TextColor" Value="{StaticResource Accent}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
         <Setter Property="FontFamily" Value="OpenSansSemibold" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="CornerRadius" Value="8" />
@@ -215,7 +222,7 @@
                     <VisualState x:Name="PointerOver">
                         <VisualState.Setters>
                             <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource AccentSoftLight}, Dark={StaticResource AccentSoftDark}}" />
-                            <Setter Property="TextColor" Value="{StaticResource Accent}" />
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -223,16 +230,32 @@
         </Setter>
     </Style>
 
-    <Style x:Key="TabButton" TargetType="Button" BasedOn="{StaticResource GhostButton}">
+    <!-- Segmented view switcher: neutral track, raised active segment (macOS/Windows segmented look). -->
+    <Style x:Key="TabButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="Transparent" />
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
-        <Setter Property="HeightRequest" Value="38" />
-        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="FontFamily" Value="OpenSansSemibold" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="CornerRadius" Value="7" />
+        <Setter Property="HeightRequest" Value="32" />
+        <Setter Property="MinimumWidthRequest" Value="88" />
+        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="PointerOver">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
     </Style>
 
-    <Style x:Key="TabButtonActive" TargetType="Button" BasedOn="{StaticResource TabButton}">
-        <Setter Property="TextColor" Value="{StaticResource Accent}" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource AccentSoftLight}, Dark={StaticResource AccentSoftDark}}" />
-    </Style>
+    <!-- Active segment: applied by per-tab DataTriggers so leaving a tab restores TabButton values. -->
+    <Shadow x:Key="SegmentShadow" Brush="#000000" Opacity="0.12" Radius="3" Offset="0,1" />
 
     <!-- Inputs -->
     <Style x:Key="Input" TargetType="Entry">
