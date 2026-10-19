@@ -14,7 +14,7 @@ publishes anything. Builds reach TestFlight through
 | [`app-privacy.md`](app-privacy.md) | App Privacy questionnaire, export compliance, age rating |
 | [`en-us/screenshots/`](en-us/screenshots/) | Five clean source captures, plus five upload-ready marketing layouts in `marketing/`; all 2560 x 1600 |
 | [`en-us/app-previews/`](en-us/app-previews/) | Separate 1920 x 1080 App Store screen recording and poster |
-| [`en-us/website-launch/`](en-us/website-launch/) | Separate animated website film, poster, captions, transcript, and storyboard |
+| [`en-us/website-launch/`](en-us/website-launch/) | Held 30-second, animation-led website film with one genuine app shot, poster, captions, transcript, and storyboard |
 | [`en-us/asset-manifest.json`](en-us/asset-manifest.json) | Capture provenance, media properties, hashes, and release caveats |
 | [`../../scripts/normalize-mac-store-screenshots.py`](../../scripts/normalize-mac-store-screenshots.py) | Flatten capture transparency and color-manage screenshots to sRGB |
 | [`../../scripts/render-mac-app-preview.py`](../../scripts/render-mac-app-preview.py) | Encode and validate the genuine App Store preview |
@@ -49,10 +49,11 @@ publishes anything. Builds reach TestFlight through
   `com.refractored.localmorph.assetcapture` build on Xcode 26.6 / macOS 26.6.2. They are for
   owner review, not evidence from TestFlight or the final Store build; recapture and review them
   against the final TestFlight candidate before submission.
-- The website film is a separate, held asset; it is not linked from the public site and does not
-  claim that the Mac app is available. The owner confirmed rights to the demo photo and video on
-  October 19, 2026; their original source is not recorded. Recapture and review the assets against
-  the final TestFlight candidate before submission.
+- The website film is a separate, held asset: animated conversion visuals with one genuine app
+  workspace shot. The App Store preview remains a genuine screen recording. The film is not
+  linked from the public site and does not claim that the Mac app is available. The owner
+  confirmed rights to the demo photo and video on October 19, 2026; their original source is not
+  recorded. Review the app shot against the final TestFlight candidate before submission.
 - The App Store preview is 1920 x 1080, 30 fps, 30 seconds, H.264/yuv420p with stereo AAC.
   This validates the encoded file properties only, not App Store Connect ingestion.
 

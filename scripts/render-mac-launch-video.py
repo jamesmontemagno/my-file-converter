@@ -1,4 +1,4 @@
-"""Render the held Mac website launch film from genuine app captures."""
+"""Render the held Mac website launch film with one genuine app capture."""
 
 import hashlib
 import json
@@ -31,7 +31,7 @@ MUTED = "#a2b0c5"
 BLUE = "#3978ff"
 GREEN = "#b2e86b"
 LINE = "#33425d"
-SCENE_STARTS = (0, 5, 11, 17, 23)
+SCENE_STARTS = (0, 5, 11, 17, 23, 27)
 CAPTURE_FILES = (
     "01-local-workspace.png",
     "02-video-presets.png",
@@ -143,81 +143,261 @@ def reveal_lines(image, lines, x, y, size, color, time, delay=0, line_gap=1.16):
                   time, delay + index * 0.14, True)
 
 
-def hero_graphic(image, time):
-    draw = ImageDraw.Draw(image, "RGBA")
-    labels = (("VIDEO", 268), ("PHOTO", 470), ("AUDIO", 672))
-    for index, (label, y) in enumerate(labels):
-        x = 1004 + round((1 - ease((time - index * 0.18) / 0.9)) * 48)
-        draw.rounded_rectangle((x, y, x + 210, y + 88), radius=18,
-                               fill=(28, 42, 66, 230), outline=(99, 127, 176, 180), width=2)
-        draw.ellipse((x + 22, y + 27, x + 54, y + 59),
-                     outline=BLUE if index != 1 else GREEN, width=3)
-        draw.text((x + 72, y + 25), label, font=font(22, True), fill=PAPER)
-        end_x = 1370 + round(50 * ease((time - 0.4) / 1.8))
-        draw.line((x + 210, y + 44, end_x, y + 44), fill=(77, 116, 190, 200), width=3)
-        dot_x = x + 210 + (end_x - x - 210) * ((time * 0.65 + index * 0.28) % 1)
-        draw.ellipse((round(dot_x - 6), y + 38, round(dot_x + 6), y + 50), fill=GREEN)
-    icon = app_icon()
-    image.paste(icon, (1415, 398), icon)
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle((1398, 381, 1660, 643), radius=38, outline="#435980", width=2)
-
-
-def app_capture(image, index, local_time):
-    width, height = 1160, 725
-    shift = round(24 * ease(local_time / 6))
-    x, y = 690, 222
-    tile = screenshot(index).crop((shift, round(15 * ease(local_time / 6)),
-                                   shift + width, round(15 * ease(local_time / 6)) + height))
-    shadow = ImageDraw.Draw(image)
-    shadow.rounded_rectangle((x + 12, y + 16, x + width + 12, y + height + 16),
-                             radius=20, fill="#070b13")
-    mask = Image.new("L", (width, height), 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, width - 1, height - 1), radius=16, fill=255)
-    image.paste(tile, (x, y), mask)
-    ImageDraw.Draw(image).rounded_rectangle((x, y, x + width, y + height),
-                                             radius=16, outline="#3a4b69", width=2)
-
-
-def feature_scene(index, time):
-    image = background(time)
-    draw_header(image, final=index == 4)
-    titles = (
-        (("One clear", "workspace."), ("Bring videos, audio and photos together.",
-                                        "Preview the files in your batch."), 0),
-        (("Set a size.", "See it through."), ("Choose a target for sharing.",
-                                              "Review the completed result."), 2),
-        (("Your history.", "At a glance."), ("Review completed conversions.",
-                                             "Open or repeat a result from history."), 3),
-        (("A new format.", "Same device."), ("Preview the original, then convert.",
-                                              "Files stay on this device."), 4),
+def curve_point(start, control, end, progress):
+    inverse = 1 - progress
+    return (
+        round(inverse * inverse * start[0] + 2 * inverse * progress * control[0]
+              + progress * progress * end[0]),
+        round(inverse * inverse * start[1] + 2 * inverse * progress * control[1]
+              + progress * progress * end[1]),
     )
-    title, description, capture_index = titles[index - 1]
-    reveal_lines(image, title, 96, 282, 67, PAPER, time, 0.1)
+
+
+def draw_flow(image, start, control, end, time, color=GREEN):
+    draw = ImageDraw.Draw(image, "RGBA")
+    points = [curve_point(start, control, end, step / 32) for step in range(33)]
+    draw.line(points, fill=(67, 94, 140, 170), width=3)
+    for index in range(6):
+        progress = (time * 0.38 + index / 6) % 1
+        x, y = curve_point(start, control, end, progress)
+        radius = 4 if index else 6
+        draw.ellipse((x - radius, y - radius, x + radius, y + radius),
+                     fill=ImageColor.getrgb(color) + (220,))
+
+
+def draw_converter(image, center, time, label):
+    x, y = center
+    draw = ImageDraw.Draw(image, "RGBA")
+    outer = (x - 88, y - 88, x + 88, y + 88)
+    inner = (x - 66, y - 66, x + 66, y + 66)
+    draw.ellipse(outer, fill=(17, 29, 48, 235), outline=(57, 76, 112, 220), width=3)
+    draw.ellipse(inner, outline=(54, 79, 125, 180), width=2)
+    start_angle = round(time * 118) % 360
+    draw.arc((x - 77, y - 77, x + 77, y + 77), start_angle,
+             start_angle + 230, fill=BLUE, width=7)
+    for offset in (0, 120, 240):
+        angle = math.radians(time * 118 + offset)
+        dot_x = round(x + 77 * math.cos(angle))
+        dot_y = round(y + 77 * math.sin(angle))
+        draw.ellipse((dot_x - 5, dot_y - 5, dot_x + 5, dot_y + 5), fill=GREEN)
+    bounds = draw.textbbox((0, 0), label, font=font(17, True))
+    draw.text((x - (bounds[2] - bounds[0]) / 2, y - 12), label,
+              font=font(17, True), fill=PAPER)
+
+
+def draw_media_card(image, x, y, width, height, kind, name, detail, time):
+    draw = ImageDraw.Draw(image, "RGBA")
+    draw.rounded_rectangle((x, y, x + width, y + height), radius=22,
+                           fill=(18, 31, 51, 238), outline=(71, 95, 137, 230), width=2)
+    left, top = x + 18, y + 16
+    icon_width, icon_height = width - 36, height - 70
+    right, bottom = left + icon_width, top + icon_height
+    draw.rounded_rectangle((left, top, right, bottom), radius=13,
+                           fill=(12, 22, 38, 255))
+
+    if kind == "video":
+        gap = 6
+        frame_width = (icon_width - 20 - gap * 2) // 3
+        for index in range(3):
+            frame_left = left + 10 + index * (frame_width + gap)
+            frame_top = top + 14
+            frame_bottom = bottom - 14
+            draw.rounded_rectangle((frame_left, frame_top, frame_left + frame_width, frame_bottom),
+                                   radius=6, fill=(27, 47, 72, 255))
+            draw.ellipse((frame_left + frame_width * 0.62, frame_top + 12,
+                          frame_left + frame_width * 0.78, frame_top + 28),
+                         fill=(244, 203, 117, 255))
+            horizon = frame_top + round((frame_bottom - frame_top) * 0.62)
+            draw.polygon(((frame_left + 2, horizon + 10),
+                          (frame_left + frame_width * 0.38, frame_top + 35),
+                          (frame_left + frame_width * 0.72, horizon + 9),
+                          (frame_left + frame_width - 2, frame_top + 43),
+                          (frame_left + frame_width - 2, frame_bottom - 2),
+                          (frame_left + 2, frame_bottom - 2)),
+                         fill=(42, 105, 119, 255))
+            draw.polygon(((frame_left + 2, horizon + 26),
+                          (frame_left + frame_width * 0.44, frame_top + 62),
+                          (frame_left + frame_width * 0.74, horizon + 23),
+                          (frame_left + frame_width - 2, frame_top + 70),
+                          (frame_left + frame_width - 2, frame_bottom - 2),
+                          (frame_left + 2, frame_bottom - 2)),
+                         fill=(32, 72, 87, 255))
+    elif kind == "photo":
+        draw.rectangle((left + 2, top + 2, right - 2, bottom - 2), fill=(30, 61, 83, 255))
+        sky = top + round(icon_height * 0.59)
+        draw.ellipse((right - 70, top + 18, right - 34, top + 54), fill=(248, 202, 112, 255))
+        draw.polygon(((left + 2, sky + 35), (left + icon_width * 0.34, top + 22),
+                      (left + icon_width * 0.63, sky + 32), (right - 2, top + 48),
+                      (right - 2, bottom - 2), (left + 2, bottom - 2)),
+                     fill=(55, 121, 130, 255))
+        draw.polygon(((left + 2, sky + 52), (left + icon_width * 0.43, top + 70),
+                      (left + icon_width * 0.69, sky + 44), (right - 2, top + 83),
+                      (right - 2, bottom - 2), (left + 2, bottom - 2)),
+                     fill=(31, 75, 82, 255))
+        draw.line((left + 2, bottom - 23, right - 2, bottom - 23),
+                  fill=(59, 151, 133, 230), width=3)
+    elif kind == "audio":
+        baseline = top + icon_height // 2
+        draw.line((left + 12, baseline, right - 12, baseline),
+                  fill=(64, 95, 137, 180), width=2)
+        bars = max(9, icon_width // 18)
+        gap = 5
+        bar_width = max(4, (icon_width - 36 - gap * (bars - 1)) // bars)
+        origin = left + 18
+        for index in range(bars):
+            amplitude = 16 + round(28 * abs(math.sin(index * 0.72 + time * 2.1)))
+            bar_x = origin + index * (bar_width + gap)
+            draw.rounded_rectangle((bar_x, baseline - amplitude,
+                                    bar_x + bar_width, baseline + amplitude),
+                                   radius=bar_width // 2,
+                                   fill=(80, 135, 202, 235) if index % 3 else
+                                   (178, 232, 107, 235))
+
+    label_y = y + height - 43
+    draw.text((x + 19, label_y), name, font=font(17, True), fill=PAPER)
+    if detail:
+        bounds = draw.textbbox((0, 0), detail, font=font(15, True))
+        draw.text((x + width - 18 - (bounds[2] - bounds[0]), label_y + 1),
+                  detail, font=font(15, True), fill=GREEN)
+
+
+def draw_story_copy(image, title, description, time):
+    reveal_lines(image, title, 96, 275, 61, PAPER, time, 0.1, 1.13)
     for row, line in enumerate(description):
-        draw_text(image, line, (101, 504 + row * 48), 25, MUTED, time, 0.48 + row * 0.18)
-    ImageDraw.Draw(image).rounded_rectangle((101, 638, 233, 644), radius=3, fill=BLUE)
-    if index == 4:
-        draw = ImageDraw.Draw(image)
-        draw.rounded_rectangle((98, 716, 465, 779), radius=16, fill="#1b2b46",
-                               outline="#4a6794", width=2)
-        draw.text((123, 734), "LEARN MORE  ·  localmorph.com", font=font(20, True), fill=PAPER)
-    app_capture(image, capture_index, time)
-    return image
+        draw_text(image, line, (101, 458 + row * 44), 23, MUTED,
+                  time, 0.48 + row * 0.16)
+    ImageDraw.Draw(image).rounded_rectangle((101, 594, 229, 600), radius=3, fill=BLUE)
 
 
 def intro_scene(time):
     image = background(time)
     draw_header(image)
-    reveal_lines(image, ("Your files.", "Your Mac."), 96, 292, 104, PAPER, time, 0.15, 1.14)
-    draw_text(image, "A calmer way to convert.", (103, 557), 34, MUTED, time, 0.55)
-    draw_text(image, "Video  ·  audio  ·  photos", (103, 629), 23, GREEN, time, 0.85, True)
-    hero_graphic(image, time)
+    reveal_lines(image, ("Every file,", "a next step."), 96, 292, 86, PAPER, time, 0.15, 1.12)
+    draw_text(image, "Video, audio and photos.", (103, 512), 31, MUTED, time, 0.55)
+    draw_text(image, "One local workflow.", (103, 574), 24, GREEN, time, 0.85, True)
+
+    rows = (("video", "VIDEO.MOV", 232), ("photo", "PHOTO.HEIC", 443),
+            ("audio", "AUDIO.M4A", 654))
+    for index, (kind, name, y) in enumerate(rows):
+        offset = round((1 - ease((time - index * 0.16) / 0.65)) * 36)
+        x = 850 + offset
+        draw_media_card(image, x, y, 250, 166, kind, name, "", time)
+        draw_flow(image, (x + 250, y + 82), (1320, y + 82),
+                  (1450, 520), time + index * 0.27, GREEN if index != 1 else BLUE)
+    icon = app_icon()
+    image.paste(icon, (1450, 406), icon)
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((1432, 388, 1696, 652), radius=38,
+                           outline="#435980", width=2)
     return image
 
 
+def video_scene(time):
+    image = background(time)
+    draw_header(image)
+    draw_story_copy(image, ("Video, ready", "to share."),
+                    ("MOV to MP4 with H.264.", "A clear path from source to result."), time)
+    draw_media_card(image, 548, 324, 270, 242, "video", "CLIP.MOV", "SOURCE", time)
+    draw_flow(image, (818, 445), (956, 353), (1044, 445), time)
+    draw_converter(image, (1138, 445), time, "ENCODE")
+    draw_flow(image, (1232, 445), (1370, 537), (1480, 445), time + 0.4, BLUE)
+    draw_media_card(image, 1480, 324, 270, 242, "video", "CLIP.MP4", "H.264", time + 0.2)
+    return image
+
+
+def size_meter(image, time):
+    x, y, width, height = 930, 309, 440, 314
+    draw = ImageDraw.Draw(image, "RGBA")
+    draw.rounded_rectangle((x, y, x + width, y + height), radius=26,
+                           fill=(19, 32, 53, 242), outline=(69, 94, 137, 230), width=2)
+    draw.text((x + 28, y + 25), "SIZE TARGET", font=font(16, True), fill=MUTED)
+    draw.text((x + 28, y + 61), "4 MB MAX", font=font(39, True), fill=PAPER)
+    draw.rounded_rectangle((x + 28, y + 132, x + width - 28, y + 152),
+                           radius=10, fill=(38, 54, 77, 255))
+    progress = ease(time / 3.2)
+    bar_width = round((width - 56) * (0.06 + 0.86 * progress))
+    draw.rounded_rectangle((x + 28, y + 132, x + 28 + bar_width, y + 152),
+                           radius=10, fill=(57, 120, 255, 255))
+    draw.ellipse((x + 21 + bar_width, y + 127, x + 35 + bar_width, y + 157),
+                 fill=(178, 232, 107, 255))
+    draw_text(image, "3.67 MB RESULT", (x + 28, y + 189), 25, GREEN, time, 1.25, True)
+    draw_text(image, "Below the selected cap.", (x + 28, y + 239), 18, MUTED, time, 1.48)
+
+
+def target_scene(time):
+    image = background(time)
+    draw_header(image)
+    draw_story_copy(image, ("Set a limit.", "See the result."),
+                    ("Choose a maximum size.", "Verify the completed file."), time)
+    draw_media_card(image, 550, 342, 250, 226, "video", "SOURCE.MOV", "", time)
+    draw_flow(image, (800, 455), (860, 385), (930, 455), time)
+    size_meter(image, time)
+    draw_flow(image, (1370, 455), (1425, 535), (1488, 455), time + 0.3, BLUE)
+    draw_media_card(image, 1488, 342, 250, 226, "video", "READY.MP4", "3.67 MB", time + 0.2)
+    return image
+
+
+def photo_scene(time):
+    image = background(time)
+    draw_header(image)
+    draw_story_copy(image, ("Photos.", "Your format."),
+                    ("HEIC to JPEG on your Mac.", "Keep the original untouched."), time)
+    draw_media_card(image, 548, 324, 270, 242, "photo", "PHOTO.HEIC", "SOURCE", time)
+    draw_flow(image, (818, 445), (956, 353), (1044, 445), time)
+    draw_converter(image, (1138, 445), time, "CONVERT")
+    draw_flow(image, (1232, 445), (1370, 537), (1480, 445), time + 0.4, GREEN)
+    draw_media_card(image, 1480, 324, 270, 242, "photo", "PHOTO.JPG", "JPEG", time + 0.2)
+    return image
+
+
+def app_capture(image):
+    tile = screenshot(0)
+    width, height = tile.size
+    x, y = (WIDTH - width) // 2, 228
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((x + 12, y + 16, x + width + 12, y + height + 16),
+                           radius=20, fill="#070b13")
+    mask = Image.new("L", (width, height), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, width - 1, height - 1),
+                                            radius=16, fill=255)
+    image.paste(tile, (x, y), mask)
+    ImageDraw.Draw(image).rounded_rectangle((x, y, x + width, y + height),
+                                             radius=16, outline="#3a4b69", width=2)
+
+
+def app_scene(time):
+    image = background(time)
+    draw_header(image)
+    draw_text(image, "Preview, choose a target, and convert.", (96, 142), 39,
+              PAPER, time, 0.12, True)
+    app_capture(image)
+    return image
+
+
+def closing_scene(time):
+    image = background(time)
+    draw_header(image, final=True)
+    icon = app_icon()
+    image.paste(icon, (846, 244), icon)
+    draw = ImageDraw.Draw(image, "RGBA")
+    draw.ellipse((810, 208, 1110, 508), outline=(69, 95, 143, 210), width=2)
+    for index in range(8):
+        angle = math.radians(time * 42 + index * 45)
+        x = round(960 + 168 * math.cos(angle))
+        y = round(358 + 168 * math.sin(angle))
+        color = (178, 232, 107, 230) if index % 2 else (57, 120, 255, 230)
+        draw.ellipse((x - 5, y - 5, x + 5, y + 5), fill=color)
+    reveal_lines(image, ("Your files.", "Your Mac."), 96, 544, 72, PAPER, time, 0.15, 1.12)
+    draw_text(image, "Learn more at localmorph.com.", (101, 735), 28, MUTED, time, 0.7)
+    draw_text(image, "LocalMorph for Mac", (1310, 832), 28, GREEN, time, 0.82, True)
+    return image
+
+
+SCENES = (intro_scene, video_scene, target_scene, photo_scene, app_scene, closing_scene)
+
+
 def scene(index, time):
-    return intro_scene(time) if index == 0 else feature_scene(index, time)
+    return SCENES[index](time)
 
 
 def frame(time):
@@ -421,6 +601,8 @@ def build_manifest():
             "captions": file_record(CAPTIONS),
             "transcript": file_record(TRANSCRIPT),
             "storyboard": file_record(STORYBOARD),
+            "visualApproach": "Animation-led conversion story with exactly one genuine Mac app workspace capture.",
+            "appScreenshotCount": 1,
             "publication": "Held in the App Store kit; not wired into the public website and makes no availability claim.",
         },
         "provenance": {
@@ -428,6 +610,7 @@ def build_manifest():
             "brandMark": "Existing LocalMorph app-tile source asset in store/microsoft-store/logos/.",
             "typeface": "Open Sans files already bundled in the application font resources.",
             "music": "Original instrumental synthesized by this renderer; no third-party recording.",
+            "websiteFilm": "Conversion steps are represented with original vector animation; the film shows one genuine workspace capture and no fabricated app UI.",
             "demoMedia": existing_provenance.get(
                 "demoMedia",
                 "Coastline demonstration photo/video origin is not recorded; owner rights clearance is required before public or App Store use.",
@@ -438,7 +621,7 @@ def build_manifest():
 
 
 def make_storyboard():
-    times = (2.5, 8, 14, 20, 26, 29)
+    times = (2.5, 8, 14, 20, 25, 28.5)
     sheet = Image.new("RGB", (960, 810), BACKGROUND_TOP)
     for index, time in enumerate(times):
         tile = frame(time).resize((480, 270), Image.Resampling.LANCZOS)
@@ -474,7 +657,7 @@ def main():
             "-af", "loudnorm=I=-16:TP=-1.5:LRA=8",
             "-t", str(SECONDS), "-movflags", "+faststart",
             "-metadata", "title=LocalMorph for Mac - Website Launch Film",
-            "-metadata", "comment=Genuine Mac captures; original instrumental; no availability claim.",
+            "-metadata", "comment=Animation-led conversion story with one genuine Mac capture; no availability claim.",
             str(WEBSITE_VIDEO),
         ]
         with log.open("wb") as errors:

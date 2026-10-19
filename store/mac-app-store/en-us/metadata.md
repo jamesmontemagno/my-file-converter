@@ -120,9 +120,10 @@ sources, not the recommended marketing set. The optional 30-second App Store pre
 `en-us/app-previews/localmorph-mac-app-preview.mp4`
 
 Its poster is `en-us/app-previews/localmorph-mac-app-preview-poster.png`. Do not upload the
-separate website film from `en-us/website-launch/` as the App Store preview. The current captures
-and preview came from an isolated asset-capture build, not the final TestFlight candidate; recapture
-and review them against the exact build selected for App Review.
+separate, animation-led website film from `en-us/website-launch/` as the App Store preview; that
+film has one genuine app shot, while the preview is a genuine screen recording. The current
+captures and preview came from an isolated asset-capture build, not the final TestFlight
+candidate; recapture and review them against the exact build selected for App Review.
 
 ## Submission checklist
 

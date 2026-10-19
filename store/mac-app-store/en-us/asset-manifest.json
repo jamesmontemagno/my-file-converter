@@ -14,8 +14,8 @@
   },
   "renderer": {
     "path": "scripts/render-mac-launch-video.py",
-    "sha256": "27892f7537402daa10588b135934c391dd7108eafd30c31c20c2bc68786deeda",
-    "bytes": 21865,
+    "sha256": "b9e8a4852ae4fd191662990c4fea9f05f2a814a4934efde09cf2a7c6ea09c8de",
+    "bytes": 30652,
     "pythonVersion": "3.9.6",
     "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers"
   },
@@ -165,8 +165,8 @@
   },
   "websiteLaunchFilm": {
     "path": "store/mac-app-store/en-us/website-launch/localmorph-mac-launch.mp4",
-    "sha256": "445247b3f15a25d96557fd5b4298d49844d79494e1656bf341dcea108ab098c9",
-    "bytes": 2526429,
+    "sha256": "d0318aeb6a01bf1bf07c4696413f9db95c3f0b532732dcb2c11eb772a8b113fe",
+    "bytes": 2121023,
     "width": 1920,
     "height": 1080,
     "durationSeconds": 30.0,
@@ -178,24 +178,26 @@
     "audioSampleRate": 48000,
     "poster": {
       "path": "store/mac-app-store/en-us/website-launch/localmorph-mac-poster.webp",
-      "sha256": "f542c27191f041c1044248b1cd82f14679568e58fe0bb962c09411d120f4caf0",
-      "bytes": 102184
+      "sha256": "ab586694c02a4befc20436bae7c53a5b274627f741eb92bbf2a44740254f989d",
+      "bytes": 42712
     },
     "captions": {
       "path": "store/mac-app-store/en-us/website-launch/captions.vtt",
-      "sha256": "27eb62228870885a870dbd31008577868ae14038354a6ccb1623258c486d0cff",
-      "bytes": 627
+      "sha256": "735d783ea06d1c5aac2bc4416f0b149eb5a609785f293b2b0ddc9d66c04528d3",
+      "bytes": 571
     },
     "transcript": {
       "path": "store/mac-app-store/en-us/website-launch/transcript.md",
-      "sha256": "7413564c8e56a52a269a9aaceb58415e83fc06d9608bdd3d9fb2f047389a4332",
-      "bytes": 1500
+      "sha256": "c727713f62307c6947b30b4cb8fde62725893c1a0068074301a8bb4e2a1e8979",
+      "bytes": 1800
     },
     "storyboard": {
       "path": "store/mac-app-store/en-us/website-launch/storyboard.jpg",
-      "sha256": "f4156f96d9cbc3cd0662e3517318129069025593999a23a4d5d841b348427542",
-      "bytes": 137558
+      "sha256": "7edd19ff63e3f78ea1422ea53561ea04807b628d63935cc76f6b473b041f81cf",
+      "bytes": 103815
     },
+    "visualApproach": "Animation-led conversion story with exactly one genuine Mac app workspace capture.",
+    "appScreenshotCount": 1,
     "publication": "Held in the App Store kit; not wired into the public website and makes no availability claim."
   },
   "provenance": {
@@ -203,6 +205,7 @@
     "brandMark": "Existing LocalMorph app-tile source asset in store/microsoft-store/logos/.",
     "typeface": "Open Sans files already bundled in the application font resources.",
     "music": "Original instrumental synthesized by this renderer; no third-party recording.",
+    "websiteFilm": "Conversion steps are represented with original vector animation; the film shows one genuine workspace capture and no fabricated app UI.",
     "demoMedia": "Owner confirmed on 2026-10-19 that the coastline demonstration photo/video may be used in these assets. The original source is not recorded; recapture and review against the final TestFlight candidate before App Store submission."
   }
 }

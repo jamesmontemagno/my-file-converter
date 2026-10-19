@@ -50,8 +50,9 @@
   captures, a separate 30-second 1920x1080 App Store preview, and an animated website film with captions,
   transcript, poster, and storyboard. The owner confirmed demo-media rights on October 19, 2026;
   original source provenance is not recorded. The screenshots are clean app captures without
-  marketing headlines/callouts, and the App Store preview is a screen recording; the separate
-  website film is the marketing-led artwork. In response to the owner's October 19 request,
+  marketing headlines/callouts, and the App Store preview is a screen recording; in response to
+  the owner's October 19 feedback, PR #50 revises the separate website film to lead with animated
+  conversion visuals and show only one genuine app workspace capture. The earlier request also
   added five 2560x1600 promotional layouts under
   `store/mac-app-store/en-us/screenshots/marketing/`, using the genuine screenshots with
   headlines and decorative artwork outside the app UI. The original clean captures are
@@ -89,6 +90,6 @@
 - Verify shared feature parity, native Mac behavior, and actual bundled codec/filter capabilities before finalizing claims. libass subtitle burn-in and zimg HDR tone mapping are now in the pinned bundle; MP3/Opus/VP9/AV1 encoders remain unavailable. Representative iPhone HEIC/HEIF coverage and final source/component approval remain open.
 - Install and validate the processed TestFlight build on supported Macs, then retain separate review approval and manual public release. Mac tags invoke package-only builds; future TestFlight versions still need explicit dispatch and approvals.
 - The six Apple Actions secrets worked in the approved beta run; see the [Mac configuration runbook](docs/release-setup.md#actions-signing-and-upload-configuration). The `mac-app-store` environment requires owner approval, disables administrator bypass, and restricts main/Mac tags with self-review explicitly allowed. The optional internal-group variable now selects the owner-provided Internal Test Group.
-- The initial Mac listing/privacy kit is in #48 and the clean screenshots, screen-recorded App Store preview, and held website-film draft are in merged #49. PR #50 adds five marketing-treated screenshot layouts at `store/mac-app-store/en-us/screenshots/marketing/`; the optional separate App Store Creative Assets are not included. The owner confirmed demo-media rights; recapture the assets from the final TestFlight candidate before App Store submission and keep public launch messaging gated on actual availability.
+- The initial Mac listing/privacy kit is in #48 and the clean screenshots, screen-recorded App Store preview, and held website-film draft are in merged #49. PR #50 adds five marketing-treated screenshot layouts and an animation-led website film with one genuine app shot; the separate App Store preview remains the genuine screen recording. Optional separate App Store Creative Assets are not included. The owner confirmed demo-media rights; review the app capture against the final TestFlight candidate before submission and keep public launch messaging gated on actual availability.
 - Complete Windows Store certification and native x64/ARM64 checks without changing its external-media-tool policy.
 - See [release setup](docs/release-setup.md) and the [shipping checklist](docs/shipping-checklist.md) for current gates. The core product settings and media scope are decided; normal-workspace/TestFlight acceptance, final asset recapture, and separate review/public-release gates remain. Intel support/testing is no longer in scope.
