@@ -20,6 +20,27 @@ This does not remove FFmpeg/other tool installation through WinGet or developmen
 through Homebrew. Browser conversion, NuGet/global-tool distribution, and bridge releases are
 unchanged.
 
+## Windows build performance
+
+Windows bridge tests, desktop CI, and Store packaging use the same pinned Windows SDK
+and MAUI workload set in their workflows. NuGet package caches are partitioned by host
+OS/architecture, toolchain versions, and project/build/NuGet configuration inputs; a
+compatible older dependency cache can seed a changed project graph. Installed SDKs and
+MSI workload directories are not cached. Background workload advertising downloads are
+disabled in the Windows app jobs; the explicit workload installation still runs.
+
+These remain x64 `windows-latest` jobs, including builds that produce ARM64 packages.
+There is no ARM-host disk formatting or runner migration. Existing path-based CI routing,
+Store upload verification, symbols, and both approval gates remain unchanged.
+Compare repeated cold/warm runs at the same commit and image, including cache transfer,
+SDK setup and workload installation in job totals. A cache hit is not evidence that workload
+installation was skipped or that a speedup came from storage. Toolchain and NuGet paths
+are printed in the app jobs. To reset caches, increment their `nuget-v1` prefix.
+
+The tag-helper regression test uses an executable POSIX Git shim and therefore runs
+only on Unix. It is explicitly skipped on Windows, where invoking the real Git binary
+instead of that shim could create or push release tags.
+
 ## Cutting a Windows Store release
 
 1. Add a `## vX.Y.Z-windows` section to `dotnet/CHANGELOG.md`.

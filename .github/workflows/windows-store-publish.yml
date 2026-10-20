@@ -34,6 +34,8 @@ jobs:
     name: Build and verify Store upload
     if: github.event_name == 'push' || inputs.mode != 'diagnose'
     runs-on: windows-latest
+    env:
+      DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: 'true'
     outputs:
       version: ${{ steps.version.outputs.version }}
       source_commit: ${{ steps.version.outputs.source_commit }}
@@ -58,11 +60,23 @@ jobs:
           "source_commit=$head" >> $env:GITHUB_OUTPUT
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: '10.0.401'
+      - name: Cache Windows NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-${{ hashFiles('dotnet/**/*.csproj', '**/Directory.*.props', '**/Directory.*.targets', '**/NuGet.config', '**/nuget.config') }}
+          restore-keys: |
+            nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-
       - name: Install Windows MAUI workload
         run: |
-          dotnet workload install maui-windows
+          dotnet workload install maui-windows --version 10.0.401.1
           if ($LASTEXITCODE -ne 0) { throw 'MAUI workload installation failed.' }
+      - name: Describe Windows toolchain
+        run: |
+          dotnet --info
+          dotnet workload list
+          dotnet nuget locals all --list
       - name: Test packaging helpers
         run: .\scripts\windows\Test-StoreScripts.ps1
       - name: Build unsigned x64 and ARM64 Store upload with crash symbols
