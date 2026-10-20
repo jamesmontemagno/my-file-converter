@@ -36,6 +36,7 @@ jobs:
     runs-on: windows-latest
     env:
       DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: 'true'
+      WINDOWS_DOTNET_VERSION: '10.0.401'
     outputs:
       version: ${{ steps.version.outputs.version }}
       source_commit: ${{ steps.version.outputs.source_commit }}
@@ -60,7 +61,14 @@ jobs:
           "source_commit=$head" >> $env:GITHUB_OUTPUT
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.401'
+          dotnet-version: ${{ env.WINDOWS_DOTNET_VERSION }}
+      - name: Select pinned Windows SDK
+        run: |
+          @{ sdk = @{ version = $env:WINDOWS_DOTNET_VERSION; rollForward = 'disable'; allowPrerelease = $false } } |
+            ConvertTo-Json | Set-Content -LiteralPath global.json -Encoding utf8
+          $actual = dotnet --version
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $env:WINDOWS_DOTNET_VERSION) { throw "Unexpected Windows SDK: $actual" }
+          "Selected Windows SDK: $actual"
       - name: Cache Windows NuGet packages
         uses: actions/cache@v6
         with:

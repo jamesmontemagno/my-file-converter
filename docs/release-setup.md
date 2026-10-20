@@ -28,6 +28,9 @@ OS/architecture, toolchain versions, and project/build/NuGet configuration input
 compatible older dependency cache can seed a changed project graph. Installed SDKs and
 MSI workload directories are not cached. Background workload advertising downloads are
 disabled in the Windows app jobs; the explicit workload installation still runs.
+Each Windows job writes a CI-only `global.json` with roll-forward disabled and checks
+the selected SDK, so a newer SDK preinstalled on the image cannot override the pin.
+No SDK selection file is committed or applied to the Apple/Linux jobs.
 
 These remain x64 `windows-latest` jobs, including builds that produce ARM64 packages.
 There is no ARM-host disk formatting or runner migration. Existing path-based CI routing,
