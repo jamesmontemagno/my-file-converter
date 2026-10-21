@@ -72,7 +72,7 @@ public static class ToolCatalog
                 "JohnMacFarlane.Pandoc", "pandoc", "https://pandoc.org/installing.html", IsCore: false),
             new(ToolKind.Ghostscript, "Ghostscript", "PDF compression and PDF to image",
                 OperatingSystem.IsWindows() ? ["gswin64c.exe", "gswin32c.exe", "gs.exe"] : ["gs"],
-                "ArtifexSoftware.GhostScript", "ghostscript", "https://ghostscript.com/releases/gsdnld.html", IsCore: false)
+                string.Empty, "ghostscript", "https://ghostscript.com/releases/gsdnld.html", IsCore: false)
         };
 
         if (OperatingSystem.IsWindows())
@@ -102,7 +102,8 @@ public static class ToolCatalog
         var descriptor = Get(kind);
         if (descriptor.IsStoreCodec) return StoreUri(descriptor);
         if (descriptor.IsSystemFramework) return string.Empty;
-        if (OperatingSystem.IsWindows()) return $"winget install --id {descriptor.WingetId} -e";
+        if (OperatingSystem.IsWindows()) return string.IsNullOrWhiteSpace(descriptor.WingetId)
+            ? string.Empty : $"winget install --id {descriptor.WingetId} -e";
         if (OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst()) return $"brew install {descriptor.BrewFormula}";
         return $"sudo apt install {descriptor.BrewFormula.Replace("--cask ", string.Empty)}";
     }

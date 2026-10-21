@@ -142,6 +142,7 @@ public static class PlatformActions
         if (descriptor.IsStoreCodec) return OpenStorePage(ToolCatalog.StoreUri(descriptor), descriptor.WebsiteUrl);
 
         var command = ToolCatalog.InstallCommand(kind);
+        if (string.IsNullOrWhiteSpace(command)) return false;
         try
         {
             if (OperatingSystem.IsWindows())
