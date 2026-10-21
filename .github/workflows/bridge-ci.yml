@@ -59,11 +59,12 @@ concurrency:
 
 jobs:
   changes:
-    name: Detect affected desktop components
+    name: Detect affected .NET components
     runs-on: ubuntu-latest
     outputs:
       distribution: ${{ steps.paths.outputs.distribution }}
-      tests: ${{ steps.paths.outputs.tests }}
+      bridge: ${{ steps.paths.outputs.bridge }}
+      core: ${{ steps.paths.outputs.core }}
       windows: ${{ steps.paths.outputs.windows }}
       mac: ${{ steps.paths.outputs.mac }}
     steps:
@@ -93,7 +94,7 @@ jobs:
 
   test:
     needs: changes
-    if: needs.changes.outputs.tests == 'true'
+    if: needs.changes.outputs.bridge == 'true' || needs.changes.outputs.core == 'true'
     runs-on: ${{ matrix.os }}
     env:
       WINDOWS_DOTNET_VERSION: '10.0.401'
@@ -134,9 +135,15 @@ jobs:
       - name: Install FFmpeg (Windows)
         if: runner.os == 'Windows'
         run: choco install ffmpeg -y --no-progress
-      - run: dotnet test dotnet/tests/LocalMorph.Bridge.Tests/LocalMorph.Bridge.Tests.csproj --configuration Release
-      - run: dotnet test dotnet/tests/LocalMorph.Core.Tests/LocalMorph.Core.Tests.csproj --configuration Release
-      - run: dotnet pack dotnet/src/LocalMorph.Bridge/LocalMorph.Bridge.csproj --configuration Release
+      - name: Test Bridge
+        if: needs.changes.outputs.bridge == 'true'
+        run: dotnet test dotnet/tests/LocalMorph.Bridge.Tests/LocalMorph.Bridge.Tests.csproj --configuration Release
+      - name: Test Core
+        if: needs.changes.outputs.core == 'true'
+        run: dotnet test dotnet/tests/LocalMorph.Core.Tests/LocalMorph.Core.Tests.csproj --configuration Release
+      - name: Pack Bridge
+        if: needs.changes.outputs.bridge == 'true'
+        run: dotnet pack dotnet/src/LocalMorph.Bridge/LocalMorph.Bridge.csproj --configuration Release
 
   desktop-app:
     needs: changes

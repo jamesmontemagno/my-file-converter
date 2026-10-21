@@ -549,6 +549,10 @@ The source pin is checked before extraction; configure flags, source trees, lice
 tool hashes and dependency reports are retained. The preparer verifies those hashes, rejects
 Intel/universal helpers, validates the effective app bundle, signs helpers before the app,
 and records signed hashes and proof sources.
+FreeType downloads use the official GNU mirror with the project's SourceForge release as a
+fallback. Both use the same SHA-256 pin; downloads have bounded timeouts, and only verified
+archives enter the source cache. Download logs name each dependency and URL; successful downloads
+record their source URL in the dependency report.
 Set `LOCALMORPH_PROOF_SIGNING_IDENTITY` only when a different local signing identity is needed.
 Use `LOCALMORPH_PROOF_SIGNING_IDENTITY=-` for the separate ad-hoc CI identity when no development
 certificate is available. Run the automated container check and retain its log:

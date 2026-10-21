@@ -3,13 +3,15 @@
 from pathlib import Path
 import ast
 import fnmatch
+import json
 import re
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ci_paths import affected, changed_paths
+from ci_paths import affected, changed_paths, main
 
 
 class CiPathTests(unittest.TestCase):
@@ -32,21 +34,81 @@ class CiPathTests(unittest.TestCase):
         self.assertEqual({"distribution", "mac"}, self.selected("scripts/mac/store_release.py"))
         self.assertEqual({"distribution", "windows"}, self.selected("dotnet/packaging/windows/StoreManifest.xml"))
 
-    def test_shared_code_and_build_configuration_keep_cross_platform_coverage(self):
-        for path in ("dotnet/src/LocalMorph.Core/Jobs/ConversionRunner.cs",
-                     "dotnet/src/LocalMorph.App/Services/AppSettings.cs",
+    def test_app_only_changes_do_not_run_bridge_or_core_tests(self):
+        for path in ("dotnet/src/LocalMorph.App/Services/AppSettings.cs",
                      "dotnet/src/LocalMorph.App/LocalMorph.App.csproj",
-                     "dotnet/src/LocalMorph.App/Resources/Styles/Styles.xaml"):
-            self.assertEqual({"distribution", "tests", "windows", "mac"}, self.selected(path))
-        for path in ("dotnet/Directory.Build.props", "global.json", "dotnet/LocalMorph.slnx",
+                     "dotnet/src/LocalMorph.App/Resources/Styles/Styles.xaml",
+                     "dotnet/src/LocalMorph.App/MainPage.xaml",
+                     "dotnet/src/LocalMorph.App/ViewModels/MainViewModel.About.cs"):
+            with self.subTest(path=path):
+                self.assertEqual({"distribution", "windows", "mac"}, self.selected(path))
+
+    def test_core_and_shared_build_changes_keep_all_dependent_coverage(self):
+        for path in ("dotnet/src/LocalMorph.Core/Jobs/ConversionRunner.cs",
+                     "dotnet/src/LocalMorph.Core/Support/FeedbackIssue.cs",
+                     "dotnet/src/LocalMorph.Core/LocalMorph.Core.csproj",
+                     "dotnet/Directory.Build.props", "global.json", "dotnet/LocalMorph.slnx",
                      "scripts/ci_paths.py", ".github/workflows/bridge-ci.yml"):
-            self.assertEqual({"distribution", "tests", "windows", "mac"}, self.selected(path))
+            with self.subTest(path=path):
+                self.assertEqual({"distribution", "bridge", "core", "windows", "mac"}, self.selected(path))
+
+    def test_bridge_changes_do_not_rebuild_apps_or_run_core_tests(self):
+        for path in ("dotnet/src/LocalMorph.Bridge/BridgeApplication.cs",
+                     "dotnet/src/LocalMorph.Bridge/LocalMorph.Bridge.csproj"):
+            with self.subTest(path=path):
+                self.assertEqual({"distribution", "bridge"}, self.selected(path))
+
+    def test_only_the_affected_test_project_runs(self):
+        self.assertEqual({"core"}, self.selected("dotnet/tests/LocalMorph.Core.Tests/QueueTests.cs"))
+        self.assertEqual({"bridge"}, self.selected("dotnet/tests/LocalMorph.Bridge.Tests/BridgeTests.cs"))
+        self.assertEqual({"bridge", "core"}, self.selected("dotnet/tests/shared.runsettings"))
+
+    def test_multiple_components_accumulate_their_required_checks(self):
+        self.assertEqual({"distribution", "bridge", "core", "windows", "mac"}, self.selected(
+            "dotnet/src/LocalMorph.App/MainPage.xaml",
+            "dotnet/tests/LocalMorph.Bridge.Tests/BridgeTests.cs",
+            "dotnet/tests/LocalMorph.Core.Tests/FeedbackIssueTests.cs"))
+        self.assertEqual({"distribution", "bridge", "windows"}, self.selected(
+            "dotnet/src/LocalMorph.App/Platforms/Windows/OldFile.cs",
+            "dotnet/src/LocalMorph.Bridge/MovedFile.cs"))
+
+    def test_action_outputs_match_the_json_summary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            event = Path(directory) / "event.json"
+            output = Path(directory) / "output"
+            event.write_text("{}")
+            with patch.dict("os.environ", {"GITHUB_EVENT_NAME": "pull_request",
+                                          "GITHUB_EVENT_PATH": str(event),
+                                          "GITHUB_OUTPUT": str(output)}), \
+                    patch("ci_paths.changed_paths", return_value=["dotnet/src/LocalMorph.App/MainPage.xaml"]), \
+                    patch("builtins.print") as summary:
+                main()
+            outputs = dict(line.split("=", 1) for line in output.read_text().splitlines())
+        self.assertEqual({"distribution": "true", "bridge": "false", "core": "false",
+                          "windows": "true", "mac": "true"}, outputs)
+        self.assertEqual({name: value == "true" for name, value in outputs.items()},
+                         json.loads(summary.call_args.args[0]))
+
+    def test_workflow_gates_the_matrix_and_each_test_or_pack_step(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / ".github/workflows/bridge-ci.yml").read_text()
+        self.assertNotIn("needs.changes.outputs.tests", workflow)
+        for component in ("bridge", "core"):
+            self.assertIn(component + ": ${{ steps.paths.outputs." + component + " }}", workflow)
+        self.assertIn("if: needs.changes.outputs.bridge == 'true' || needs.changes.outputs.core == 'true'", workflow)
+        for name, component, command in (
+                ("Test Bridge", "bridge", "dotnet test dotnet/tests/LocalMorph.Bridge.Tests/LocalMorph.Bridge.Tests.csproj"),
+                ("Test Core", "core", "dotnet test dotnet/tests/LocalMorph.Core.Tests/LocalMorph.Core.Tests.csproj"),
+                ("Pack Bridge", "bridge", "dotnet pack dotnet/src/LocalMorph.Bridge/LocalMorph.Bridge.csproj")):
+            with self.subTest(step=name):
+                self.assertIn(f"      - name: {name}\n"
+                              f"        if: needs.changes.outputs.{component} == 'true'\n"
+                              f"        run: {command} --configuration Release", workflow)
 
     def test_helpers_and_tests_do_not_rebuild_unrelated_apps(self):
         self.assertEqual({"distribution"}, self.selected("scripts/tests/test_mac_release.py"))
         self.assertEqual({"distribution"}, self.selected("scripts/create-release-tags.ps1"))
-        self.assertEqual({"tests"}, self.selected("dotnet/tests/LocalMorph.Core.Tests/QueueTests.cs"))
-        self.assertEqual({"tests"}, self.selected(".github/workflows/bridge-release.yml"))
+        self.assertEqual({"bridge"}, self.selected(".github/workflows/bridge-release.yml"))
 
     def test_reintroducing_direct_distribution_still_runs_guards(self):
         for path in ("Casks/localmorph.rb", "public/appcast.xml", "dotnet/packaging/winget/installer.yaml",

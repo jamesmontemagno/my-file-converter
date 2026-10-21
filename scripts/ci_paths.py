@@ -9,7 +9,7 @@ import subprocess
 
 
 def affected(paths):
-    result = dict.fromkeys(("distribution", "tests", "windows", "mac"), False)
+    result = dict.fromkeys(("distribution", "bridge", "core", "windows", "mac"), False)
     for path in paths:
         if path.endswith(".md"):
             continue
@@ -19,10 +19,16 @@ def affected(paths):
                 or name.startswith("Directory.") and name.endswith((".props", ".targets"))
                 or path.startswith("dotnet/") and path.endswith((".sln", ".slnx"))):
             result = dict.fromkeys(result, True)
-        elif path.startswith(("dotnet/src/LocalMorph.Core/", "dotnet/src/LocalMorph.Bridge/")):
-            result.update(distribution=True, tests=True, windows=True, mac=True)
+        elif path.startswith("dotnet/src/LocalMorph.Core/"):
+            result = dict.fromkeys(result, True)
+        elif path.startswith("dotnet/src/LocalMorph.Bridge/"):
+            result.update(distribution=True, bridge=True)
+        elif path.startswith("dotnet/tests/LocalMorph.Bridge.Tests/"):
+            result["bridge"] = True
+        elif path.startswith("dotnet/tests/LocalMorph.Core.Tests/"):
+            result["core"] = True
         elif path.startswith("dotnet/tests/"):
-            result["tests"] = True
+            result.update(bridge=True, core=True)
         elif path.startswith("dotnet/src/LocalMorph.App/Platforms/Windows/"):
             result.update(distribution=True, windows=True)
         elif path.startswith("dotnet/src/LocalMorph.App/Platforms/MacCatalyst/"):
@@ -32,7 +38,7 @@ def affected(paths):
         elif path.startswith(("dotnet/src/LocalMorph.App/Platforms/iOS/", "dotnet/src/LocalMorph.App/Platforms/Android/")):
             continue
         elif path.startswith("dotnet/src/LocalMorph.App/"):
-            result.update(distribution=True, tests=True, windows=True, mac=True)
+            result.update(distribution=True, windows=True, mac=True)
         elif (path.startswith(("scripts/windows/", "dotnet/packaging/windows/", "dotnet/src/LocalMorph.Shell/"))
               or path == ".github/workflows/windows-store-publish.yml"):
             result.update(distribution=True, windows=True)
@@ -40,7 +46,7 @@ def affected(paths):
               or path == ".github/workflows/mac-store-publish.yml"):
             result.update(distribution=True, mac=True)
         elif path == ".github/workflows/bridge-release.yml":
-            result["tests"] = True
+            result["bridge"] = True
         elif (path.startswith(("scripts/tests/", "scripts/create-release-tags.", "Casks/",
                                "public/appcast", "dotnet/packaging/winget/"))
               or path in {".github/workflows/mac-release.yml", ".github/workflows/windows-release.yml",
