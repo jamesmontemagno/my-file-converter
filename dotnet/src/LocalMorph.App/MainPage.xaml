@@ -553,7 +553,7 @@
                                 <Label Style="{StaticResource IconAccent}" Text="{x:Static local:Icons.Sparkle}" FontSize="16" />
                                 <Label Text="Quick presets" Style="{StaticResource SectionTitle}" VerticalOptions="Center" />
                             </HorizontalStackLayout>
-                            <CollectionView ItemsSource="{Binding PresetOptions}" ItemTemplate="{StaticResource PresetTemplate}" HeightRequest="{OnPlatform Default=100, MacCatalyst=112}" SelectionMode="None" AutomationId="PresetList">
+                            <CollectionView ItemsSource="{Binding PresetOptions}" ItemTemplate="{StaticResource PresetTemplate}" HeightRequest="{OnPlatform Default=100, MacCatalyst=112}" HorizontalScrollBarVisibility="Always" SelectionMode="None" AutomationId="PresetList">
                                 <CollectionView.ItemsLayout>
                                     <LinearItemsLayout Orientation="Horizontal" />
                                 </CollectionView.ItemsLayout>
