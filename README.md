@@ -143,7 +143,8 @@ levels. Further imports can extend the queue; duplicates do not consume the impo
   detected with a real test encode and used automatically when they work.
 - **Development/Windows Tools view** — finds FFmpeg, ImageMagick, LibreOffice, Pandoc, and Ghostscript on PATH, in
   winget/Homebrew/Program Files locations, or bundled with the app; one-click install via
-  `winget`/`brew` for anything missing.
+  `winget`/`brew` where available. On Windows, install Ghostscript from its
+  [official website](https://ghostscript.com/releases/gsdnld.html), then select **Refresh**.
 - **macOS built-in converters (Mac App Store)** — the sandboxed Mac app can't run user-installed
   tools, so it uses Apple's ImageIO, Core Graphics, and text system instead of ImageMagick,
   LibreOffice, Pandoc, and Ghostscript. It converts HEIC/HEIF, RAW, PSD, WebP, AVIF, and common

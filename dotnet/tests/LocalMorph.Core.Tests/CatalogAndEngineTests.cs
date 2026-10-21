@@ -281,6 +281,19 @@ public sealed class ToolTests
     }
 
     [Fact]
+    public void Ghostscript_uses_manual_installation_on_windows_and_package_managers_elsewhere()
+    {
+        var descriptor = ToolCatalog.Get(ToolKind.Ghostscript);
+        Assert.Empty(descriptor.WingetId);
+        Assert.Equal("https://ghostscript.com/releases/gsdnld.html", descriptor.WebsiteUrl);
+
+        var expected = OperatingSystem.IsWindows() ? string.Empty
+            : OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst() ? "brew install ghostscript"
+            : "sudo apt install ghostscript";
+        Assert.Equal(expected, ToolCatalog.InstallCommand(ToolKind.Ghostscript));
+    }
+
+    [Fact]
     public void Windows_heif_codec_is_a_store_tool_only_on_windows()
     {
         var descriptor = ToolCatalog.All.FirstOrDefault(tool => tool.Kind == ToolKind.WindowsHeif);

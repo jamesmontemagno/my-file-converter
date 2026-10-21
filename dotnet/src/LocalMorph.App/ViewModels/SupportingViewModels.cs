@@ -80,11 +80,12 @@ public sealed partial class ToolItemViewModel : ObservableObject
     /// <summary>Mono text under a missing tool: the package-manager command, or where the codec comes from.</summary>
     public string InstallHint => IsSystemFramework ? "Built into macOS; update macOS if this is unavailable."
         : Distribution.IsMacStoreBuild ? Distribution.BundledToolRepair
-        : IsStoreCodec ? "Free from the Microsoft Store" : InstallCommand;
+        : IsStoreCodec ? "Free from the Microsoft Store"
+        : string.IsNullOrEmpty(InstallCommand) ? "Install from the website, then select Refresh." : InstallCommand;
     public string InstallActionLabel => IsStoreCodec ? "Get from Store" : OperatingSystem.IsWindows() ? "Install with WinGet" : "Install";
     public string WebsiteUrl => Descriptor.WebsiteUrl;
-    public bool CanLaunchInstaller => PlatformActions.CanLaunchInstaller && !IsSystemFramework;
-    public bool CanCopyCommand => !Distribution.IsMacStoreBuild && !IsStoreCodec && !IsSystemFramework;
+    public bool CanLaunchInstaller => PlatformActions.CanLaunchInstaller && !IsSystemFramework && !string.IsNullOrEmpty(InstallCommand);
+    public bool CanCopyCommand => !Distribution.IsMacStoreBuild && !IsStoreCodec && !IsSystemFramework && !string.IsNullOrEmpty(InstallCommand);
     public bool CanOpenWebsite => !Distribution.IsMacStoreBuild && !IsSystemFramework;
 
     [ObservableProperty]
