@@ -234,9 +234,21 @@ One-time setup (environments, secrets, Apple/Partner Center accounts):
 
 CI runs on pull requests targeting `main` and pushes to `main`, including merges.
 Feature-branch pushes do not trigger CI, avoiding duplicate push and pull-request runs.
-Bridge CI runs when changes include `dotnet/**`, `README.md`, release-tag helpers,
-Windows/Mac helpers, helper tests, Store workflows, or `.github/workflows/bridge-ci.yml`;
-retired cask/feed paths and other workflow changes also run the guards. Web CI runs for all changes.
+**Bridge CI** covers the .NET desktop app, shared Core library, and Bridge. It detects changed
+paths before selecting jobs; Markdown-only changes do not trigger desktop checks.
+
+- Shared desktop UI/app changes run Windows and Mac app validation and distribution guards,
+  not the Bridge/Core test matrix.
+- Bridge source changes run Bridge tests and packaging; Core test changes run Core tests only.
+  Changes to either test project run its own suite without rebuilding unrelated desktop apps.
+- Shared Core source or repository-wide .NET build configuration changes retain both test suites
+  and desktop-build coverage, because the app and Bridge depend on Core.
+- Windows/Mac-specific app and packaging changes run the affected platform's validation.
+  Release helpers, Store workflows, and retired installer/feed paths also select distribution guards.
+
+When selected, the test matrix runs on Linux, Windows, and Mac, with separate conditions for Bridge
+tests, Core tests, and Bridge packaging. Web CI and Pages deployment use their own web-input path
+filters rather than running for unrelated desktop changes.
 
 ## Deployment
 
