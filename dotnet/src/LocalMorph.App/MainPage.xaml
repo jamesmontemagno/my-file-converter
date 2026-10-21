@@ -287,6 +287,15 @@
                             </DataTrigger>
                         </Button.Triggers>
                     </Button>
+                    <Button Text="About" Command="{Binding ShowAboutCommand}" AutomationId="AboutTab" Style="{StaticResource TabButton}">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsAboutView}" Value="True">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SegmentActiveLight}, Dark={StaticResource SegmentActiveDark}}" />
+                                <Setter Property="Shadow" Value="{StaticResource SegmentShadow}" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
                 </HorizontalStackLayout>
             </Border>
 
@@ -996,6 +1005,13 @@
                         <Label Grid.Column="1" Text="{Binding FfmpegSetupInstructions}" Style="{StaticResource Body}" VerticalOptions="Center" LineBreakMode="WordWrap" />
                     </Grid>
                 </Border>
+                <Border Style="{StaticResource CardAlt}" Padding="16,14">
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="Third-party tools and codecs" Style="{StaticResource SectionTitle}" SemanticProperties.HeadingLevel="Level2" />
+                        <Label Text="Third-party tools and codecs are provided by their respective developers and have their own licenses and terms. Review each tool's license and documentation before installing or using it. Availability and supported formats depend on the tools installed or bundled with this app."
+                               Style="{StaticResource Muted}" LineBreakMode="WordWrap" AutomationId="ThirdPartyDisclaimer" />
+                    </VerticalStackLayout>
+                </Border>
                 <CollectionView ItemsSource="{Binding Tools}" ItemTemplate="{StaticResource ToolTemplate}" SelectionMode="None" AutomationId="ToolList" />
                 <Button Text="Forget file permissions" Style="{StaticResource SecondaryButton}" IsVisible="{Binding IsMacStoreBuild}"
                         Command="{Binding ForgetFilePermissionsCommand}" HorizontalOptions="Start" />
@@ -1012,23 +1028,81 @@
                 <Label Text="Errors and failed conversions are logged on this device only, including file names and paths. Nothing is sent anywhere."
                        Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
 
-                <!-- About & updates -->
-                <Border Style="{StaticResource Card}" Padding="16,14" AutomationId="AboutPanel">
-                    <VerticalStackLayout Spacing="12">
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                            <VerticalStackLayout Spacing="2">
-                                <Label Text="ABOUT &amp; UPDATES" Style="{StaticResource Eyebrow}" />
-                                <Label Text="{Binding CurrentVersionLabel}" Style="{StaticResource SectionTitle}" AutomationId="VersionLabel" />
-                            </VerticalStackLayout>
-                            <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Start">
-                                <Button Style="{StaticResource SecondaryButton}" Text="Open Store updates" Command="{Binding OpenStoreUpdatesCommand}"
-                                        IsVisible="{Binding CanOpenStoreUpdates}" AutomationId="StoreUpdatesButton" />
-                            </HorizontalStackLayout>
-                        </Grid>
+            </VerticalStackLayout>
+        </ScrollView>
 
-                        <Label Text="{Binding UpdateDescription}" Style="{StaticResource Muted}" />
+        <!-- ===================== About ===================== -->
+        <ScrollView Grid.Row="1" IsVisible="{Binding IsAboutView}" Padding="24,8,24,16">
+            <VerticalStackLayout Spacing="14" MaximumWidthRequest="980">
+                <Border Style="{StaticResource Card}" Padding="16,14" AutomationId="AboutPanel">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+                        <Image Source="localmorph_logo.png" WidthRequest="56" HeightRequest="56" VerticalOptions="Start"
+                               SemanticProperties.Description="LocalMorph app logo" />
+                        <VerticalStackLayout Grid.Column="1" Spacing="6">
+                            <Label Text="LocalMorph" Style="{StaticResource Title}" SemanticProperties.HeadingLevel="Level1" />
+                            <Label Text="Convert images, audio, video, and documents on your device. Your conversion files stay on this computer."
+                                   Style="{StaticResource Body}" LineBreakMode="WordWrap" />
+                            <FlexLayout Wrap="Wrap">
+                                <Label Text="{Binding AppVersion, StringFormat='Version {0}'}" Style="{StaticResource Muted}"
+                                       Margin="0,0,20,0" AutomationId="VersionLabel" />
+                                <Label Text="{Binding AppBuild, StringFormat='Build {0}'}" Style="{StaticResource Muted}" AutomationId="BuildLabel" />
+                            </FlexLayout>
+                            <Label Text="Copyright Refractored LLC" Style="{StaticResource Muted}" AutomationId="CopyrightLabel" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Padding="16,14">
+                    <VerticalStackLayout Spacing="12">
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="Help improve LocalMorph" Style="{StaticResource SectionTitle}" SemanticProperties.HeadingLevel="Level2" />
+                            <Label Text="Report a bug or suggest a feature. You'll review and submit your draft on GitHub."
+                                   Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
+                        </VerticalStackLayout>
+                        <Grid ColumnDefinitions="180,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="4">
+                            <Label Text="Type" Style="{StaticResource FieldLabel}" />
+                            <Picker Grid.Row="1" ItemsSource="{Binding FeedbackTypes}" SelectedItem="{Binding SelectedFeedbackType}"
+                                    Style="{StaticResource Select}" AutomationId="FeedbackType"
+                                    SemanticProperties.Description="Feedback type" />
+                            <Label Grid.Column="1" Text="Title (required)" Style="{StaticResource FieldLabel}" />
+                            <Entry Grid.Column="1" Grid.Row="1" Text="{Binding FeedbackTitle}" Style="{StaticResource Input}"
+                                   Placeholder="A short summary" AutomationId="FeedbackTitle"
+                                   SemanticProperties.Description="Report title, required" />
+                        </Grid>
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="Details (required)" Style="{StaticResource FieldLabel}" />
+                            <Editor Text="{Binding FeedbackDetails}" Style="{StaticResource MultilineInput}" HeightRequest="112"
+                                    Placeholder="What happened, or what would you like to be able to do?" AutomationId="FeedbackDetails"
+                                    SemanticProperties.Description="Report details, required" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="GitHub issues are public. Don't include private files or personal information. A GitHub account is needed to submit."
+                                   Style="{StaticResource Body}" LineBreakMode="WordWrap" />
+                            <Label Text="{Binding FeedbackEnvironmentSummary}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
+                        </VerticalStackLayout>
+                        <Label Text="{Binding FeedbackError}" IsVisible="{Binding FeedbackError, Converter={StaticResource HasText}}"
+                               Style="{StaticResource Body}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" AutomationId="FeedbackError" />
+                        <HorizontalStackLayout Spacing="10">
+                            <Button Text="Open on GitHub" Command="{Binding OpenFeedbackCommand}" Style="{StaticResource PrimaryButton}"
+                                    AutomationId="OpenFeedbackButton" />
+                            <ActivityIndicator IsRunning="{Binding IsOpeningAboutLink}" IsVisible="{Binding IsOpeningAboutLink}"
+                                               WidthRequest="18" HeightRequest="18" Color="{StaticResource Accent}" />
+                        </HorizontalStackLayout>
+                        <Label Text="{Binding FeedbackStatus}" IsVisible="{Binding FeedbackStatus, Converter={StaticResource HasText}}"
+                               Style="{StaticResource Body}" LineBreakMode="WordWrap" AutomationId="FeedbackStatus" />
                     </VerticalStackLayout>
                 </Border>
+
+                <FlexLayout Wrap="Wrap" JustifyContent="Start">
+                    <Button Text="Privacy policy" Command="{Binding OpenPrivacyPolicyCommand}" Style="{StaticResource GhostButton}"
+                            Margin="0,0,8,0" AutomationId="PrivacyPolicyButton" />
+                    <Button Text="Website" Command="{Binding OpenWebsiteCommand}" Style="{StaticResource GhostButton}"
+                            Margin="0,0,8,0" AutomationId="WebsiteButton" />
+                    <Button Text="GitHub project" Command="{Binding OpenProjectCommand}" Style="{StaticResource GhostButton}"
+                            AutomationId="ProjectButton" />
+                </FlexLayout>
+                <Label Text="{Binding AboutLinkError}" IsVisible="{Binding AboutLinkError, Converter={StaticResource HasText}}"
+                       Style="{StaticResource Body}" TextColor="{StaticResource Danger}" LineBreakMode="WordWrap" AutomationId="AboutLinkError" />
             </VerticalStackLayout>
         </ScrollView>
 

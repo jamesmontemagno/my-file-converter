@@ -266,6 +266,13 @@
         <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
     </Style>
 
+    <Style x:Key="MultilineInput" TargetType="Editor">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource CardAltLight}, Dark={StaticResource CardAltDark}}" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+    </Style>
+
     <Style x:Key="Select" TargetType="Picker">
         <Setter Property="HeightRequest" Value="40" />
         <Setter Property="FontSize" Value="13" />

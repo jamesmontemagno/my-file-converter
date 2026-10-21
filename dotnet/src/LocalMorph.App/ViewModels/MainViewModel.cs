@@ -16,7 +16,8 @@ public enum WorkspaceView
 {
     Convert,
     History,
-    Tools
+    Tools,
+    About
 }
 
 public sealed record ChoiceOption<T>(string Label, T Value)
@@ -62,6 +63,7 @@ public partial class MainViewModel : ObservableObject
     {
         this.service = service;
         this.settings = settings;
+        SelectedFeedbackType = FeedbackTypes[0];
         SelectedOperation = OperationOptions[0];
         SelectedSplitMode = SplitModeOptions[0];
 
@@ -263,6 +265,7 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsConvertView))]
     [NotifyPropertyChangedFor(nameof(IsHistoryView))]
     [NotifyPropertyChangedFor(nameof(IsToolsView))]
+    [NotifyPropertyChangedFor(nameof(IsAboutView))]
     [NotifyPropertyChangedFor(nameof(TitleSubtitle))]
     public partial WorkspaceView View { get; set; } = WorkspaceView.Convert;
 
@@ -451,6 +454,7 @@ public partial class MainViewModel : ObservableObject
     public bool IsConvertView => View == WorkspaceView.Convert;
     public bool IsHistoryView => View == WorkspaceView.History;
     public bool IsToolsView => View == WorkspaceView.Tools;
+    public bool IsAboutView => View == WorkspaceView.About;
     public bool HasFiles => Files.Count > 0;
     public bool HasNoFiles => Files.Count == 0;
 
@@ -459,6 +463,7 @@ public partial class MainViewModel : ObservableObject
     {
         WorkspaceView.History => "History",
         WorkspaceView.Tools => "Tools",
+        WorkspaceView.About => "About",
         _ when IsConverting => BatchStatus,
         _ when Files.Count > 0 => $"{Files.Count} file{(Files.Count == 1 ? string.Empty : "s")} queued",
         _ => "Local file conversion"
@@ -580,30 +585,6 @@ public partial class MainViewModel : ObservableObject
         }
 
         if (service.History.PersistenceError is { } historyError) ReportError(historyError);
-    }
-
-    // ---------------------------------------------------------------- updates
-
-    public string CurrentVersionLabel => $"LocalMorph {Distribution.CurrentVersionDisplay}";
-    public string UpdateDescription => Distribution.UpdateDescription;
-    public bool CanOpenStoreUpdates => Distribution.StoreUpdates is not null;
-
-    [RelayCommand]
-    private async Task OpenStoreUpdatesAsync()
-    {
-        if (Distribution.StoreUpdates is not { } uri)
-        {
-            ReportError("Open App Store and choose Updates on this platform.");
-            return;
-        }
-        try
-        {
-            if (!await Launcher.Default.OpenAsync(uri)) ReportError("Could not open Store updates. Open Microsoft Store and choose Downloads.");
-        }
-        catch (Exception ex)
-        {
-            ReportError($"Could not open Store updates: {ex.Message}");
-        }
     }
 
     private void ApplyTools(ToolInventory inventory)
@@ -1813,6 +1794,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand] private void ShowConvert() => View = WorkspaceView.Convert;
     [RelayCommand] private void ShowHistory() => View = WorkspaceView.History;
     [RelayCommand] private void ShowTools() => View = WorkspaceView.Tools;
+    [RelayCommand] private void ShowAbout() => View = WorkspaceView.About;
     [RelayCommand] private void ToggleAdvanced() => IsAdvancedOpen = !IsAdvancedOpen;
     [RelayCommand] private void ToggleOutput() => IsOutputOpen = !IsOutputOpen;
     [RelayCommand] private void ToggleCommandPreview() => IsCommandPreviewOpen = !IsCommandPreviewOpen;

@@ -145,6 +145,8 @@ levels. Further imports can extend the queue; duplicates do not consume the impo
   winget/Homebrew/Program Files locations, or bundled with the app; one-click install via
   `winget`/`brew` where available. On Windows, install Ghostscript from its
   [official website](https://ghostscript.com/releases/gsdnld.html), then select **Refresh**.
+  The Tools page explains that third-party tools and codecs have their own developers,
+  licenses, and terms; format availability depends on the installed or bundled tools.
 - **macOS built-in converters (Mac App Store)** — the sandboxed Mac app can't run user-installed
   tools, so it uses Apple's ImageIO, Core Graphics, and text system instead of ImageMagick,
   LibreOffice, Pandoc, and Ghostscript. It converts HEIC/HEIF, RAW, PSD, WebP, AVIF, and common
@@ -167,6 +169,13 @@ levels. Further imports can extend the queue; duplicates do not consume the impo
   are not changed. Installed-package activation still requires release validation.
 - **Command preview** — inspect/copy the planned conversion; analysis-dependent operations explain
   their stages. Completed-job diagnostics retain the actual analysis and rendering commands.
+- **About & feedback** — the About tab shows the installed app version, build number, and
+  Refractored LLC copyright notice, with links to the website, GitHub project, and
+  [privacy policy](https://localmorph.com/#/privacy). Its Bug / Feature request form opens a
+  prefilled public GitHub issue with your title, details, app version/build, and OS information.
+  Review and submit it on GitHub; a GitHub account is required. No files or logs are attached.
+  Drafts stay in memory across tab switches and after opening GitHub, but are not saved across
+  app restarts. Oversized browser links are rejected without truncating the draft.
 
 Build and run on Windows:
 
