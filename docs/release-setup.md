@@ -105,7 +105,7 @@ workflow defaults for it.
   App SDK frameworks, and architecture-matched Explorer DLLs. They do not bundle or download FFmpeg
   or FFprobe, and no FFmpeg compliance-archive variables are required.
 - Users install FFmpeg and FFprobe separately. The Tools page opens a user-initiated
-  `winget install --id Gyan.FFmpeg -e` terminal, or the FFmpeg website for manual installation.
+  `winget install --id Gyan.FFmpeg -e --source winget` terminal, or the FFmpeg website for manual installation.
   A full Windows build can be extracted so both executables are in `C:\ffmpeg\bin`; other
   installations can use PATH or supported WinGet locations. Select **Refresh** after installation.
   Installing external tools may require internet access and acceptance of their licenses. Verify

@@ -70,7 +70,7 @@ separately, then run the lightweight LocalMorph Bridge on the same Windows,
 macOS, or Linux device. On Windows, the SDK is also available through Winget:
 
 ```powershell
-winget install --id Microsoft.DotNet.SDK.10 -e
+winget install --id Microsoft.DotNet.SDK.10 -e --source winget
 ```
 
 Verify `dotnet --version` reports 10.x before starting the bridge:
@@ -179,7 +179,7 @@ Real-FFmpeg integration tests share one xUnit collection so concurrent encoders 
 probes on smaller CI runners. Other test collections remain parallel; production probe timeouts and
 conversion concurrency are unchanged.
 
-Development builds need FFmpeg for media conversion (`winget install Gyan.FFmpeg` /
+Development builds need FFmpeg for media conversion (`winget install --id Gyan.FFmpeg -e --source winget` /
 `brew install ffmpeg`), or platform binaries under
 [`Resources/ffmpeg`](dotnet/src/LocalMorph.App/Resources/ffmpeg). Packaged Windows builds also need
 Visual Studio 2022 or newer C++ tools for each target architecture to build the native Explorer DLL;

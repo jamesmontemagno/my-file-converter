@@ -56,8 +56,8 @@ tokens and original upload filenames are never included in operational logs.
 
 The NuGet package does not bundle or download FFmpeg. Install it separately:
 
-- **Windows:** `winget install --id Microsoft.DotNet.SDK.10 -e`, then install a
-  trusted FFmpeg package such as `winget install --id Gyan.FFmpeg.Shared -e`.
+- **Windows:** `winget install --id Microsoft.DotNet.SDK.10 -e --source winget`, then install a
+  trusted FFmpeg package such as `winget install --id Gyan.FFmpeg.Shared -e --source winget`.
 - **macOS:** `brew install --cask dotnet-sdk`, then `brew install ffmpeg`.
 - **Linux:** follow the
   [official .NET installation guide](https://learn.microsoft.com/dotnet/core/install/linux)

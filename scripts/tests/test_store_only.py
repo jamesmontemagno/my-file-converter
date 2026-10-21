@@ -35,6 +35,7 @@ class StoreOnlyTests(unittest.TestCase):
             self.assertTrue((ROOT / path).is_file(), path)
         tools = (ROOT / "dotnet/src/LocalMorph.Core/Tools/ToolCatalog.cs").read_text()
         self.assertIn("winget install --id", tools)
+        self.assertIn("--source winget", tools)
         workflow = (ROOT / ".github/workflows/windows-store-publish.yml").read_text()
         self.assertIn("Internal Testing", workflow)
         self.assertIn("FLIGHT_UPLOAD_SHA256", workflow)
