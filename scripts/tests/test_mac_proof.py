@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import plistlib
+import re
 import subprocess
 import tempfile
 import unittest
@@ -12,6 +13,105 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class MacProofTests(unittest.TestCase):
+    def media_download(self, mode):
+        builder = ROOT / "scripts/mac/build-proof-media.sh"
+        script = builder.read_text()
+        source_hash = re.search(r'^SHA256="([0-9a-f]{64})"$', script, re.MULTILINE)[1]
+        pins = re.findall(r'^\s*"([^|"]+)\|[^|"]+\|([0-9a-f]{64})(?:\|[^"]*)?"',
+                          script, re.MULTILINE)
+        self.assertEqual(6, len(pins))
+        hash_cases = "\n".join(f'  {name}|{name}.partial) echo {digest} ;;'
+                               for name, digest in pins)
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            source = temporary / "source.tar.xz"
+            source.write_bytes(b"source fixture")
+            output = temporary / "output"
+            log = temporary / "downloads.txt"
+            for name, body in (
+                ("uname", "echo Darwin"),
+                ("shasum", f"""\
+case "$MOCK_DOWNLOAD_MODE" in
+  corrupt*) case "$3" in *freetype*) echo invalid-hash; exit 0 ;; esac ;;
+esac
+case "${{3##*/}}" in
+  source.tar.xz) echo {source_hash} ;;
+{hash_cases}
+  *) exit 1 ;;
+esac"""),
+                ("curl", """\
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) shift; output="$1" ;;
+    https://*) url="$1" ;;
+  esac
+  shift
+done
+printf '%s\\n' "$url" >> "$MOCK_DOWNLOAD_LOG"
+printf fixture > "$output"
+case "$url" in
+  *freetype*)
+    if [ "$MOCK_DOWNLOAD_MODE" = all-fail ]; then exit 22; fi
+    case "$url" in
+      *download-mirror.savannah.gnu.org*)
+        case "$MOCK_DOWNLOAD_MODE" in primary-fails|corrupt-fallback) exit 22 ;; esac ;;
+    esac ;;
+esac"""),
+                ("tar", 'echo DOWNLOADS_VERIFIED >&2; exit 23'),
+            ):
+                executable = temporary / name
+                executable.write_text("#!/bin/sh\n" + body + "\n")
+                executable.chmod(0o755)
+            result = subprocess.run(
+                ["bash", str(builder), str(source), str(output), "arm64"],
+                env={**os.environ, "PATH": f"{temporary}{os.pathsep}{os.environ['PATH']}",
+                     "MOCK_DOWNLOAD_MODE": mode, "MOCK_DOWNLOAD_LOG": str(log)},
+                capture_output=True, text=True,
+            )
+            self.assertTrue(log.is_file(), result.stderr)
+            attempts = [url for url in log.read_text().splitlines() if "freetype" in url]
+            metadata = output / "arm64/dependency-sources.txt"
+            cached = (output / "sources/freetype-2.13.3.tar.xz").exists()
+            return result, attempts, metadata.read_text(), cached
+
+    def test_media_download_uses_gnu_mirror_and_verifies_before_building(self):
+        result, attempts, metadata, cached = self.media_download("success")
+        self.assertEqual(23, result.returncode, result.stderr)
+        self.assertIn("DOWNLOADS_VERIFIED", result.stderr)
+        self.assertEqual(1, len(attempts))
+        self.assertIn("https://download-mirror.savannah.gnu.org/", attempts[0])
+        self.assertIn(attempts[0], metadata)
+        self.assertTrue(cached)
+
+    def test_media_download_falls_back_and_records_the_actual_source(self):
+        result, attempts, metadata, cached = self.media_download("primary-fails")
+        self.assertEqual(23, result.returncode, result.stderr)
+        self.assertEqual(2, len(attempts))
+        self.assertIn("https://downloads.sourceforge.net/", attempts[1])
+        self.assertIn(attempts[1], metadata)
+        self.assertNotIn(attempts[0], metadata)
+        self.assertTrue(cached)
+
+    def test_media_download_exhausted_sources_fail_without_caching(self):
+        result, attempts, metadata, cached = self.media_download("all-fail")
+        self.assertEqual(1, result.returncode, result.stderr)
+        self.assertEqual(2, len(attempts))
+        self.assertIn("Could not download dependency freetype-2.13.3.tar.xz", result.stderr)
+        self.assertNotIn("DOWNLOADS_VERIFIED", result.stderr)
+        self.assertNotIn("freetype", metadata)
+        self.assertFalse(cached)
+
+    def test_media_download_checksum_failure_is_not_retried_or_cached(self):
+        for mode, count in (("corrupt", 1), ("corrupt-fallback", 2)):
+            with self.subTest(mode=mode):
+                result, attempts, metadata, cached = self.media_download(mode)
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertEqual(count, len(attempts))
+                self.assertIn("Dependency source freetype-2.13.3.tar.xz does not match its pin.", result.stderr)
+                self.assertNotIn("DOWNLOADS_VERIFIED", result.stderr)
+                self.assertNotIn("freetype", metadata)
+                self.assertFalse(cached)
+
     def test_proof_entitlements_are_isolated_and_helpers_inherit(self):
         directory = ROOT / "dotnet/src/LocalMorph.App/Platforms/MacCatalyst"
         with (directory / "SandboxProof.entitlements").open("rb") as source:

@@ -33,7 +33,7 @@ BUILD="$OUTPUT/$ARCH"
 # FreeType FTL, FriBidi LGPL-2.1, HarfBuzz MIT, libass ISC, zimg WTFPL; pkgconf is build-only.
 DEPENDENCIES=(
   "pkgconf-2.4.3.tar.xz|https://distfiles.ariadne.space/pkgconf/pkgconf-2.4.3.tar.xz|51203d99ed573fa7344bf07ca626f10c7cc094e0846ac4aa0023bd0c83c25a41"
-  "freetype-2.13.3.tar.xz|https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.xz|0550350666d427c74daeb85d5ac7bb353acba5f76956395995311a9c6f063289"
+  "freetype-2.13.3.tar.xz|https://download-mirror.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.xz|0550350666d427c74daeb85d5ac7bb353acba5f76956395995311a9c6f063289|https://downloads.sourceforge.net/project/freetype/freetype2/2.13.3/freetype-2.13.3.tar.xz"
   "fribidi-1.0.16.tar.xz|https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz|1b1cde5b235d40479e91be2f0e88a309e3214c8ab470ec8a2744d82a5a9ea05c"
   "harfbuzz-11.2.1.tar.xz|https://github.com/harfbuzz/harfbuzz/releases/download/11.2.1/harfbuzz-11.2.1.tar.xz|093714c8548a285094685f0bdc999e202d666b59eeb3df2ff921ab68b8336a49"
   "libass-0.17.4.tar.xz|https://github.com/libass/libass/releases/download/0.17.4/libass-0.17.4.tar.xz|78f1179b838d025e9c26e8fef33f8092f65611444ffa1bfc0cfac6a33511a05a"
@@ -42,14 +42,32 @@ DEPENDENCIES=(
 SOURCES="$OUTPUT/sources"
 mkdir -p "$SOURCES"
 for entry in "${DEPENDENCIES[@]}"; do
-  IFS='|' read -r name url hash <<< "$entry"
-  if [[ ! -f "$SOURCES/$name" ]]; then
-    curl --fail --silent --show-error --location --retry 3 "$url" -o "$SOURCES/$name.partial"
-    mv "$SOURCES/$name.partial" "$SOURCES/$name"
+  IFS='|' read -r name url hash mirror <<< "$entry"
+  archive="$SOURCES/$name"
+  if [[ ! -f "$archive" ]]; then
+    archive="$archive.partial"
+    downloaded=false
+    for candidate in "$url" "$mirror"; do
+      [[ -n "$candidate" ]] || continue
+      echo "Downloading dependency $name from $candidate" >&2
+      if curl --fail --silent --show-error --location --retry 3 --retry-max-time 120 \
+          --connect-timeout 15 --max-time 60 "$candidate" -o "$archive"; then
+        downloaded=true
+        url="$candidate"
+        break
+      fi
+    done
+    if [[ "$downloaded" != true ]]; then
+      echo "Could not download dependency $name from its configured sources." >&2
+      exit 1
+    fi
   fi
-  if [[ "$(shasum -a 256 "$SOURCES/$name" | cut -d ' ' -f 1)" != "$hash" ]]; then
+  if [[ "$(shasum -a 256 "$archive" | cut -d ' ' -f 1)" != "$hash" ]]; then
     echo "Dependency source $name does not match its pin." >&2
     exit 1
+  fi
+  if [[ "$archive" != "$SOURCES/$name" ]]; then
+    mv "$archive" "$SOURCES/$name"
   fi
   printf '%s  %s  %s\n' "$hash" "$name" "$url" >> "$BUILD/dependency-sources.txt"
 done
