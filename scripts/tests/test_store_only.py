@@ -53,6 +53,7 @@ class StoreOnlyTests(unittest.TestCase):
                     with self.subTest(path=path, marker=marker):
                         self.assertNotIn(marker, text)
 
+    @unittest.skipIf(os.name == "nt", "The POSIX git mock is unsafe on Windows; run tag-helper checks on Unix.")
     def test_tag_helpers_fail_before_mutation_and_route_only_to_stores(self):
         runners = [("bash", "scripts/create-release-tags.sh", "--windows", "--mac", "--push")]
         if shutil.which("pwsh"):

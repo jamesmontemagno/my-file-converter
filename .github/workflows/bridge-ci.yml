@@ -95,6 +95,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.tests == 'true'
     runs-on: ${{ matrix.os }}
+    env:
+      WINDOWS_DOTNET_VERSION: '10.0.401'
     strategy:
       fail-fast: false
       matrix:
@@ -103,7 +105,24 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: ${{ runner.os == 'Windows' && env.WINDOWS_DOTNET_VERSION || '10.0.x' }}
+      - name: Select pinned Windows SDK
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          @{ sdk = @{ version = $env:WINDOWS_DOTNET_VERSION; rollForward = 'disable'; allowPrerelease = $false } } |
+            ConvertTo-Json | Set-Content -LiteralPath global.json -Encoding utf8
+          $actual = dotnet --version
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $env:WINDOWS_DOTNET_VERSION) { throw "Unexpected Windows SDK: $actual" }
+          "Selected Windows SDK: $actual"
+      - name: Cache Windows NuGet packages
+        if: runner.os == 'Windows'
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-${{ hashFiles('dotnet/**/*.csproj', '**/Directory.*.props', '**/Directory.*.targets', '**/NuGet.config', '**/nuget.config') }}
+          restore-keys: |
+            nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-
       - name: Install FFmpeg (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
@@ -123,12 +142,36 @@ jobs:
     needs: changes
     if: needs.changes.outputs.windows == 'true'
     runs-on: windows-latest
+    env:
+      DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: 'true'
+      WINDOWS_DOTNET_VERSION: '10.0.401'
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
-      - run: dotnet workload install maui-windows
+          dotnet-version: ${{ env.WINDOWS_DOTNET_VERSION }}
+      - name: Select pinned Windows SDK
+        shell: pwsh
+        run: |
+          @{ sdk = @{ version = $env:WINDOWS_DOTNET_VERSION; rollForward = 'disable'; allowPrerelease = $false } } |
+            ConvertTo-Json | Set-Content -LiteralPath global.json -Encoding utf8
+          $actual = dotnet --version
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $env:WINDOWS_DOTNET_VERSION) { throw "Unexpected Windows SDK: $actual" }
+          "Selected Windows SDK: $actual"
+      - name: Cache Windows NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-${{ hashFiles('dotnet/**/*.csproj', '**/Directory.*.props', '**/Directory.*.targets', '**/NuGet.config', '**/nuget.config') }}
+          restore-keys: |
+            nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-
+      - name: Install pinned Windows MAUI workload
+        run: dotnet workload install maui-windows --version 10.0.401.1
+      - name: Describe Windows toolchain
+        run: |
+          dotnet --info
+          dotnet workload list
+          dotnet nuget locals all --list
       - run: dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-windows10.0.19041.0 --configuration Release -p:WindowsOnly=true
       - name: Test Store helpers
         shell: pwsh
