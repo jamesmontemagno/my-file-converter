@@ -103,7 +103,7 @@ public static class ToolCatalog
         if (descriptor.IsStoreCodec) return StoreUri(descriptor);
         if (descriptor.IsSystemFramework) return string.Empty;
         if (OperatingSystem.IsWindows()) return string.IsNullOrWhiteSpace(descriptor.WingetId)
-            ? string.Empty : $"winget install --id {descriptor.WingetId} -e";
+            ? string.Empty : $"winget install --id {descriptor.WingetId} -e --source winget";
         if (OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst()) return $"brew install {descriptor.BrewFormula}";
         return $"sudo apt install {descriptor.BrewFormula.Replace("--cask ", string.Empty)}";
     }

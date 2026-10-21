@@ -276,7 +276,7 @@ public sealed class ToolTests
     public void Install_command_targets_platform_package_manager()
     {
         var command = ToolCatalog.InstallCommand(ToolKind.ImageMagick);
-        if (OperatingSystem.IsWindows()) Assert.Equal("winget install --id ImageMagick.ImageMagick -e", command);
+        if (OperatingSystem.IsWindows()) Assert.Equal("winget install --id ImageMagick.ImageMagick -e --source winget", command);
         else Assert.Contains("imagemagick", command);
     }
 
@@ -335,7 +335,7 @@ public sealed class ExternalMediaToolsTests
     [InlineData(ToolKind.Ffprobe)]
     public void Both_media_tools_use_the_same_external_package(ToolKind kind)
     {
-        var expected = OperatingSystem.IsWindows() ? "winget install --id Gyan.FFmpeg -e"
+        var expected = OperatingSystem.IsWindows() ? "winget install --id Gyan.FFmpeg -e --source winget"
             : OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst() ? "brew install ffmpeg"
             : "sudo apt install ffmpeg";
         Assert.Equal(expected, ToolCatalog.InstallCommand(kind));

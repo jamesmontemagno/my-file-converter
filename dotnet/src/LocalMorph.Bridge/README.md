@@ -7,7 +7,7 @@ Install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 and ensure `ffmpeg` is on `PATH`. On Windows, install the SDK with:
 
 ```powershell
-winget install --id Microsoft.DotNet.SDK.10 -e
+winget install --id Microsoft.DotNet.SDK.10 -e --source winget
 ```
 
 Verify `dotnet --version` begins with `10.`, then run the tool without

@@ -1181,8 +1181,8 @@ const bridgePlatformGuides: Record<
     label: 'Windows',
     instructions:
       'Install the .NET 10 SDK and FFmpeg with Winget, then start the bridge in PowerShell or Windows Terminal.',
-    command: `winget install --id Microsoft.DotNet.SDK.10 -e
-winget install --id Gyan.FFmpeg.Shared -e
+    command: `winget install --id Microsoft.DotNet.SDK.10 -e --source winget
+winget install --id Gyan.FFmpeg.Shared -e --source winget
 dnx LocalMorph.Bridge`,
   },
   macos: {
