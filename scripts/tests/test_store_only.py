@@ -40,6 +40,32 @@ class StoreOnlyTests(unittest.TestCase):
         self.assertIn("Internal Testing", workflow)
         self.assertIn("FLIGHT_UPLOAD_SHA256", workflow)
 
+    def test_flight_recovery_is_isolated_from_diagnostics_and_production(self):
+        workflow = (ROOT / ".github/workflows/windows-store-publish.yml").read_text()
+        diagnose = workflow.split("\n  diagnose:", 1)[1].split("\n  flight:", 1)[0]
+        flight = workflow.split("\n  flight:", 1)[1].split("\n  publish:", 1)[0]
+        production = workflow.split("\n  publish:", 1)[1]
+        self.assertIn("replace_flight_draft:", workflow)
+        self.assertIn("default: false", workflow.split("replace_flight_draft:", 1)[1])
+        self.assertIn("MICROSOFT_STORE_FLIGHT_GROUP_IDS: ${{ vars.MICROSOFT_STORE_FLIGHT_GROUP_IDS }}", flight)
+        self.assertIn("inputs.mode == 'publish' && inputs.replace_flight_draft", flight)
+        self.assertIn("-PrepareFlight -ReplaceFlightDraft:", flight)
+        self.assertIn("environment: microsoft-store", flight)
+        self.assertIn("--flightId $env:FLIGHT_ID", flight)
+        self.assertIn("needs: [package, flight]", production)
+        for section in (diagnose, production):
+            self.assertNotIn("-PrepareFlight", section)
+            self.assertNotIn("-ReplaceFlightDraft", section)
+        self.assertNotIn("submission delete", workflow)
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 is required for mocked Partner Center checks.")
+    def test_partner_center_lifecycle(self):
+        result = subprocess.run(
+            ["pwsh", "-NoProfile", "-File", str(ROOT / "scripts/windows/Test-PartnerCenterScripts.ps1")],
+            cwd=ROOT, capture_output=True, text=True, timeout=60,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_app_does_not_contain_a_direct_updater(self):
         sources = ROOT / "dotnet/src"
         for pattern in ("*.cs", "*.xaml", "*.plist"):
