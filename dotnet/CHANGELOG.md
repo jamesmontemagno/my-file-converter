@@ -21,6 +21,7 @@ desktop installers are not distributed through GitHub Releases.
   Markdig, BSD-2). The Tools page lists them as built in. Windows behavior is unchanged.
 
 ### Fixed
+- Windows: omit the nonexistent app build number from About and feedback drafts; Mac still shows its build number.
 - Gridded HEIC photos showed the 512×512 tile size; Mac now reads the real image size natively.
 
 ### Changed

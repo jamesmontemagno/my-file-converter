@@ -174,10 +174,10 @@ levels. Further imports can extend the queue; duplicates do not consume the impo
   are not changed. Installed-package activation still requires release validation.
 - **Command preview** — inspect/copy the planned conversion; analysis-dependent operations explain
   their stages. Completed-job diagnostics retain the actual analysis and rendering commands.
-- **About & feedback** — the About tab shows the installed app version, build number, and
+- **About & feedback** — the About tab shows the installed app version, Mac-only build number, and
   Refractored LLC copyright notice, with links to the website, GitHub project, and
   [privacy policy](https://localmorph.com/#/privacy). Its Bug / Feature request form opens a
-  prefilled public GitHub issue with your title, details, app version/build, and OS information.
+  prefilled public GitHub issue with your title, details, app version, Mac build number when applicable, and OS information.
   Review and submit it on GitHub; a GitHub account is required. No files or logs are attached.
   Drafts stay in memory across tab switches and after opening GitHub, but are not saved across
   app restarts. Oversized browser links are rejected without truncating the draft.

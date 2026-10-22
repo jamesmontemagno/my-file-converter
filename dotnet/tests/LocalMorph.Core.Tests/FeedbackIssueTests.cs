@@ -5,7 +5,7 @@ namespace LocalMorph.Core.Tests;
 
 public sealed class FeedbackIssueTests
 {
-    private static readonly FeedbackEnvironment Windows = new("1.2.3", "42", "Windows 10.0.26100");
+    private static readonly FeedbackEnvironment Windows = new("1.2.3", null, "Windows 10.0.26100");
     private static readonly FeedbackEnvironment Mac = new("1.2.3", "57", "macOS Version 26.0 (Build 25A354)");
 
     [Theory]
@@ -23,7 +23,7 @@ public sealed class FeedbackIssueTests
         var query = ReadQuery(url);
         Assert.Equal(2, query.Count);
         Assert.Equal($"[{label}] My report", query["title"]);
-        Assert.Equal($"## {label}\n\nWhat happened\n\n## Environment\n\n- App: LocalMorph\n- Version: 1.2.3\n- Build: 42\n- OS: Windows 10.0.26100\n", query["body"]);
+        Assert.Equal($"## {label}\n\nWhat happened\n\n## Environment\n\n- App: LocalMorph\n- Version: 1.2.3\n- OS: Windows 10.0.26100\n", query["body"]);
     }
 
     [Fact]

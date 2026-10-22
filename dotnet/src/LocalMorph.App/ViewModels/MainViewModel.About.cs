@@ -9,8 +9,8 @@ namespace LocalMorph.App.ViewModels;
 public partial class MainViewModel
 {
     public string AppVersion => Distribution.CurrentVersionDisplay;
-    public string AppBuild => AppInfo.Current.BuildString;
-    public string FeedbackEnvironmentSummary => $"Included in your draft: LocalMorph {AppVersion}, build {AppBuild}, {FeedbackOperatingSystem}. No files or logs are attached.";
+    public string? AppBuild => DeviceInfo.Current.Platform == DevicePlatform.MacCatalyst ? AppInfo.Current.BuildString : null;
+    public string FeedbackEnvironmentSummary => $"Included in your draft: LocalMorph {AppVersion}{(AppBuild is null ? "" : $", build {AppBuild}")}, {FeedbackOperatingSystem}. No files or logs are attached.";
 
     public IReadOnlyList<ChoiceOption<FeedbackKind>> FeedbackTypes { get; } =
         [new("Bug", FeedbackKind.Bug), new("Feature request", FeedbackKind.FeatureRequest)];
