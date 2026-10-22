@@ -91,7 +91,7 @@ public sealed record ConversionOptions
     public SubtitleMode Subtitles { get; init; } = SubtitleMode.Auto;
     /// <summary>Subtitle track to burn in or extract, counted among subtitle streams (0 = first).</summary>
     public int? SubtitleTrack { get; init; }
-    /// <summary>An .srt/.vtt/.ass file to add as a track (or burn in when <see cref="Subtitles"/> is <see cref="SubtitleMode.BurnIn"/>).</summary>
+    /// <summary>A supported text subtitle file to add as a track (or burn in when <see cref="Subtitles"/> is <see cref="SubtitleMode.BurnIn"/>).</summary>
     public string? ExternalSubtitlePath { get; init; }
 
     // ---- picture edits ----
@@ -148,7 +148,7 @@ public sealed record ConversionOptions
         if (AudioDelayMilliseconds is < -60_000 or > 60_000) return "Audio sync offset must be within ±60 seconds (±60000 ms).";
         if (!string.IsNullOrWhiteSpace(ReplacementAudioPath) && !File.Exists(ReplacementAudioPath)) return $"The replacement audio file {Path.GetFileName(ReplacementAudioPath)} no longer exists.";
         if (!string.IsNullOrWhiteSpace(ExternalSubtitlePath) && !File.Exists(ExternalSubtitlePath)) return $"The subtitle file {Path.GetFileName(ExternalSubtitlePath)} no longer exists.";
-        if (!string.IsNullOrWhiteSpace(ExternalSubtitlePath) && SourceClassifier.Classify(ExternalSubtitlePath) != MediaCategory.Subtitle) return "Subtitle files must be .srt, .vtt, .ass, or .ssa.";
+        if (!string.IsNullOrWhiteSpace(ExternalSubtitlePath) && SourceClassifier.Classify(ExternalSubtitlePath) != MediaCategory.Subtitle) return SourceClassifier.SubtitleFileHint;
         return null;
     }
 

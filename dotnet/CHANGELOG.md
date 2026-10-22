@@ -6,6 +6,10 @@ desktop installers are not distributed through GitHub Releases.
 ## Unreleased
 
 ### Added
+- Desktop: import, export, and extract YouTube SBV, LRC lyrics, and paragraph-timed TTML alongside
+  SRT/WebVTT/ASS. New subtitle formats also work as selectable video tracks and for burn-in.
+  Plain-text interchange follows CaptionStack conventions; LRC end times are inferred on import
+  and omitted on export. Pickers, presets, and Windows file associations include the new extensions.
 - Mac: bundled FFmpeg now statically includes libass (CoreText fonts, FreeType, FriBidi,
   HarfBuzz) and zimg, enabling subtitle burn-in and HDR-to-SDR tone mapping. Pinned,
   hash-verified dependency sources and licenses ship with every package; Tools → Licenses

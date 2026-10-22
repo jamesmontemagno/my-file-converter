@@ -21,10 +21,14 @@ public sealed class FileImportTests : IDisposable
         Assert.DoesNotContain(paths[0], result.Paths);
     }
 
-    [Fact]
-    public async Task Folder_subtitles_are_sidecars_but_subtitle_only_folders_are_importable()
+    [Theory]
+    [InlineData("srt")]
+    [InlineData("sbv")]
+    [InlineData("lrc")]
+    [InlineData("ttml")]
+    public async Task Folder_subtitles_are_sidecars_but_subtitle_only_folders_are_importable(string extension)
     {
-        var subtitle = Path.Combine(root, "captions.srt");
+        var subtitle = Path.Combine(root, "captions." + extension);
         var video = Path.Combine(root, "video.mp4");
         await File.WriteAllTextAsync(subtitle, "");
         Assert.Equal(subtitle, Assert.Single((await FileImport.ScanAsync([root], [])).Paths));

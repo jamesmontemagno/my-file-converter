@@ -7,7 +7,7 @@ public enum MediaCategory
     Image,
     Document,
     Unknown,
-    /// <summary>Text subtitle files (SRT, WebVTT, ASS/SSA).</summary>
+    /// <summary>Text subtitle files (SRT, WebVTT, ASS/SSA, SBV, LRC, TTML).</summary>
     Subtitle
 }
 
@@ -56,7 +56,8 @@ public static class SourceClassifier
         [".ppt"] = MediaCategory.Document, [".odp"] = MediaCategory.Document, [".tex"] = MediaCategory.Document, [".rst"] = MediaCategory.Document,
         [".wpd"] = MediaCategory.Document, [".pages"] = MediaCategory.Document, [".numbers"] = MediaCategory.Document, [".key"] = MediaCategory.Document,
         // subtitles
-        [".srt"] = MediaCategory.Subtitle, [".vtt"] = MediaCategory.Subtitle, [".ass"] = MediaCategory.Subtitle, [".ssa"] = MediaCategory.Subtitle
+        [".srt"] = MediaCategory.Subtitle, [".vtt"] = MediaCategory.Subtitle, [".ass"] = MediaCategory.Subtitle, [".ssa"] = MediaCategory.Subtitle,
+        [".sbv"] = MediaCategory.Subtitle, [".lrc"] = MediaCategory.Subtitle, [".ttml"] = MediaCategory.Subtitle
     };
 
     /// <summary>Images FFmpeg cannot reliably decode; ImageMagick handles these.</summary>
@@ -81,6 +82,8 @@ public static class SourceClassifier
     };
 
     public static IReadOnlyList<string> AllKnownExtensions => Categories.Keys.ToArray();
+
+    public const string SubtitleFileHint = "Subtitle files must be .srt, .vtt, .ass, .ssa, .sbv, .lrc, or .ttml.";
 
     public static IEnumerable<string> ExtensionsFor(MediaCategory category) =>
         Categories.Where(pair => pair.Value == category).Select(pair => pair.Key);

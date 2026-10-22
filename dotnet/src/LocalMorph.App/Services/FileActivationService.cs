@@ -91,6 +91,6 @@ public static class FileActivationService
         ["audio"] = [".mp3", ".wav", ".aac", ".m4a", ".flac", ".ogg", ".oga", ".opus", ".wma", ".aiff", ".aif", ".amr", ".ac3", ".mka", ".caf"],
         ["image"] = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".heic", ".heif", ".avif", ".jxl", ".svg", ".psd", ".ico", ".tga", ".dds", ".exr"],
         ["document"] = [".pdf", ".docx", ".doc", ".odt", ".rtf", ".md", ".markdown", ".html", ".htm", ".epub", ".xlsx", ".xls", ".ods", ".csv", ".pptx", ".ppt", ".odp"],
-        ["subtitle"] = [".srt", ".vtt", ".ass", ".ssa"]
+        ["subtitle"] = SourceClassifier.ExtensionsFor(MediaCategory.Subtitle).ToArray()
     };
 }

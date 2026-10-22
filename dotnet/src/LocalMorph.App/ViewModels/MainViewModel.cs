@@ -1143,7 +1143,7 @@ public partial class MainViewModel : ObservableObject
 
     private static readonly FilePickerFileType SubtitleFileTypes = new(new Dictionary<DevicePlatform, IEnumerable<string>>
     {
-        [DevicePlatform.WinUI] = [".srt", ".vtt", ".ass", ".ssa"],
+        [DevicePlatform.WinUI] = SourceClassifier.ExtensionsFor(MediaCategory.Subtitle),
         [DevicePlatform.MacCatalyst] = ["public.item"],
         [DevicePlatform.Android] = ["*/*"]
     });
@@ -1180,7 +1180,7 @@ public partial class MainViewModel : ObservableObject
             if (path is null || !Files.Contains(file)) return;
             if (SourceClassifier.Classify(path) != MediaCategory.Subtitle)
             {
-                ShowToast("Subtitle files must be .srt, .vtt, .ass, or .ssa.");
+                ShowToast(SourceClassifier.SubtitleFileHint);
                 return;
             }
             RetainWorkspaceAccess(path);

@@ -15,13 +15,78 @@ public sealed class FfmpegEngine : IConversionEngine
     {
         var ffmpeg = tools.PathFor(ToolKind.Ffmpeg) ?? throw new InvalidOperationException("FFmpeg is not installed.");
         if (job.Operation.Kind == MediaOperation.Join) return MediaOperations.JoinPlan(job, ffmpeg, workDirectory);
-        var context = new BuildContext(job.Source, job.Format, job.Options, tools.Ffmpeg, job.WorkingOutputPath);
+        var source = job.Source;
+        var format = job.Format;
+        var outputPath = job.WorkingOutputPath;
+        var preparations = new List<EngineStep>();
+        var temporaryFiles = new List<string>();
+        string TemporarySrt(string role)
+        {
+            var path = Path.Combine(workDirectory, $"localmorph-{job.Id:N}-{role}.srt");
+            temporaryFiles.Add(path);
+            return path;
+        }
+        void Prepare(string input, string output) => preparations.Add(TextStep(input, output, "Reading subtitle captions"));
+
+        if (source.Category == MediaCategory.Subtitle && SubtitleText.NeedsConversion(source.Path))
+        {
+            var normalized = TemporarySrt("source");
+            Prepare(source.Path, normalized);
+            source = source with { Path = normalized };
+        }
+        string? preparedSubtitlePath = null;
+        if (format.Category == MediaCategory.Video && job.Options.ExternalSubtitlePath is { } external &&
+            SubtitleText.NeedsConversion(external) &&
+            (job.Options.BurnsSubtitles && format.Supports(FormatFeatures.BurnSubtitles) ||
+             !job.Options.BurnsSubtitles && format.Supports(FormatFeatures.Subtitles) && SoftSubtitleCodec(format) is not null))
+        {
+            preparedSubtitlePath = TemporarySrt("external");
+            Prepare(external, preparedSubtitlePath);
+        }
+        var convertOutput = format.Category == MediaCategory.Subtitle && SubtitleText.NeedsConversion(format.ExtensionWithDot);
+        if (convertOutput)
+        {
+            format = FormatCatalog.Find("subtitles-srt")!;
+            outputPath = TemporarySrt("output");
+        }
+        var context = new BuildContext(source, format, job.Options, tools.Ffmpeg, outputPath, preparedSubtitlePath: preparedSubtitlePath);
+        var plan = CreatePlan(context, ffmpeg, workDirectory, job.Id);
+        if (temporaryFiles.Count == 0) return plan;
+
+        ConversionPlan Wrap(ConversionPlan inner) => new()
+        {
+            Steps = preparations.Concat(inner.Steps).Concat(convertOutput
+                ? [TextStep(outputPath, job.WorkingOutputPath, "Writing subtitle captions", progressStart: 1)] : Array.Empty<EngineStep>()).ToArray(),
+            Finalize = inner.Finalize,
+            Cleanup = () =>
+            {
+                inner.Cleanup?.Invoke();
+                foreach (var path in temporaryFiles) File.Delete(path);
+            },
+            RetryOversizedOutput = inner.RetryOversizedOutput is { } retry
+                ? bytes => retry(bytes) is { } next ? Wrap(next) : null
+                : null
+        };
+        return Wrap(plan);
+    }
+
+    private static EngineStep TextStep(string source, string destination, string label, double progressStart = 0) => new()
+    {
+        Label = label,
+        Summary = $"Convert text captions: {CommandLine.Quote(source)} -> {CommandLine.Quote(destination)}",
+        Execute = (_, token) => SubtitleText.ConvertAsync(source, destination, token),
+        ProgressStart = progressStart,
+        IsIndeterminate = true
+    };
+
+    private static ConversionPlan CreatePlan(BuildContext context, string ffmpeg, string workDirectory, Guid jobId)
+    {
         if (context.TargetSizeError is { } sizeError) throw new InvalidOperationException(sizeError);
         var durationUs = EffectiveDurationMicroseconds(context);
 
         if (context.UsesTwoPass)
         {
-            var passLog = Path.Combine(workDirectory, $"localmorph-{job.Id:N}");
+            var passLog = Path.Combine(workDirectory, $"localmorph-{jobId:N}");
             var pass1 = BuildArguments(context, pass: 1, passLog);
             var pass2 = BuildArguments(context, pass: 2, passLog);
             return new ConversionPlan
@@ -79,7 +144,7 @@ public sealed class FfmpegEngine : IConversionEngine
                     var adjusted = (int)Math.Floor(bitrate * (limit * 1_000_000 / bytes) * 0.9);
                     if (adjusted < 100 || adjusted >= bitrate) return null;
                     var retry = new BuildContext(context.Source, context.Format, context.Options,
-                        context.Capabilities, context.OutputPath, adjusted);
+                        context.Capabilities, context.OutputPath, adjusted, context.PreparedSubtitlePath);
                     return SinglePassPlan(retry, ffmpeg);
                 }
                 : null
@@ -921,13 +986,14 @@ public sealed class FfmpegEngine : IConversionEngine
 
     private sealed class BuildContext
     {
-        public BuildContext(SourceFile source, OutputFormat format, ConversionOptions options, FfmpegCapabilities capabilities, string outputPath, int? targetVideoKbps = null)
+        public BuildContext(SourceFile source, OutputFormat format, ConversionOptions options, FfmpegCapabilities capabilities, string outputPath, int? targetVideoKbps = null, string? preparedSubtitlePath = null)
         {
             Source = source;
             Format = format;
             Options = options;
             Capabilities = capabilities;
             OutputPath = outputPath;
+            PreparedSubtitlePath = preparedSubtitlePath;
             if (options.VideoBitrateKbps is not null && options.Validate(format) is { } bitrateIssue)
                 throw new InvalidOperationException(bitrateIssue);
             if (options.ToneMapToSdr)
@@ -998,6 +1064,7 @@ public sealed class FfmpegEngine : IConversionEngine
             {
                 throw new InvalidOperationException($"The subtitle file {Path.GetFileName(externalSubtitles)} no longer exists.");
             }
+            externalSubtitles = preparedSubtitlePath ?? externalSubtitles;
 
             if (isVideoTarget && options.BurnsSubtitles && format.Supports(FormatFeatures.BurnSubtitles))
             {
@@ -1055,6 +1122,7 @@ public sealed class FfmpegEngine : IConversionEngine
             return format.Supports(FormatFeatures.PlaybackSpeed) && Math.Abs(options.PlaybackSpeed - 1.0) > 0.001 ? duration / options.PlaybackSpeed : duration;
         }
 
+        public string? PreparedSubtitlePath { get; }
         private const int MinimumVideoKbps = 100;
 
         /// <summary>Audio track to read, counted among the source's audio streams.</summary>

@@ -182,12 +182,18 @@ public static class FormatCatalog
         new("pdf-image", "PDF (from image)", "pdf", "Wrap an image into a single-page PDF.", MediaCategory.Document, FromImage,
             FormatFeatures.Quality | FormatFeatures.Resolution, [EngineKind.ImageMagick, EngineKind.AppleNative]),
 
-        // ---- Subtitles (FFmpeg's text subtitle encoders are built into every build) ----
+        // ---- Subtitles (plain-text interchange bridges through FFmpeg's built-in SRT codec) ----
         new("subtitles-srt", "SubRip (SRT)", "srt", "Plain-text subtitles every player and editor understands.", MediaCategory.Subtitle, FromVideoOrSubtitle,
             FormatFeatures.SubtitleTrack, [EngineKind.Ffmpeg], Badge: "Popular"),
         new("subtitles-vtt", "WebVTT", "vtt", "Subtitles for HTML5 video, YouTube, and the web.", MediaCategory.Subtitle, FromVideoOrSubtitle,
             FormatFeatures.SubtitleTrack, [EngineKind.Ffmpeg]),
         new("subtitles-ass", "Advanced SubStation (ASS)", "ass", "Styled subtitles for Aegisub and anime fansubs.", MediaCategory.Subtitle, FromVideoOrSubtitle,
+            FormatFeatures.SubtitleTrack, [EngineKind.Ffmpeg]),
+        new("subtitles-sbv", "YouTube SBV", "sbv", "Compact timed captions for YouTube. Plain text without styling.", MediaCategory.Subtitle, FromVideoOrSubtitle,
+            FormatFeatures.SubtitleTrack, [EngineKind.Ffmpeg]),
+        new("subtitles-lrc", "LRC lyrics", "lrc", "Timestamped lyrics. End times and line breaks are not preserved.", MediaCategory.Subtitle, FromVideoOrSubtitle,
+            FormatFeatures.SubtitleTrack, [EngineKind.Ffmpeg]),
+        new("subtitles-ttml", "TTML", "ttml", "XML captions with paragraph timing. Plain text without styling.", MediaCategory.Subtitle, FromVideoOrSubtitle,
             FormatFeatures.SubtitleTrack, [EngineKind.Ffmpeg]),
 
         // ---- Documents ----
