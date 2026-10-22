@@ -83,6 +83,7 @@ Configuration (names/scopes only; never print secret values):
 |---|---|---|
 | Repository secrets | `MICROSOFT_STORE_IDENTITY_NAME`, `MICROSOFT_STORE_PUBLISHER`, `MICROSOFT_STORE_PUBLISHER_DISPLAY_NAME` | Partner Center package identity |
 | `microsoft-store` environment variable | `MICROSOFT_STORE_PRODUCT_ID` | Canonical Partner Center product ID; repository secret of the same name is a fallback |
+| `microsoft-store` environment variable | `MICROSOFT_STORE_FLIGHT_GROUP_IDS` | Comma-separated existing Partner Center tester group IDs; required only when an approved publish must create the missing `Internal Testing` flight |
 | `microsoft-store` environment secrets | `PARTNER_CENTER_TENANT_ID`, `PARTNER_CENTER_SELLER_ID`, `PARTNER_CENTER_CLIENT_ID`, `PARTNER_CENTER_CLIENT_SECRET` | Protected account/application access |
 
 The `microsoft-store` environment must have required reviewers and **administrator bypass disabled**.
@@ -150,17 +151,24 @@ These checks do not replace a real SDK-produced `.msixupload`, WACK, or installa
 
 1. **package** (manual default): builds/validates the upload artifact and never calls Partner Center.
 2. **diagnose** (manual, protected environment): read-only token/application-access and Internal
-   Testing flight-discovery checks; does not create a draft submission. Even diagnostics require
-   reviewer approval.
+   Testing flight/submission-readiness checks; never creates a flight or deletes a draft, even if
+   `replace_flight_draft` is selected. Even diagnostics require reviewer approval.
 3. **publish** (manual) **or a Windows tag push**: packages the selected tag, then runs the rollout:
    - **Approve and submit Internal Testing flight** pauses for environment approval. It revalidates
      the artifact against the exact version/source commit, authenticates, and enumerates all package
      flight pages through the Store API. Exactly one case-sensitive name `Internal Testing` must
-     match, with a valid flight ID. Missing/duplicate/malformed flights fail closed; the script never
-     falls back to the first flight or the production listing, and never creates a flight.
+     match, with a valid flight ID. If missing, it creates that flight **through the API**, using
+     `MICROSOFT_STORE_FLIGHT_GROUP_IDS`; missing/invalid group configuration blocks creation.
+     Existing flights keep their tester assignments. Duplicate/malformed flights fail closed;
+     the script never falls back to the first flight or the production listing.
+   - It checks the flight's pending submission before invoking the CLI. A portal-created draft
+     without an API upload URL blocks publishing with recovery instructions. Manual **publish**
+     can explicitly opt into `replace_flight_draft`: only a `PendingCommit` portal draft on
+     `Internal Testing` is deleted. The flight, tester groups, and production submission are
+     never deleted. Processing/certification/unknown states block publishing, even with this opt-in.
    - After approval, `msstore publish <upload> --appId <product> --flightId <resolved-id>` submits
-     the actual `.msixupload`, including crash symbols, only to that existing flight. Tester groups
-     and membership remain configured in Partner Center.
+     the actual `.msixupload`, including crash symbols, only to the resolved flight. The CLI creates
+     an API submission when none exists. Tester membership remains configured in Partner Center.
    - **Approve and submit tested upload to production** depends on successful flight submission and
      pauses for a **second** environment approval. Before approving, check Partner Center for flight
      publication, install through an account in the flight's tester group, and complete smoke/WACK/
@@ -181,6 +189,39 @@ instead when no deployment approvals should be queued.
 Never use `--noCommit` as a claimed read-only test: creating/uploading a draft mutates Partner Center.
 Build success, accepted upload, submission processing, certification, and Store availability are
 different milestones; review Partner Center status separately.
+
+### Recovering Internal Testing flight failures
+
+Run `39681368160` exposed two different states:
+
+- Attempts 1 and 2 resolved different flight IDs, then the CLI rejected the first pending
+  submission: “Retrieved a submission that was created in Partner Center.” That draft had no
+  API `fileUploadUrl`; recreating a flight in the portal can reproduce the same failure.
+- Attempt 3 (job `119526047662`) found **zero** flights named `Internal Testing`, so publishing
+  never started. The logs establish the missing flight, not who removed or renamed it.
+
+A **flight** (name, ID, tester assignments) and its **submission** (draft packages) are separate
+resources. A new flight is needed only if the flight is actually missing:
+
+1. Set `MICROSOFT_STORE_FLIGHT_GROUP_IDS` in the protected `microsoft-store` environment to the
+   intended existing tester group IDs from Partner Center (not display names or email addresses).
+   The approved job uses these only to create a missing flight; it never rewrites existing groups.
+2. After merging the fix, manually run **Windows Store Publish** from **main**, mode **publish**,
+   tag **`v1.0.3-windows`** (or the desired immutable Windows tag). This rebuilds/verifies the tagged
+   package while using the current deployment scripts. **Re-running the old failed run uses the
+   old workflow/commit and cannot pick up this fix.** Do not move the tag.
+3. If a portal draft still exists, inspect/back up its unsaved work first, then enable
+   **replace_flight_draft** on the manual publish run and approve the flight job. This deliberately
+   discards that draft's changes. Alternatively discard only the unsubmitted draft in Partner
+   Center, leaving the flight intact. Do not edit submissions in the portal during an API publish.
+4. Let the CLI create/upload/commit the API submission. Check publication and tester installation
+   before the separate production approval. No live submission is implied by local mocked tests.
+
+Do **not** use `msstore submission delete` for flight recovery: it targets the application's
+production draft, not a flight draft. The scoped API endpoint used here is
+`DELETE /applications/{appId}/flights/{flightId}/submissions/{submissionId}`.
+See the [CLI publishing lifecycle](https://github.com/microsoft/msstore-cli/blob/main/MSStore.CLI/Helpers/IStorePackagedAPIExtensions.cs)
+and [flight submission API](https://learn.microsoft.com/windows/uwp/monetize/manage-flight-submissions).
 
 ### Remaining release gates
 

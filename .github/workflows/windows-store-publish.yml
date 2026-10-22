@@ -16,6 +16,11 @@ on:
         options: [package, diagnose, publish]
         default: package
         required: true
+      replace_flight_draft:
+        description: 'Publish only: discard an unsubmitted portal-created Internal Testing draft (keeps flight/testers)'
+        type: boolean
+        default: false
+        required: false
 
 permissions:
   contents: read
@@ -158,7 +163,7 @@ jobs:
           if ($uploads.Count -ne 1) { throw 'Expected exactly one Store upload artifact.' }
           .\scripts\windows\Test-StoreUpload.ps1 -Upload $uploads[0].FullName -IdentityName $env:IDENTITY_NAME -Publisher $env:PUBLISHER -Version $env:PACKAGE_VERSION -SourceCommit $env:SOURCE_COMMIT
           "sha256=$((Get-FileHash -LiteralPath $uploads[0].FullName -Algorithm SHA256).Hash)" >> $env:GITHUB_OUTPUT
-      - name: Check Partner Center access and resolve Internal Testing
+      - name: Prepare API-managed Internal Testing flight
         id: flight
         env:
           MICROSOFT_STORE_PRODUCT_ID: ${{ vars.MICROSOFT_STORE_PRODUCT_ID || secrets.MICROSOFT_STORE_PRODUCT_ID }}
@@ -166,8 +171,10 @@ jobs:
           PARTNER_CENTER_SELLER_ID: ${{ secrets.PARTNER_CENTER_SELLER_ID }}
           PARTNER_CENTER_CLIENT_ID: ${{ secrets.PARTNER_CENTER_CLIENT_ID }}
           PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+          MICROSOFT_STORE_FLIGHT_GROUP_IDS: ${{ vars.MICROSOFT_STORE_FLIGHT_GROUP_IDS }}
+          REPLACE_FLIGHT_DRAFT: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'publish' && inputs.replace_flight_draft }}
         run: |
-          $flightId = .\scripts\windows\Test-PartnerCenter.ps1 -FlightName 'Internal Testing'
+          $flightId = .\scripts\windows\Test-PartnerCenter.ps1 -FlightName 'Internal Testing' -PrepareFlight -ReplaceFlightDraft:($env:REPLACE_FLIGHT_DRAFT -eq 'true')
           "flight_id=$flightId" >> $env:GITHUB_OUTPUT
       - name: Set up Microsoft Store Developer CLI
         uses: microsoft/microsoft-store-apppublisher@v1.4

@@ -19,8 +19,14 @@ No successful package, helper test, or compilation establishes certification or 
 - Require reviewer approval and disable administrator bypass. The owner explicitly permits
   self-approval; the workflow checks this policy with `Test-StoreApproval.ps1 -AllowSelfReview`.
   Missing/unreadable protections must fail closed.
-- Confirm exactly one existing package flight named **Internal Testing**, with intended testers.
-  The scripts discover it by name; they do not create it or fall back to production.
+- Confirm exactly one package flight named **Internal Testing**, with intended testers, or set
+  `MICROSOFT_STORE_FLIGHT_GROUP_IDS` to existing tester group IDs so the approved publish job can
+  create the missing flight through the API. Existing flights keep their tester assignments;
+  duplicate matches fail closed and publishing never falls back to production.
+- Do not create the first flight submission in the portal. If a portal-created draft already
+  exists, preserve the flight and discard only that draft, or explicitly enable
+  `replace_flight_draft` on a manual publish after reviewing the draft changes that will be lost.
+  Processing submissions are never discarded. See the recovery runbook for details.
 - Confirm category, pricing/markets, support and published desktop privacy policy, age ratings,
   and the [Microsoft Store listing kit](../store/microsoft-store/README.md). The published
   privacy page at `https://localmorph.com/#/privacy` now has a desktop apps section.
@@ -54,7 +60,7 @@ No successful package, helper test, or compilation establishes certification or 
 ## Windows submission gates
 
 1. Manual **package** builds and verifies only; no Partner Center mutation.
-2. Protected **diagnose** is read-only token/app access and flight discovery, not draft creation.
+2. Protected **diagnose** is read-only token/app access and flight/submission checks, never mutation.
 3. A tag push or manual **publish** waits for approval before submitting the validated upload
    to **Internal Testing**.
 4. Wait for flight publication, install as a tester, and complete the checks above.
