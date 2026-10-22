@@ -132,9 +132,14 @@ levels. Further imports can extend the queue; duplicates do not consume the impo
   language, drop the commentary), keep them all with your choice first and default, save any track as
   its own audio file, or **replace the soundtrack** with a new audio file (stream-copying the video).
 - **Subtitles** — keep embedded tracks (MKV keeps everything; MP4/MOV get text tracks as `mov_text`),
-  remove them, add an `.srt`/`.vtt`/`.ass` file as a selectable track, or **burn** a track or file into
-  the picture (text via libass, PGS/VobSub via overlay). Extract a subtitle track to SRT/VTT/ASS, or
-  convert subtitle files between those formats.
+  remove them, add an SRT/VTT/ASS/SSA/SBV/LRC/TTML file as a selectable track, or **burn** a track or file into
+  the picture (text via libass, PGS/VobSub via overlay). Extract a subtitle track to SRT/VTT/ASS/SBV/LRC/TTML,
+  or convert subtitle files between those formats. SBV, LRC, and TTML use plain-text captions without
+  styling or positioning. Like [CaptionStack](https://github.com/jamesmontemagno/captionstack), LRC import
+  ends each cue at the next timestamp (the final cue lasts three seconds); LRC export keeps start times
+  only and flattens multiline captions. TTML supports paragraph/container `begin`, `end`, and `dur`
+  with clock or h/m/s/ms offset times and explicit line breaks; frame/tick timing, sequential containers,
+  and timed spans are not supported. All desktop subtitle conversions use the installed or bundled FFmpeg.
 - **Edit & effects** — crop to 16:9, 9:16, 1:1, 4:5, 4:3, or 21:9 (center crop), mirror/flip,
   deinterlace, denoise, fade in/out (video and audio), reverse, volume, and audio-sync offset.
 - **Extras** — a 4×4 **contact sheet** of thumbnails across a video, and a **waveform** PNG of any
@@ -169,10 +174,10 @@ levels. Further imports can extend the queue; duplicates do not consume the impo
   are not changed. Installed-package activation still requires release validation.
 - **Command preview** — inspect/copy the planned conversion; analysis-dependent operations explain
   their stages. Completed-job diagnostics retain the actual analysis and rendering commands.
-- **About & feedback** — the About tab shows the installed app version, build number, and
+- **About & feedback** — the About tab shows the installed app version, Mac-only build number, and
   Refractored LLC copyright notice, with links to the website, GitHub project, and
   [privacy policy](https://localmorph.com/#/privacy). Its Bug / Feature request form opens a
-  prefilled public GitHub issue with your title, details, app version/build, and OS information.
+  prefilled public GitHub issue with your title, details, app version, Mac build number when applicable, and OS information.
   Review and submit it on GitHub; a GitHub account is required. No files or logs are attached.
   Drafts stay in memory across tab switches and after opening GitHub, but are not saved across
   app restarts. Oversized browser links are rejected without truncating the draft.

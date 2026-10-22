@@ -1045,7 +1045,8 @@
                             <FlexLayout Wrap="Wrap">
                                 <Label Text="{Binding AppVersion, StringFormat='Version {0}'}" Style="{StaticResource Muted}"
                                        Margin="0,0,20,0" AutomationId="VersionLabel" />
-                                <Label Text="{Binding AppBuild, StringFormat='Build {0}'}" Style="{StaticResource Muted}" AutomationId="BuildLabel" />
+                                <Label Text="{Binding AppBuild, StringFormat='Build {0}'}" Style="{StaticResource Muted}"
+                                       IsVisible="{OnPlatform Default=False, MacCatalyst=True}" AutomationId="BuildLabel" />
                             </FlexLayout>
                             <Label Text="Copyright Refractored LLC" Style="{StaticResource Muted}" AutomationId="CopyrightLabel" />
                         </VerticalStackLayout>

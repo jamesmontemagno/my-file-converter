@@ -6,7 +6,7 @@ public enum FeedbackKind
     FeatureRequest
 }
 
-public sealed record FeedbackEnvironment(string Version, string Build, string OperatingSystem);
+public sealed record FeedbackEnvironment(string Version, string? Build, string OperatingSystem);
 
 public sealed record FeedbackIssueResult(Uri? Url, string? Error = null);
 
@@ -24,13 +24,16 @@ public static class FeedbackIssue
             return new(null, "Enter a title for your report.");
         if (string.IsNullOrWhiteSpace(details))
             return new(null, "Enter details for your report.");
-        if (string.IsNullOrWhiteSpace(environment.Version) || string.IsNullOrWhiteSpace(environment.Build) || string.IsNullOrWhiteSpace(environment.OperatingSystem))
+        if (string.IsNullOrWhiteSpace(environment.Version) ||
+            (environment.Build is not null && string.IsNullOrWhiteSpace(environment.Build)) ||
+            string.IsNullOrWhiteSpace(environment.OperatingSystem))
             return new(null, "App version, build, or OS information is unavailable. Restart LocalMorph and try again.");
         if (title.Length > MaxUrlLength || details.Length > MaxUrlLength)
             return new(null, TooLongMessage);
 
         var label = kind == FeedbackKind.Bug ? "Bug" : "Feature request";
-        var body = $"## {label}\n\n{details.Trim()}\n\n## Environment\n\n- App: LocalMorph\n- Version: {environment.Version}\n- Build: {environment.Build}\n- OS: {environment.OperatingSystem}\n";
+        var buildLine = environment.Build is null ? "" : $"- Build: {environment.Build}\n";
+        var body = $"## {label}\n\n{details.Trim()}\n\n## Environment\n\n- App: LocalMorph\n- Version: {environment.Version}\n{buildLine}- OS: {environment.OperatingSystem}\n";
         var url = $"{IssueUrl}?title={Uri.EscapeDataString($"[{label}] {title.Trim()}")}&body={Uri.EscapeDataString(body)}";
         if (url.Length > MaxUrlLength) return new(null, TooLongMessage);
 

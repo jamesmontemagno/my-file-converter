@@ -72,6 +72,12 @@ public static class Presets
             new ConversionOptions(), [MediaCategory.Subtitle]),
         new("to-vtt", "WebVTT", "Subtitles for the web and HTML5 video.", "\uF45B", "subtitles-vtt",
             new ConversionOptions(), [MediaCategory.Subtitle]),
+        new("to-sbv", "YouTube SBV", "Compact timed captions for YouTube.", "\uE558", "subtitles-sbv",
+            new ConversionOptions(), [MediaCategory.Subtitle]),
+        new("to-lrc", "LRC lyrics", "Start-timestamped lyrics without end times.", "\uE558", "subtitles-lrc",
+            new ConversionOptions(), [MediaCategory.Subtitle]),
+        new("to-ttml", "TTML", "Plain-text XML captions with paragraph timing.", "\uE558", "subtitles-ttml",
+            new ConversionOptions(), [MediaCategory.Subtitle]),
 
         new("to-pdf", "Save as PDF", "Fixed-layout PDF from any office document.", "\uF3AD", "pdf",
             new ConversionOptions(), [MediaCategory.Document]),

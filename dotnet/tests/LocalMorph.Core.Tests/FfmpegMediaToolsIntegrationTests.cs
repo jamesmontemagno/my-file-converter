@@ -146,6 +146,77 @@ public sealed class FfmpegMediaToolsIntegrationTests
     }
 
     [FfmpegFact]
+    public async Task Sbv_lrc_and_ttml_extract_convert_and_work_as_external_tracks()
+    {
+        var root = Fixture.Root;
+        var video = await Fixture.MakeMultiTrackVideoAsync(root);
+        var baseline = await Fixture.ConvertAsync(video, "subtitles-srt");
+        AssertCompleted(baseline);
+        var expected = SubtitleText.Parse(await File.ReadAllTextAsync(baseline.OutputPath), "srt");
+        foreach (var extension in new[] { "sbv", "lrc", "ttml" })
+        {
+            var extracted = await Fixture.ConvertAsync(video, "subtitles-" + extension);
+            AssertCompleted(extracted);
+            var cues = SubtitleText.Parse(await File.ReadAllTextAsync(extracted.OutputPath), extension);
+            Assert.Equal(expected[0].StartMilliseconds, cues[0].StartMilliseconds);
+            Assert.Contains("Hello from LocalMorph", cues[0].Text);
+
+            foreach (var target in new[] { "srt", "vtt", "ass" })
+            {
+                var converted = await Fixture.ConvertAsync(extracted.OutputPath, "subtitles-" + target);
+                AssertCompleted(converted);
+                Assert.Contains("Hello from LocalMorph", await File.ReadAllTextAsync(converted.OutputPath));
+            }
+            var muxed = await Fixture.ConvertAsync(video, "mp4-copy", new ConversionOptions { ExternalSubtitlePath = extracted.OutputPath });
+            AssertCompleted(muxed);
+            Assert.Equal("mov_text", await Fixture.ProbeAsync(muxed.OutputPath, "-select_streams", "s", "-show_entries", "stream=codec_name", "-of", "csv=p=0"));
+
+            if (Fixture.Inventory.Value.Ffmpeg.MayHaveFilter("subtitles"))
+            {
+                var burned = await Fixture.ConvertAsync(video, "mp4-h264", new ConversionOptions
+                {
+                    ExternalSubtitlePath = extracted.OutputPath, Subtitles = SubtitleMode.BurnIn,
+                    UseHardwareEncoder = false, Speed = EncodingSpeed.Fast, TargetHeight = 180
+                });
+                AssertCompleted(burned);
+            }
+        }
+        Assert.Empty(Directory.EnumerateFiles(Path.Combine(root, "work"), "localmorph-*.srt"));
+    }
+
+    [FfmpegFact]
+    public async Task New_subtitle_formats_preserve_text_through_the_srt_bridge()
+    {
+        var root = Fixture.Root;
+        SubtitleCue[] cues = [new(125, 1500, "A & B < C > D\n\u65e5\u672c\u8a9e")];
+        var source = Path.Combine(root, "captions.sbv");
+        await File.WriteAllTextAsync(source, SubtitleText.Serialize(cues, "sbv"));
+        var converted = await Fixture.ConvertAsync(source, "subtitles-ttml");
+        AssertCompleted(converted);
+        Assert.Equal(cues, SubtitleText.Parse(await File.ReadAllTextAsync(converted.OutputPath), "ttml"));
+        Assert.Equal(SubtitleText.Serialize(cues, "sbv"), await File.ReadAllTextAsync(source));
+    }
+
+    [FfmpegFact]
+    public async Task Malformed_subtitles_leave_existing_destinations_untouched_and_clean_work_files()
+    {
+        var root = Fixture.Root;
+        var source = Path.Combine(root, "invalid.sbv");
+        var destination = Path.Combine(root, "existing.vtt");
+        await File.WriteAllTextAsync(source, "not valid captions");
+        await File.WriteAllTextAsync(destination, "existing destination");
+        var job = new ConversionJob(await SourceInspector.InspectAsync(source, Fixture.Inventory.Value),
+            FormatCatalog.Find("subtitles-vtt")!, new(), destination, EngineKind.Ffmpeg)
+        { OverwritePolicy = OverwritePolicy.Overwrite };
+        await ConversionRunner.RunAsync(job, Fixture.Inventory.Value, Path.Combine(root, "work"));
+        Assert.Equal(JobState.Failed, job.State);
+        Assert.Contains("Invalid SBV", job.Error);
+        Assert.Equal("existing destination", await File.ReadAllTextAsync(destination));
+        Assert.Empty(Directory.EnumerateFiles(Path.Combine(root, "work")));
+        Assert.Empty(Directory.EnumerateFiles(root, ".localmorph-*"));
+    }
+
+    [FfmpegFact]
     public async Task Contact_sheet_and_waveform_are_single_images()
     {
         var root = Fixture.Root;

@@ -62,6 +62,9 @@
               <uap:FileType>.vtt</uap:FileType>
               <uap:FileType>.ass</uap:FileType>
               <uap:FileType>.ssa</uap:FileType>
+              <uap:FileType>.sbv</uap:FileType>
+              <uap:FileType>.lrc</uap:FileType>
+              <uap:FileType>.ttml</uap:FileType>
             </uap:SupportedFileTypes>
           </uap:FileTypeAssociation>
         </uap:Extension>

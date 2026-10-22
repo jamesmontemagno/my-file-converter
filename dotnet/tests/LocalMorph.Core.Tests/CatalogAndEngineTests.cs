@@ -53,7 +53,7 @@ public sealed class FormatCatalogTests
     public void Subtitle_sources_get_subtitle_targets_only()
     {
         var formats = FormatCatalog.ForSource(MediaCategory.Subtitle).Select(format => format.Id).ToList();
-        Assert.Equal(["subtitles-srt", "subtitles-vtt", "subtitles-ass"], formats);
+        Assert.Equal(["subtitles-srt", "subtitles-vtt", "subtitles-ass", "subtitles-sbv", "subtitles-lrc", "subtitles-ttml"], formats);
         Assert.Equal(MediaCategory.Subtitle, SourceClassifier.Classify("movie.en.srt"));
         Assert.Equal(MediaCategory.Subtitle, SourceClassifier.Classify("captions.vtt"));
     }
@@ -161,6 +161,9 @@ public sealed class FormatCatalogTests
     [InlineData("song.m4a", MediaCategory.Audio)]
     [InlineData("photo.HEIC", MediaCategory.Image)]
     [InlineData("deck.pptx", MediaCategory.Document)]
+    [InlineData("captions.SBV", MediaCategory.Subtitle)]
+    [InlineData("lyrics.LRC", MediaCategory.Subtitle)]
+    [InlineData("captions.TTML", MediaCategory.Subtitle)]
     [InlineData("mystery.xyz", MediaCategory.Unknown)]
     public void Classifier_is_case_insensitive(string name, MediaCategory expected) =>
         Assert.Equal(expected, SourceClassifier.Classify(name));
