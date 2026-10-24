@@ -119,7 +119,9 @@ class CiPathTests(unittest.TestCase):
         store = (root / ".github/workflows/windows-store-publish.yml").read_text()
         package = store.split("\n  package:", 1)[1].split("\n  diagnose:", 1)[0]
         for job in (desktop, package):
-            self.assertIn(r"DOTNET_INSTALL_DIR: ${{ runner.temp }}\localmorph-dotnet", job)
+            self.assertIn(r"DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\localmorph-dotnet", job)
+            self.assertLess(job.index("DOTNET_INSTALL_DIR="), job.index("actions/setup-dotnet@"))
+            self.assertNotIn("${{ runner.temp }}", job)
             self.assertIn("(Get-Command dotnet -CommandType Application).Source -ne $expected", job)
             self.assertIn(r"metadata\workloads\10.0.400\installertype\msi", job)
             self.assertIn("if (Test-Path -LiteralPath $msi) { throw", job)

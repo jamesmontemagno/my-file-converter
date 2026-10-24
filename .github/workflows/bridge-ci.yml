@@ -156,9 +156,11 @@ jobs:
     env:
       DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: 'true'
       WINDOWS_DOTNET_VERSION: '10.0.401'
-      DOTNET_INSTALL_DIR: ${{ runner.temp }}\localmorph-dotnet
     steps:
       - uses: actions/checkout@v7
+      - name: Initialize isolated Windows SDK directory
+        shell: pwsh
+        run: '"DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\localmorph-dotnet" >> $env:GITHUB_ENV'
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.WINDOWS_DOTNET_VERSION }}
