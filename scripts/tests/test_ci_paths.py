@@ -4,7 +4,10 @@ from pathlib import Path
 import ast
 import fnmatch
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -53,6 +56,69 @@ class CiPathTests(unittest.TestCase):
                      "scripts/ci_paths.py", ".github/workflows/bridge-ci.yml"):
             with self.subTest(path=path):
                 self.assertEqual({"distribution", "bridge", "core", "windows", "mac"}, self.selected(path))
+
+    def test_shared_windows_cache_setup_runs_all_consuming_coverage(self):
+        self.assertEqual({"distribution", "bridge", "core", "windows", "mac"},
+                         self.selected("scripts/windows/Initialize-NuGetCache.ps1"))
+
+    def test_windows_package_caches_follow_effective_location_before_dotnet_setup(self):
+        root = Path(__file__).resolve().parents[2]
+        bridge = (root / ".github/workflows/bridge-ci.yml").read_text()
+        store = (root / ".github/workflows/windows-store-publish.yml").read_text()
+        jobs = [
+            bridge.split("\n  test:", 1)[1].split("\n  desktop-app:", 1)[0],
+            bridge.split("\n  desktop-app:", 1)[1].split("\n  desktop-app-mac:", 1)[0],
+            store.split("\n  package:", 1)[1].split("\n  diagnose:", 1)[0],
+        ]
+        for job in jobs:
+            self.assertLess(job.index("Initialize-NuGetCache.ps1"), job.index("actions/setup-dotnet@"))
+            self.assertIn("if: runner.os == 'Windows' && runner.environment == 'github-hosted'", job)
+            self.assertIn("RUNNER_ENVIRONMENT: ${{ runner.environment }}", job)
+            self.assertIn("path: ${{ env.NUGET_PACKAGES || '~/.nuget/packages' }}", job)
+            self.assertIn("key: nuget-v2-${{ runner.os }}-${{ runner.arch }}", job)
+            self.assertNotIn("nuget-v1-", job)
+            self.assertNotIn("path: ${{ env.NUGET_HTTP_CACHE_PATH", job)
+        self.assertNotIn("Initialize-NuGetCache.ps1", store.split("\n  diagnose:", 1)[1])
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell is required to exercise cache setup")
+    def test_cache_setup_guards_and_preserves_explicit_paths(self):
+        script = Path(__file__).resolve().parents[1] / "windows/Initialize-NuGetCache.ps1"
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            output = base / "github-env"
+            environment = dict(os.environ, RUNNER_ENVIRONMENT="self-hosted",
+                               RUNNER_TEMP=str(base), GITHUB_ENV=str(output))
+            for name in ("NUGET_PACKAGES", "NUGET_HTTP_CACHE_PATH"):
+                environment.pop(name, None)
+
+            def invoke():
+                return subprocess.run(["pwsh", "-NoProfile", "-File", str(script)],
+                                      env=environment, capture_output=True, text=True)
+
+            self.assertEqual(0, invoke().returncode)
+            self.assertFalse(output.exists())
+            environment["RUNNER_ENVIRONMENT"] = "github-hosted"
+            if os.name != "nt":
+                self.assertEqual(0, invoke().returncode)
+                self.assertFalse(output.exists())
+                return
+            result = invoke()
+            self.assertEqual(0, result.returncode, result.stderr)
+            paths = dict(line.split("=", 1) for line in output.read_text(encoding="utf-8-sig").splitlines())
+            self.assertEqual(str(base / "nuget/packages"), paths["NUGET_PACKAGES"])
+            self.assertEqual(str(base / "nuget/http-cache"), paths["NUGET_HTTP_CACHE_PATH"])
+            self.assertTrue(all(Path(path).is_dir() for path in paths.values()))
+            output.unlink()
+            environment["NUGET_PACKAGES"] = str(base / "explicit-packages")
+            self.assertEqual(0, invoke().returncode)
+            self.assertNotIn("NUGET_PACKAGES=", output.read_text(encoding="utf-8-sig"))
+            self.assertIn("NUGET_HTTP_CACHE_PATH=", output.read_text(encoding="utf-8-sig"))
+            output.unlink()
+            environment["NUGET_HTTP_CACHE_PATH"] = str(base / "explicit-http")
+            self.assertEqual(0, invoke().returncode)
+            self.assertFalse(output.exists())
+            environment.pop("RUNNER_TEMP")
+            self.assertNotEqual(0, invoke().returncode)
 
     def test_bridge_changes_do_not_rebuild_apps_or_run_core_tests(self):
         for path in ("dotnet/src/LocalMorph.Bridge/BridgeApplication.cs",
