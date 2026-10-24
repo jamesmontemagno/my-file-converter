@@ -105,14 +105,13 @@ jobs:
         with:
           dotnet-version: '10.0.401'
       - run: dotnet workload install maui-maccatalyst --version 10.0.401.1
-      - name: Build and validate pinned beta media before importing signing keys
+      - uses: ./.github/actions/mac-media
+      - name: Validate pinned beta media payload before importing signing keys
         run: |
-          mkdir -p artifacts/mac-media
-          curl --fail --location --retry 3 https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz -o artifacts/mac-media/ffmpeg-9.0.2.tar.xz
-          bash scripts/mac/build-proof-media.sh artifacts/mac-media/ffmpeg-9.0.2.tar.xz artifacts/mac-media/media arm64
           mkdir -p artifacts/mac-media/payload
           cp -R artifacts/mac-media/media/arm64/bin artifacts/mac-media/payload/
           cp artifacts/mac-media/media/arm64/{COPYING.LGPLv2.1,LICENSE.md,configure-flags.txt,source.txt,binaries.sha256,dependencies.txt,xcode.txt} artifacts/mac-media/payload/
+          cp artifacts/mac-media/cache.json artifacts/mac-media/payload/
           cp -R artifacts/mac-media/media/arm64/licenses artifacts/mac-media/media/sources artifacts/mac-media/payload/
           python3 - <<'PY'
           from pathlib import Path

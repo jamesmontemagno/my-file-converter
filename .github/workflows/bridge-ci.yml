@@ -14,6 +14,7 @@ on:
       - 'scripts/ci_paths.py'
       - 'scripts/windows/**'
       - 'scripts/mac/**'
+      - '.github/actions/mac-media/**'
       - 'scripts/tests/**'
       - 'scripts/create-release-tags.*'
       - 'Casks/**'
@@ -38,6 +39,7 @@ on:
       - 'scripts/ci_paths.py'
       - 'scripts/windows/**'
       - 'scripts/mac/**'
+      - '.github/actions/mac-media/**'
       - 'scripts/tests/**'
       - 'scripts/create-release-tags.*'
       - 'Casks/**'
@@ -226,14 +228,10 @@ jobs:
         run: dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-maccatalyst -p:MacOnly=true -p:LocalMorphMacSandboxProof=true -p:EnableCodeSigning=false
       - name: Validate sandbox proof architecture, minimum OS and scenes
         run: python3 scripts/mac/validate_app.py "dotnet/src/LocalMorph.App/bin/Debug/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph Sandbox Proof.app"
-      - name: Build pinned source-only media with libass/zimg
-        run: |
-          mkdir -p artifacts/mac-proof
-          curl --fail --location --retry 3 https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz -o artifacts/mac-proof/ffmpeg-9.0.2.tar.xz
-          bash scripts/mac/build-proof-media.sh artifacts/mac-proof/ffmpeg-9.0.2.tar.xz artifacts/mac-proof/media arm64
+      - uses: ./.github/actions/mac-media
       - name: Test Apple engine against source-built tools (not host FFmpeg)
         run: |
-          export PATH="$PWD/artifacts/mac-proof/media/arm64/bin:$PATH"
+          export PATH="$PWD/artifacts/mac-media/media/arm64/bin:$PATH"
           dotnet test dotnet/tests/LocalMorph.Core.Tests --configuration Release \
             --filter 'FullyQualifiedName~AppleEncoder|FullyQualifiedName~FfmpegEngineTests|FullyQualifiedName~FileAccessRegistryTests|FullyQualifiedName~BundledToolTests|FullyQualifiedName~QueueFileAccessTests|FullyQualifiedName~FileImportTests' \
             --logger 'trx;LogFileName=apple-encoders.trx' \
@@ -242,12 +240,12 @@ jobs:
         run: |
           dotnet build dotnet/src/LocalMorph.App/LocalMorph.App.csproj -f net10.0-maccatalyst -c Release \
             -p:MacOnly=true -p:LocalMorphMacStoreBuild=true -p:LocalMorphMacStoreBetaRelease=true \
-            "-p:LocalMorphMacStoreMediaDirectory=$PWD/artifacts/mac-proof/media/arm64" \
+            "-p:LocalMorphMacStoreMediaDirectory=$PWD/artifacts/mac-media/media/arm64" \
             -p:EnableCodeSigning=true -p:CodesignKey=- -p:CodesignRequireProvisioningProfile=false \
             -p:NoDSymUtil=false -p:DebugSymbols=true -p:DebugType=portable
           python3 scripts/mac/store_release.py stage \
             --app dotnet/src/LocalMorph.App/bin/mac-store/Release/net10.0-maccatalyst/maccatalyst-arm64/LocalMorph.app \
-            --media artifacts/mac-proof/media/arm64 --version 1.0.0 --build 1 \
+            --media artifacts/mac-media/media/arm64 --version 1.0.0 --build 1 \
             --source "$(git rev-parse HEAD)" --identity=-
       - name: Launch actual Release workspace in an isolated sandbox (light, dark and system)
         run: |
@@ -257,7 +255,7 @@ jobs:
       - name: Ad-hoc sign isolated proof without Store credentials
         env:
           LOCALMORPH_PROOF_SIGNING_IDENTITY: '-'
-        run: bash scripts/mac/prepare-sandbox-proof.sh artifacts/mac-proof/media artifacts/mac-proof/proof
+        run: bash scripts/mac/prepare-sandbox-proof.sh artifacts/mac-media/media artifacts/mac-proof/proof
       - name: Verify native scenes, sandbox, Apple encoders, hard cap and cancellation
         run: |
           python3 scripts/mac/smoke_sandbox.py \
@@ -281,17 +279,14 @@ jobs:
             artifacts/mac-proof/sandbox-app.sha256
             artifacts/mac-proof/workspace-app.zip
             artifacts/mac-proof/workspace-app.sha256
-            artifacts/mac-proof/ffmpeg-9.0.2.tar.xz
-            artifacts/mac-proof/media/arm64/COPYING.LGPLv2.1
-            artifacts/mac-proof/media/arm64/LICENSE.md
-            artifacts/mac-proof/media/arm64/configure-flags.txt
-            artifacts/mac-proof/media/arm64/source.txt
-            artifacts/mac-proof/media/arm64/dependencies.txt
-            artifacts/mac-proof/media/arm64/xcode.txt
-            artifacts/mac-proof/media/arm64/licenses/
-            artifacts/mac-proof/media/sources/
             artifacts/mac-proof/proof/proof-source/build-proof-media.sh
             artifacts/mac-proof/proof/proof-source/FFmpeg-proof-NOTICE.txt
+      - name: Retain raw media sources, licensing and cache provenance
+        uses: actions/upload-artifact@v7
+        with:
+          name: mac-source-media
+          path: artifacts/mac-media/
+          if-no-files-found: error
       - name: Retain proof evidence (not Store certification)
         if: always()
         uses: actions/upload-artifact@v7
@@ -308,9 +303,10 @@ jobs:
             artifacts/mac-proof/proof/*.txt
             artifacts/mac-proof/proof/*.patch
             artifacts/mac-proof/proof/*.sha256
-            artifacts/mac-proof/media/arm64/*.txt
-            artifacts/mac-proof/media/arm64/*.log
-            artifacts/mac-proof/media/arm64/*.sha256
+            artifacts/mac-media/cache.json
+            artifacts/mac-media/media/arm64/*.txt
+            artifacts/mac-media/media/arm64/*.log
+            artifacts/mac-media/media/arm64/*.sha256
 
   desktop-app-mac-baseline:
     name: Run the Xcode 27 proof on macOS 15

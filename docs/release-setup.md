@@ -40,9 +40,45 @@ SDK setup and workload installation in job totals. A cache hit is not evidence t
 installation was skipped or that a speedup came from storage. Toolchain and NuGet paths
 are printed in the app jobs. To reset caches, increment their `nuget-v1` prefix.
 
+Windows workload installation is deliberately not replaced by an installed-packs cache.
+Windows MAUI uses MSI installer state as well as SDK packs/manifests/installation records;
+restoring only files cannot establish a valid machine installation. The existing NuGet
+cache and explicit pinned install remain in both desktop CI and Store packaging. No
+Windows workload-install speedup is claimed.
+
 The tag-helper regression test uses an executable POSIX Git shim and therefore runs
 only on Unix. It is explicitly skipped on Windows, where invoking the real Git binary
 instead of that shim could create or push release tags.
+
+## Source-only Mac media cache
+
+Desktop Mac CI and approved Store packaging share `.github/actions/mac-media`. A cold
+run builds the pinned FFmpeg/libass/zimg stack from source with a restricted system-tool
+environment. Only the raw media binaries, pinned source archives, build logs, configuration,
+licenses and provenance manifest enter `artifacts/mac-media`; dependency build trees,
+applications, signed bundles, provisioning profiles and credentials never enter the cache.
+Linker-generated ad-hoc Mach-O signatures are permitted, but identity-signed media is not.
+The cache is explicitly saved before signing starts, not in a post-job hook.
+
+The exact-match key covers all Mac scripts/patches and packaging/legal inputs, the composite
+action, every source pin, sanitized build environment and output path, runner OS/architecture/
+image, macOS/kernel, Xcode build, compiler and linker/tool hashes, and selected SDK version,
+build and settings. There are no prefix restore keys. Any changed input produces a cold build;
+unavailable/evicted caches also build from source. A restored entry with invalid contents
+fails closed rather than silently replacing evidence. Increment `mac-media-v1` to reset.
+
+Every hit rechecks the complete file inventory, all source archive pins, raw binary hashes,
+licenses/configuration, arm64-only/system-library dependencies, macOS 15.0 deployment target,
+absence of identity signatures, and required subtitle/tone-mapping filters. `cache.json`
+records the original producer commit and input hashes separately from the current app's
+immutable source provenance. CI retains that manifest and sources in `mac-source-media`.
+Existing sandbox, minimum-OS host, architecture, Store approval/signing and release validation
+still run; cache validation is not runtime or Store-certification evidence.
+
+The audit measured a median 206 seconds for the uncached Mac source-build step; warm-run
+end-to-end savings remain pending matched hosted miss/hit runs, including transfer and
+revalidation. Public standard compute has zero net cost here: this is a time optimization,
+not a dollar-savings claim. Do not dispatch Store/release workflows to benchmark it.
 
 ## Cutting a Windows Store release
 

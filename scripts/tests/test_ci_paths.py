@@ -32,6 +32,7 @@ class CiPathTests(unittest.TestCase):
         self.assertEqual({"distribution", "windows"}, self.selected("dotnet/src/LocalMorph.App/Platforms/Windows/App.xaml.cs"))
         self.assertEqual({"distribution", "windows"}, self.selected("dotnet/src/LocalMorph.Shell/Commands.cpp"))
         self.assertEqual({"distribution", "mac"}, self.selected("scripts/mac/store_release.py"))
+        self.assertEqual({"distribution", "mac"}, self.selected(".github/actions/mac-media/action.yml"))
         self.assertEqual({"distribution", "windows"}, self.selected("dotnet/packaging/windows/StoreManifest.xml"))
 
     def test_app_only_changes_do_not_run_bridge_or_core_tests(self):
@@ -158,7 +159,7 @@ class CiPathTests(unittest.TestCase):
         self.assertNotIn("\n  media:\n", workflow)
         self.assertNotIn("mac-store-beta-media", workflow)
         self.assertNotIn("unittest discover", workflow)
-        self.assertEqual(1, workflow.count("bash scripts/mac/build-proof-media.sh"))
+        self.assertEqual(1, workflow.count("uses: ./.github/actions/mac-media"))
         self.assertIn("name: mac-store-package", workflow)
         self.assertIn("PACKAGE_SHA256:", workflow)
         self.assertIn("needs: [validate, package]", workflow)
