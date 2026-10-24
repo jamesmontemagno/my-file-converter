@@ -156,6 +156,7 @@ jobs:
     env:
       DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: 'true'
       WINDOWS_DOTNET_VERSION: '10.0.401'
+      DOTNET_INSTALL_DIR: ${{ runner.temp }}\localmorph-dotnet
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -177,7 +178,16 @@ jobs:
           restore-keys: |
             nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-
       - name: Install pinned Windows MAUI workload
-        run: dotnet workload install maui-windows --version 10.0.401.1
+        shell: pwsh
+        run: |
+          $expected = Join-Path $env:DOTNET_INSTALL_DIR 'dotnet.exe'
+          if ((Get-Command dotnet -CommandType Application).Source -ne $expected) { throw 'Expected the isolated job-local SDK.' }
+          $msi = Join-Path $env:DOTNET_INSTALL_DIR 'metadata\workloads\10.0.400\installertype\msi'
+          if (Test-Path -LiteralPath $msi) { throw 'Expected file-based workload installation, not machine-wide MSI state.' }
+          dotnet workload install maui-windows --version 10.0.401.1
+          if ($LASTEXITCODE -ne 0) { throw 'MAUI workload installation failed.' }
+          $workload = dotnet workload --version
+          if ($LASTEXITCODE -ne 0 -or $workload -ne '10.0.401.1') { throw "Unexpected workload set: $workload" }
       - name: Describe Windows toolchain
         run: |
           dotnet --info

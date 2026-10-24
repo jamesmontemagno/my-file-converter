@@ -112,6 +112,29 @@ class CiPathTests(unittest.TestCase):
         self.assertEqual({"distribution"}, self.selected("scripts/create-release-tags.ps1"))
         self.assertEqual({"bridge"}, self.selected(".github/workflows/bridge-release.yml"))
 
+    def test_windows_isolates_sdk_but_keeps_pinned_install_and_full_build_coverage(self):
+        root = Path(__file__).resolve().parents[2]
+        bridge = (root / ".github/workflows/bridge-ci.yml").read_text()
+        desktop = bridge.split("\n  desktop-app:", 1)[1].split("\n  desktop-app-mac:", 1)[0]
+        store = (root / ".github/workflows/windows-store-publish.yml").read_text()
+        package = store.split("\n  package:", 1)[1].split("\n  diagnose:", 1)[0]
+        for job in (desktop, package):
+            self.assertIn(r"DOTNET_INSTALL_DIR: ${{ runner.temp }}\localmorph-dotnet", job)
+            self.assertIn("(Get-Command dotnet -CommandType Application).Source -ne $expected", job)
+            self.assertIn(r"metadata\workloads\10.0.400\installertype\msi", job)
+            self.assertIn("if (Test-Path -LiteralPath $msi) { throw", job)
+            self.assertIn("dotnet workload install maui-windows --version 10.0.401.1", job)
+            self.assertIn("$workload -ne '10.0.401.1'", job)
+            self.assertNotIn("--skip-manifest-update", job)
+            self.assertNotIn("Remove-Item", job)
+        self.assertIn("--configuration Release -p:WindowsOnly=true", desktop)
+        for architecture in ("x64", "ARM64"):
+            self.assertIn("Build-Shell.ps1 -Architecture " + architecture, desktop)
+        self.assertIn("Test-StoreScripts.ps1", desktop)
+        self.assertIn("Build-Store.ps1", package)
+        self.assertIn("environment: microsoft-store", store)
+        self.assertIn("needs: [package, flight]", store)
+
     def test_reintroducing_direct_distribution_still_runs_guards(self):
         for path in ("Casks/localmorph.rb", "public/appcast.xml", "dotnet/packaging/winget/installer.yaml",
                      ".github/workflows/mac-release.yml", ".github/workflows/windows-release.yml",

@@ -32,6 +32,16 @@ Each Windows job writes a CI-only `global.json` with roll-forward disabled and c
 the selected SDK, so a newer SDK preinstalled on the image cannot override the pin.
 No SDK selection file is committed or applied to the Apple/Linux jobs.
 
+Desktop CI and Store packaging set the supported `setup-dotnet` `DOTNET_INSTALL_DIR`
+to a fresh job-local directory under `runner.temp`. The SDK archive uses the SDK's
+file-based workload installer there, avoiding reconciliation/upgrades of unrelated
+Visual Studio Android/Apple/WebAssembly MSI workloads. Both jobs assert that PATH resolves
+to the isolated `dotnet.exe`, reject an MSI installer marker, install the pinned
+`maui-windows` workload, and verify the resulting workload-set version. No installer
+markers are deleted or overridden; the runner's machine-wide SDK/Visual Studio is untouched.
+The full Release app/XAML build, x64/ARM64 native shell compilation and symbol/Store checks
+remain automatic. Store packaging still builds both architectures with the same pins.
+
 These remain x64 `windows-latest` jobs, including builds that produce ARM64 packages.
 There is no ARM-host disk formatting or runner migration. Existing path-based CI routing,
 Store upload verification, symbols, and both approval gates remain unchanged.
@@ -41,10 +51,11 @@ installation was skipped or that a speedup came from storage. Toolchain and NuGe
 are printed in the app jobs. To reset caches, increment their `nuget-v1` prefix.
 
 Windows workload installation is deliberately not replaced by an installed-packs cache.
-Windows MAUI uses MSI installer state as well as SDK packs/manifests/installation records;
-restoring only files cannot establish a valid machine installation. The existing NuGet
-cache and explicit pinned install remain in both desktop CI and Store packaging. No
-Windows workload-install speedup is claimed.
+The Program Files SDK uses MSI installer state as well as SDK packs/manifests/installation
+records; restoring only files cannot establish a valid machine installation. The job-local
+SDK instead performs a fresh supported file-based install, not an MSI cache restore.
+The existing NuGet cache and explicit pinned install remain in both workflows.
+Measure its time benefit separately from Mac's on-demand proof change.
 
 The tag-helper regression test uses an executable POSIX Git shim and therefore runs
 only on Unix. It is explicitly skipped on Windows, where invoking the real Git binary
