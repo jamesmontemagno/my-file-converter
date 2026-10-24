@@ -1,0 +1,28 @@
+name: Verified source-only Mac media
+description: Reuse only compatible unsigned source-built media and its complete source/legal evidence.
+runs:
+  using: composite
+  steps:
+    - name: Fingerprint media sources and selected Apple toolchain
+      id: inputs
+      shell: bash
+      run: python3 scripts/mac/media_cache.py key
+    - name: Restore exact unsigned media
+      id: cache
+      uses: actions/cache/restore@v6
+      with:
+        path: artifacts/mac-media
+        key: mac-media-v1-${{ steps.inputs.outputs.key }}
+    - name: Build pinned source-only media with libass/zimg
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: python3 scripts/mac/media_cache.py build
+    - name: Revalidate sources, hashes, licenses, architecture, minimum OS and raw tools
+      shell: bash
+      run: python3 scripts/mac/media_cache.py verify
+    - name: Save verified raw media before any signing
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: artifacts/mac-media
+        key: mac-media-v1-${{ steps.inputs.outputs.key }}

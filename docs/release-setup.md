@@ -32,6 +32,16 @@ Each Windows job writes a CI-only `global.json` with roll-forward disabled and c
 the selected SDK, so a newer SDK preinstalled on the image cannot override the pin.
 No SDK selection file is committed or applied to the Apple/Linux jobs.
 
+Desktop CI and Store packaging set the supported `setup-dotnet` `DOTNET_INSTALL_DIR`
+to a fresh job-local directory under `runner.temp`. The SDK archive uses the SDK's
+file-based workload installer there, avoiding reconciliation/upgrades of unrelated
+Visual Studio Android/Apple/WebAssembly MSI workloads. Both jobs assert that PATH resolves
+to the isolated `dotnet.exe`, reject an MSI installer marker, install the pinned
+`maui-windows` workload, and verify the resulting workload-set version. No installer
+markers are deleted or overridden; the runner's machine-wide SDK/Visual Studio is untouched.
+The full Release app/XAML build, x64/ARM64 native shell compilation and symbol/Store checks
+remain automatic. Store packaging still builds both architectures with the same pins.
+
 These remain x64 `windows-latest` jobs, including builds that produce ARM64 packages.
 There is no ARM-host disk formatting or runner migration. Existing path-based CI routing,
 Store upload verification, symbols, and both approval gates remain unchanged.
@@ -40,9 +50,58 @@ SDK setup and workload installation in job totals. A cache hit is not evidence t
 installation was skipped or that a speedup came from storage. Toolchain and NuGet paths
 are printed in the app jobs. To reset caches, increment their `nuget-v1` prefix.
 
+Windows workload installation is deliberately not replaced by an installed-packs cache.
+The Program Files SDK uses MSI installer state as well as SDK packs/manifests/installation
+records; restoring only files cannot establish a valid machine installation. The job-local
+SDK instead performs a fresh supported file-based install, not an MSI cache restore.
+The existing NuGet cache and explicit pinned install remain in both workflows.
+Measure its time benefit separately from Mac's on-demand proof change.
+
 The tag-helper regression test uses an executable POSIX Git shim and therefore runs
 only on Unix. It is explicitly skipped on Windows, where invoking the real Git binary
 instead of that shim could create or push release tags.
+
+## Source-only Mac media cache
+
+The on-demand Mac proof and approved Store packaging share `.github/actions/mac-media`. A cold
+run builds the pinned FFmpeg/libass/zimg stack from source with a restricted system-tool
+environment. Only the raw media binaries, pinned source archives, build logs, configuration,
+licenses and provenance manifest enter `artifacts/mac-media`; dependency build trees,
+applications, signed bundles, provisioning profiles and credentials never enter the cache.
+Linker-generated ad-hoc Mach-O signatures are permitted, but identity-signed media is not.
+The cache is explicitly saved before signing starts, not in a post-job hook.
+
+The exact-match key covers all Mac scripts/patches and packaging/legal inputs, the composite
+action, every source pin, sanitized build environment and output path, runner OS/architecture/
+image, macOS/kernel, Xcode build, compiler and linker/tool hashes, and selected SDK version,
+build and settings. There are no prefix restore keys. Any changed input produces a cold build;
+unavailable/evicted caches also build from source. A restored entry with invalid contents
+fails closed rather than silently replacing evidence. Increment `mac-media-v1` to reset.
+
+Every hit rechecks the complete file inventory, all source archive pins, raw binary hashes,
+licenses/configuration, arm64-only/system-library dependencies, macOS 15.0 deployment target,
+absence of identity signatures, and required subtitle/tone-mapping filters. `cache.json`
+records the original producer commit and input hashes separately from the current app's
+immutable source provenance. CI retains that manifest and sources in `mac-source-media`.
+Existing sandbox, minimum-OS host, architecture, Store approval/signing and release validation
+still run; cache validation is not runtime or Store-certification evidence.
+
+Automatic **Bridge CI** keeps unsigned Release/Store-workspace/proof-workspace compilation,
+generated architecture/minimum-OS/scene checks and the Store packaging guard. It does not
+build media, sign/launch apps or schedule a macOS 15 runtime runner. Run **Mac full media
+and sandbox proof** (`mac-proof.yml`) explicitly in Actions, selecting the branch/tag to
+validate. It retains source-only Apple encoder tests, ad-hoc sandbox/workspace launches,
+exact-app transfer to macOS 15, and all runtime/source evidence without Store credentials.
+Run this proof for the exact release candidate before approving Store packaging; fast
+compilation alone does not demonstrate runtime compatibility. Store package validation,
+source licensing/provenance checks, signing and protected approvals remain automatic in
+the existing Store workflow. The manual workflow becomes selectable after it lands on
+the default branch.
+
+The audit measured a median 206 seconds for the uncached Mac source-build step; cache
+savings must include transfer and revalidation, while automatic PRs now omit that work
+entirely. Public standard compute has zero net cost here: this is a time optimization,
+not a dollar-savings claim. Do not dispatch Store/release workflows to benchmark it.
 
 ## Cutting a Windows Store release
 
@@ -253,7 +312,7 @@ Mac Catalyst CI pins .NET SDK **10.0.401**, workload set **10.0.401.1**, and
 Xcode **27.0**, following the [official compatibility notes](https://github.com/dotnet/macios/releases/tag/dotnet-10.0.1xx-xcode27.0-10722).
 That workload contains Apple SDK **27.0.10722** and MAUI **10.0.110**. Apple app heads use
 MAUI Controls 10.0.110; Windows and Android retain their existing package version.
-Update the three pins together in `bridge-ci.yml` and any future Mac Store workflow; an unversioned workload
+Update the three pins together in `bridge-ci.yml`, `mac-proof.yml` and the Mac Store workflow; an unversioned workload
 install can advance to a Mac Catalyst SDK that requires an Xcode version not yet on the runner.
 The `desktop-app-mac` job uses GitHub's arm64 **`xcode-27`** runner on macOS 27, not
 `macos-26` with an unavailable Xcode selector. The runner became
@@ -279,7 +338,8 @@ CI validates the **generated app bundle**, not just the source plist, with
 `python3 scripts/mac/validate_app.py <path-to.app>`: macOS 15.0 minimum, arm64-only main
 executable, and the expected single-window scene manifest. Run this for both Release and
 the isolated Debug proof. Compilation and these checks are not startup evidence.
-CI additionally builds the source-pinned minimal FFmpeg/FFprobe proof payload, ad-hoc signs
+The manually dispatched **Mac full media and sandbox proof** workflow builds or restores and
+revalidates the source-pinned minimal FFmpeg/FFprobe proof payload, ad-hoc signs
 an isolated Debug app, and launches it with `scripts/mac/smoke_sandbox.py`. The check requires
 scene-page startup, native bookmark creation/resolution for a container fixture,
 H.264/HEVC Apple software encoding, a target-size hard cap, and shared-queue
@@ -289,8 +349,9 @@ The same signed app is archived once with a SHA256, transferred to the arm64 `ma
 job, verified, and launched there without rebuilding or installing the .NET SDK/media tools.
 That job asserts the host OS/architecture and retains separate `mac-sandbox-proof-macos15`
 runtime evidence. A declared deployment minimum alone does not satisfy this check.
-The transfer artifact includes the matching FFmpeg source archive, license texts, configure
-flags and build instructions. The proof app also carries FFmpeg attribution and license texts
+The separate `mac-source-media` artifact includes the matching FFmpeg source archive, license
+texts, configure flags and producer provenance; the app transfer retains build instructions.
+The proof app also carries FFmpeg attribution and license texts
 under `Contents/Resources/FFmpeg`; diagnostic artifacts are not exempt from component notices.
 It uses no Store credentials and cannot launch the normal app identity. The ad-hoc CI identity
 is `com.refractored.localmorph.sandboxproof.ci`, separate from the Apple Development proof

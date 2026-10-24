@@ -255,6 +255,13 @@ When selected, the test matrix runs on Linux, Windows, and Mac, with separate co
 tests, Core tests, and Bridge packaging. Web CI and Pages deployment use their own web-input path
 filters rather than running for unrelated desktop changes.
 
+Automatic Mac app validation compiles the Release app and isolated Store/proof workspaces,
+checks generated arm64/minimum-OS/scene metadata, and enforces the Store packaging guard.
+It does not build FFmpeg or launch the apps. Run **Mac full media and sandbox proof** manually
+from Actions for source-only media/Apple encoder tests and sandbox runtime checks on both
+Xcode 27 and macOS 15. Run it for the release candidate before approval; compile checks alone
+are not runtime evidence. See [release setup](docs/release-setup.md#source-only-mac-media-cache).
+
 ## Deployment
 
 Push to `main` and GitHub Actions will build and publish `dist/` to GitHub Pages.

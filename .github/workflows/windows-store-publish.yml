@@ -64,6 +64,8 @@ jobs:
           if ($head -ne $tagCommit) { throw 'Checkout does not match the requested tag commit.' }
           "version=$version" >> $env:GITHUB_OUTPUT
           "source_commit=$head" >> $env:GITHUB_OUTPUT
+      - name: Initialize isolated Windows SDK directory
+        run: '"DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\localmorph-dotnet" >> $env:GITHUB_ENV'
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.WINDOWS_DOTNET_VERSION }}
@@ -83,8 +85,16 @@ jobs:
             nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-
       - name: Install Windows MAUI workload
         run: |
+          $expected = Join-Path $env:DOTNET_INSTALL_DIR 'dotnet.exe'
+          $resolved = (Get-Command dotnet | Select-Object -First 1).Source
+          if ($resolved -ne $expected) { throw "Expected the isolated job-local SDK at $expected; resolved $resolved." }
+          "Using isolated SDK: $resolved"
+          $msi = Join-Path $env:DOTNET_INSTALL_DIR 'metadata\workloads\10.0.400\installertype\msi'
+          if (Test-Path -LiteralPath $msi) { throw 'Expected file-based workload installation, not machine-wide MSI state.' }
           dotnet workload install maui-windows --version 10.0.401.1
           if ($LASTEXITCODE -ne 0) { throw 'MAUI workload installation failed.' }
+          $workload = dotnet workload --version
+          if ($LASTEXITCODE -ne 0 -or $workload -ne '10.0.401.1') { throw "Unexpected workload set: $workload" }
       - name: Describe Windows toolchain
         run: |
           dotnet --info

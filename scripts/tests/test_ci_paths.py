@@ -32,6 +32,8 @@ class CiPathTests(unittest.TestCase):
         self.assertEqual({"distribution", "windows"}, self.selected("dotnet/src/LocalMorph.App/Platforms/Windows/App.xaml.cs"))
         self.assertEqual({"distribution", "windows"}, self.selected("dotnet/src/LocalMorph.Shell/Commands.cpp"))
         self.assertEqual({"distribution", "mac"}, self.selected("scripts/mac/store_release.py"))
+        self.assertEqual({"distribution", "mac"}, self.selected(".github/actions/mac-media/action.yml"))
+        self.assertEqual({"distribution", "mac"}, self.selected(".github/workflows/mac-proof.yml"))
         self.assertEqual({"distribution", "windows"}, self.selected("dotnet/packaging/windows/StoreManifest.xml"))
 
     def test_app_only_changes_do_not_run_bridge_or_core_tests(self):
@@ -110,6 +112,32 @@ class CiPathTests(unittest.TestCase):
         self.assertEqual({"distribution"}, self.selected("scripts/create-release-tags.ps1"))
         self.assertEqual({"bridge"}, self.selected(".github/workflows/bridge-release.yml"))
 
+    def test_windows_isolates_sdk_but_keeps_pinned_install_and_full_build_coverage(self):
+        root = Path(__file__).resolve().parents[2]
+        bridge = (root / ".github/workflows/bridge-ci.yml").read_text()
+        desktop = bridge.split("\n  desktop-app:", 1)[1].split("\n  desktop-app-mac:", 1)[0]
+        store = (root / ".github/workflows/windows-store-publish.yml").read_text()
+        package = store.split("\n  package:", 1)[1].split("\n  diagnose:", 1)[0]
+        for job in (desktop, package):
+            self.assertIn(r"DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\localmorph-dotnet", job)
+            self.assertLess(job.index("DOTNET_INSTALL_DIR="), job.index("actions/setup-dotnet@"))
+            self.assertNotIn("${{ runner.temp }}", job)
+            self.assertIn("(Get-Command dotnet | Select-Object -First 1).Source", job)
+            self.assertIn("if ($resolved -ne $expected) { throw", job)
+            self.assertIn(r"metadata\workloads\10.0.400\installertype\msi", job)
+            self.assertIn("if (Test-Path -LiteralPath $msi) { throw", job)
+            self.assertIn("dotnet workload install maui-windows --version 10.0.401.1", job)
+            self.assertIn("$workload -ne '10.0.401.1'", job)
+            self.assertNotIn("--skip-manifest-update", job)
+            self.assertNotIn("Remove-Item", job)
+        self.assertIn("--configuration Release -p:WindowsOnly=true", desktop)
+        for architecture in ("x64", "ARM64"):
+            self.assertIn("Build-Shell.ps1 -Architecture " + architecture, desktop)
+        self.assertIn("Test-StoreScripts.ps1", desktop)
+        self.assertIn("Build-Store.ps1", package)
+        self.assertIn("environment: microsoft-store", store)
+        self.assertIn("needs: [package, flight]", store)
+
     def test_reintroducing_direct_distribution_still_runs_guards(self):
         for path in ("Casks/localmorph.rb", "public/appcast.xml", "dotnet/packaging/winget/installer.yaml",
                      ".github/workflows/mac-release.yml", ".github/workflows/windows-release.yml",
@@ -158,7 +186,7 @@ class CiPathTests(unittest.TestCase):
         self.assertNotIn("\n  media:\n", workflow)
         self.assertNotIn("mac-store-beta-media", workflow)
         self.assertNotIn("unittest discover", workflow)
-        self.assertEqual(1, workflow.count("bash scripts/mac/build-proof-media.sh"))
+        self.assertEqual(1, workflow.count("uses: ./.github/actions/mac-media"))
         self.assertIn("name: mac-store-package", workflow)
         self.assertIn("PACKAGE_SHA256:", workflow)
         self.assertIn("needs: [validate, package]", workflow)

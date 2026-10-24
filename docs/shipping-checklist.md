@@ -92,7 +92,9 @@ Mac delivery is not yet enabled. Do not tag or advertise a public Mac release un
 - Prove signed sandboxed execution using bundled FFmpeg/FFprobe without Homebrew or host PATH.
   Review component licenses, exact source/build provenance, hashes, codec/filter availability,
   native dependencies and necessary entitlements before approving a tool payload.
-- Inspect the `mac-sandbox-proof` CI evidence independently from host-FFmpeg test results.
+- Manually run **Mac full media and sandbox proof** for the exact release candidate before
+  approving Store packaging. Inspect its `mac-sandbox-proof` and `mac-sandbox-proof-macos15`
+  evidence independently from automatic compile checks and host-FFmpeg test results.
   The minimal Debug proof checks Apple software H.264/HEVC, target-size caps and cancellation,
   and now includes libass/zscale. Confirm `subtitles`, `ass` and `zscale` appear on the Tools
   page and that the dependency `sources/` archives and `licenses/` ship with the package. Verify explicit software bitrate,
