@@ -202,16 +202,36 @@ class MediaCacheTests(unittest.TestCase):
         self.assertNotIn("restore-keys:", action)
         self.assertNotIn("actions/cache@", action)
         self.assertLess(action.index("media_cache.py verify"), action.index("actions/cache/save@"))
-        for name in ("bridge-ci.yml", "mac-store-publish.yml"):
+        for name in ("mac-proof.yml", "mac-store-publish.yml"):
             workflow = (cache.ROOT / ".github/workflows" / name).read_text()
             self.assertEqual(1, workflow.count("uses: ./.github/actions/mac-media"))
             self.assertLess(workflow.index("uses: ./.github/actions/mac-media"),
-                            workflow.index("codesign" if name == "bridge-ci.yml" else "id: signing"))
-        bridge = (cache.ROOT / ".github/workflows/bridge-ci.yml").read_text()
-        upload = bridge.split("name: mac-sandbox-app\n", 1)[1].split("      - name:", 1)[0]
+                            workflow.index("codesign" if name == "mac-proof.yml" else "id: signing"))
+        proof = (cache.ROOT / ".github/workflows/mac-proof.yml").read_text()
+        upload = proof.split("name: mac-sandbox-app\n", 1)[1].split("      - name:", 1)[0]
         self.assertNotIn("artifacts/mac-media", upload)
         self.assertIn("artifacts/mac-proof/sandbox-app.zip", upload)
-        self.assertIn("desktop-app-mac-baseline:", bridge)
+        self.assertIn("desktop-app-mac-baseline:", proof)
+
+    def test_automatic_mac_checks_compile_without_media_builds_or_app_launches(self):
+        bridge = (cache.ROOT / ".github/workflows/bridge-ci.yml").read_text()
+        mac = bridge.split("\n  desktop-app-mac:", 1)[1]
+        for flag in ("-p:EnableCodeSigning=false", "-p:LocalMorphMacStoreBuild=true",
+                     "-p:LocalMorphMacSandboxProof=true", "-t:ValidateMacStoreBuild"):
+            self.assertIn(flag, mac)
+        self.assertEqual(3, mac.count("python3 scripts/mac/validate_app.py"))
+        for expensive in ("actions/mac-media", "smoke_sandbox.py", "prepare-sandbox-proof.sh",
+                          "desktop-app-mac-baseline", "build-proof-media.sh"):
+            self.assertNotIn(expensive, mac)
+        proof = (cache.ROOT / ".github/workflows/mac-proof.yml").read_text()
+        triggers = proof.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        self.assertEqual("  workflow_dispatch:", triggers.strip("\n"))
+        for retained in ("AppleEncoder", "FfmpegEngineTests", "QueueFileAccessTests",
+                         "prepare-sandbox-proof.sh", "smoke_sandbox.py", "macos-15",
+                         "codesign --verify --strict", "sandbox-app.sha256", "workspace-app.sha256"):
+            self.assertIn(retained, proof)
+        self.assertNotIn("secrets.", proof)
+        self.assertNotIn("environment:", proof)
 
 
 if __name__ == "__main__":

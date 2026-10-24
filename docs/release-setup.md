@@ -52,7 +52,7 @@ instead of that shim could create or push release tags.
 
 ## Source-only Mac media cache
 
-Desktop Mac CI and approved Store packaging share `.github/actions/mac-media`. A cold
+The on-demand Mac proof and approved Store packaging share `.github/actions/mac-media`. A cold
 run builds the pinned FFmpeg/libass/zimg stack from source with a restricted system-tool
 environment. Only the raw media binaries, pinned source archives, build logs, configuration,
 licenses and provenance manifest enter `artifacts/mac-media`; dependency build trees,
@@ -75,9 +75,21 @@ immutable source provenance. CI retains that manifest and sources in `mac-source
 Existing sandbox, minimum-OS host, architecture, Store approval/signing and release validation
 still run; cache validation is not runtime or Store-certification evidence.
 
-The audit measured a median 206 seconds for the uncached Mac source-build step; warm-run
-end-to-end savings remain pending matched hosted miss/hit runs, including transfer and
-revalidation. Public standard compute has zero net cost here: this is a time optimization,
+Automatic **Bridge CI** keeps unsigned Release/Store-workspace/proof-workspace compilation,
+generated architecture/minimum-OS/scene checks and the Store packaging guard. It does not
+build media, sign/launch apps or schedule a macOS 15 runtime runner. Run **Mac full media
+and sandbox proof** (`mac-proof.yml`) explicitly in Actions, selecting the branch/tag to
+validate. It retains source-only Apple encoder tests, ad-hoc sandbox/workspace launches,
+exact-app transfer to macOS 15, and all runtime/source evidence without Store credentials.
+Run this proof for the exact release candidate before approving Store packaging; fast
+compilation alone does not demonstrate runtime compatibility. Store package validation,
+source licensing/provenance checks, signing and protected approvals remain automatic in
+the existing Store workflow. The manual workflow becomes selectable after it lands on
+the default branch.
+
+The audit measured a median 206 seconds for the uncached Mac source-build step; cache
+savings must include transfer and revalidation, while automatic PRs now omit that work
+entirely. Public standard compute has zero net cost here: this is a time optimization,
 not a dollar-savings claim. Do not dispatch Store/release workflows to benchmark it.
 
 ## Cutting a Windows Store release
@@ -289,7 +301,7 @@ Mac Catalyst CI pins .NET SDK **10.0.401**, workload set **10.0.401.1**, and
 Xcode **27.0**, following the [official compatibility notes](https://github.com/dotnet/macios/releases/tag/dotnet-10.0.1xx-xcode27.0-10722).
 That workload contains Apple SDK **27.0.10722** and MAUI **10.0.110**. Apple app heads use
 MAUI Controls 10.0.110; Windows and Android retain their existing package version.
-Update the three pins together in `bridge-ci.yml` and any future Mac Store workflow; an unversioned workload
+Update the three pins together in `bridge-ci.yml`, `mac-proof.yml` and the Mac Store workflow; an unversioned workload
 install can advance to a Mac Catalyst SDK that requires an Xcode version not yet on the runner.
 The `desktop-app-mac` job uses GitHub's arm64 **`xcode-27`** runner on macOS 27, not
 `macos-26` with an unavailable Xcode selector. The runner became
@@ -315,7 +327,8 @@ CI validates the **generated app bundle**, not just the source plist, with
 `python3 scripts/mac/validate_app.py <path-to.app>`: macOS 15.0 minimum, arm64-only main
 executable, and the expected single-window scene manifest. Run this for both Release and
 the isolated Debug proof. Compilation and these checks are not startup evidence.
-CI additionally builds the source-pinned minimal FFmpeg/FFprobe proof payload, ad-hoc signs
+The manually dispatched **Mac full media and sandbox proof** workflow builds or restores and
+revalidates the source-pinned minimal FFmpeg/FFprobe proof payload, ad-hoc signs
 an isolated Debug app, and launches it with `scripts/mac/smoke_sandbox.py`. The check requires
 scene-page startup, native bookmark creation/resolution for a container fixture,
 H.264/HEVC Apple software encoding, a target-size hard cap, and shared-queue
@@ -325,8 +338,9 @@ The same signed app is archived once with a SHA256, transferred to the arm64 `ma
 job, verified, and launched there without rebuilding or installing the .NET SDK/media tools.
 That job asserts the host OS/architecture and retains separate `mac-sandbox-proof-macos15`
 runtime evidence. A declared deployment minimum alone does not satisfy this check.
-The transfer artifact includes the matching FFmpeg source archive, license texts, configure
-flags and build instructions. The proof app also carries FFmpeg attribution and license texts
+The separate `mac-source-media` artifact includes the matching FFmpeg source archive, license
+texts, configure flags and producer provenance; the app transfer retains build instructions.
+The proof app also carries FFmpeg attribution and license texts
 under `Contents/Resources/FFmpeg`; diagnostic artifacts are not exempt from component notices.
 It uses no Store credentials and cannot launch the normal app identity. The ad-hoc CI identity
 is `com.refractored.localmorph.sandboxproof.ci`, separate from the Apple Development proof

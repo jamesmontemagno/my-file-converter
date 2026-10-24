@@ -43,7 +43,7 @@ def affected(paths):
               or path == ".github/workflows/windows-store-publish.yml"):
             result.update(distribution=True, windows=True)
         elif (path.startswith(("scripts/mac/", "dotnet/packaging/mac/", ".github/actions/mac-media/"))
-              or path == ".github/workflows/mac-store-publish.yml"):
+              or path in {".github/workflows/mac-store-publish.yml", ".github/workflows/mac-proof.yml"}):
             result.update(distribution=True, mac=True)
         elif path == ".github/workflows/bridge-release.yml":
             result["bridge"] = True

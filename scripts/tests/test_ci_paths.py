@@ -33,6 +33,7 @@ class CiPathTests(unittest.TestCase):
         self.assertEqual({"distribution", "windows"}, self.selected("dotnet/src/LocalMorph.Shell/Commands.cpp"))
         self.assertEqual({"distribution", "mac"}, self.selected("scripts/mac/store_release.py"))
         self.assertEqual({"distribution", "mac"}, self.selected(".github/actions/mac-media/action.yml"))
+        self.assertEqual({"distribution", "mac"}, self.selected(".github/workflows/mac-proof.yml"))
         self.assertEqual({"distribution", "windows"}, self.selected("dotnet/packaging/windows/StoreManifest.xml"))
 
     def test_app_only_changes_do_not_run_bridge_or_core_tests(self):
