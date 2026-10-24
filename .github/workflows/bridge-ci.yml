@@ -108,6 +108,12 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
+      - name: Initialize Windows NuGet caches
+        if: runner.os == 'Windows' && runner.environment == 'github-hosted'
+        shell: pwsh
+        env:
+          RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: .\scripts\windows\Initialize-NuGetCache.ps1
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ runner.os == 'Windows' && env.WINDOWS_DOTNET_VERSION || '10.0.x' }}
@@ -124,10 +130,10 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/cache@v6
         with:
-          path: ~/.nuget/packages
-          key: nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-${{ hashFiles('dotnet/**/*.csproj', '**/Directory.*.props', '**/Directory.*.targets', '**/NuGet.config', '**/nuget.config') }}
+          path: ${{ env.NUGET_PACKAGES || '~/.nuget/packages' }}
+          key: nuget-v2-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-${{ hashFiles('dotnet/**/*.csproj', '**/Directory.*.props', '**/Directory.*.targets', '**/NuGet.config', '**/nuget.config') }}
           restore-keys: |
-            nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-
+            nuget-v2-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-
       - name: Install FFmpeg (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
@@ -158,6 +164,12 @@ jobs:
       WINDOWS_DOTNET_VERSION: '10.0.401'
     steps:
       - uses: actions/checkout@v7
+      - name: Initialize Windows NuGet caches
+        if: runner.os == 'Windows' && runner.environment == 'github-hosted'
+        shell: pwsh
+        env:
+          RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: .\scripts\windows\Initialize-NuGetCache.ps1
       - name: Initialize isolated Windows SDK directory
         shell: pwsh
         run: '"DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\localmorph-dotnet" >> $env:GITHUB_ENV'
@@ -175,10 +187,10 @@ jobs:
       - name: Cache Windows NuGet packages
         uses: actions/cache@v6
         with:
-          path: ~/.nuget/packages
-          key: nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-${{ hashFiles('dotnet/**/*.csproj', '**/Directory.*.props', '**/Directory.*.targets', '**/NuGet.config', '**/nuget.config') }}
+          path: ${{ env.NUGET_PACKAGES || '~/.nuget/packages' }}
+          key: nuget-v2-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-${{ hashFiles('dotnet/**/*.csproj', '**/Directory.*.props', '**/Directory.*.targets', '**/NuGet.config', '**/nuget.config') }}
           restore-keys: |
-            nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-
+            nuget-v2-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-
       - name: Install pinned Windows MAUI workload
         shell: pwsh
         run: |

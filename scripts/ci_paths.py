@@ -14,7 +14,8 @@ def affected(paths):
         if path.endswith(".md"):
             continue
         name = Path(path).name
-        if (path in {"scripts/ci_paths.py", ".github/workflows/bridge-ci.yml"}
+        if (path in {"scripts/ci_paths.py", ".github/workflows/bridge-ci.yml",
+                     "scripts/windows/Initialize-NuGetCache.ps1"}
                 or name in {"global.json", "NuGet.config", "nuget.config"}
                 or name.startswith("Directory.") and name.endswith((".props", ".targets"))
                 or path.startswith("dotnet/") and path.endswith((".sln", ".slnx"))):

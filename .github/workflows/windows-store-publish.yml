@@ -64,6 +64,11 @@ jobs:
           if ($head -ne $tagCommit) { throw 'Checkout does not match the requested tag commit.' }
           "version=$version" >> $env:GITHUB_OUTPUT
           "source_commit=$head" >> $env:GITHUB_OUTPUT
+      - name: Initialize Windows NuGet caches
+        if: runner.os == 'Windows' && runner.environment == 'github-hosted'
+        env:
+          RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: .\scripts\windows\Initialize-NuGetCache.ps1
       - name: Initialize isolated Windows SDK directory
         run: '"DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\localmorph-dotnet" >> $env:GITHUB_ENV'
       - uses: actions/setup-dotnet@v6
@@ -79,10 +84,10 @@ jobs:
       - name: Cache Windows NuGet packages
         uses: actions/cache@v6
         with:
-          path: ~/.nuget/packages
-          key: nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-${{ hashFiles('dotnet/**/*.csproj', '**/Directory.*.props', '**/Directory.*.targets', '**/NuGet.config', '**/nuget.config') }}
+          path: ${{ env.NUGET_PACKAGES || '~/.nuget/packages' }}
+          key: nuget-v2-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-${{ hashFiles('dotnet/**/*.csproj', '**/Directory.*.props', '**/Directory.*.targets', '**/NuGet.config', '**/nuget.config') }}
           restore-keys: |
-            nuget-v1-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-
+            nuget-v2-${{ runner.os }}-${{ runner.arch }}-sdk10.0.401-workload10.0.401.1-
       - name: Install Windows MAUI workload
         run: |
           $expected = Join-Path $env:DOTNET_INSTALL_DIR 'dotnet.exe'

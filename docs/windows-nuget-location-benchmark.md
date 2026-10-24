@@ -3,8 +3,33 @@
 Measured October 24, 2026. **Relocating both NuGet caches produced substantially
 shorter cold restores in this bounded pilot, including the closest hardware
 comparison. This is not evidence of a production warm-cache speedup.**
-Production workflows are unchanged; no optimization PR, release, signing,
-publishing, or blog edit was performed.
+At the pilot's conclusion production workflows were unchanged; no optimization
+PR, release, signing, publishing, or blog edit had been performed.
+
+## Production follow-up
+
+Following explicit approval after the pilot, this branch now proposes the
+minimal cache-location change for Windows Bridge tests, desktop CI, and Store
+package builds. The one-off pilot workflow has been removed from the production
+diff; its original commit and public run below preserve the experiment.
+`scripts/windows/Initialize-NuGetCache.ps1` runs before SDK setup on GitHub-hosted
+Windows only, creates missing package and HTTP cache directories under
+`RUNNER_TEMP`, and preserves each explicitly configured cache variable.
+Self-hosted and non-Windows environments are not relocated.
+
+All three existing package-cache actions now follow `env.NUGET_PACKAGES`,
+falling back to the original profile path when relocation is not applicable.
+The `nuget-v2` key namespace intentionally cold-fills rather than restoring an
+archive created for the previous absolute path/cache version. Existing
+OS/architecture/SDK/workload/dependency scoping and prefix fallback remain.
+Only packages are remotely persisted, never the HTTP cache. API-only Store
+diagnostics/submission jobs are unchanged, as are isolated SDK setup and pins,
+native checks, signing, approval, and release gates.
+
+This is a user-approved production candidate, **not a demonstrated warm-cache
+speedup**. Normal PR CI supplies build and cache-save correctness evidence
+separately; the bounded pilot is not being rerun. No Store/release workflow or
+blog update is dispatched by this follow-up.
 
 ## Evidence and controls
 
@@ -190,12 +215,13 @@ to 3:48) to this experiment. Both arms already used that isolated, pinned,
 file-based SDK setup. Here the closest hardware workload times were 20-21
 versus 22 seconds: effectively neutral, not another workload optimization.
 
-Production Bridge CI currently restores `~/.nuget/packages` with
+At the time of the pilot, production Bridge CI restored `~/.nuget/packages` with
 `actions/cache`; Windows Store packaging uses the same isolated toolchain and
 was not dispatched. This cold-only pilot does not measure production warm
 restore, cache extraction, or save performance, so **no production cache-path
-change is justified yet**. Neither the existing package cache nor its keys
-were changed or deleted.
+change was made as part of the pilot**. The later user-approved candidate is
+described above; it is not supported by a measured warm-cache gain. Existing
+cache entries were not deleted.
 
 If adopting the candidate later, guard it with `runner.os == 'Windows'` and
 `runner.environment == 'github-hosted'`, respect existing explicit storage
