@@ -97,7 +97,19 @@ public:
     IFACEMETHODIMP_(ULONG) AddRef() override { return ++references; }
     IFACEMETHODIMP_(ULONG) Release() override { auto count = --references; if (!count) delete this; return count; }
     IFACEMETHODIMP GetTitle(IShellItemArray*, PWSTR* title) override { return CopyText(L"Convert with LocalMorph", title); }
-    IFACEMETHODIMP GetIcon(IShellItemArray*, PWSTR* icon) override { if (icon) *icon = nullptr; return E_NOTIMPL; }
+    IFACEMETHODIMP GetIcon(IShellItemArray*, PWSTR* icon) override
+    {
+        if (!icon) return E_POINTER;
+        *icon = nullptr;
+        std::vector<wchar_t> path(32768);
+        const auto length = GetModuleFileNameW(module, path.data(), static_cast<DWORD>(path.size()));
+        if (!length) return HRESULT_FROM_WIN32(GetLastError());
+        if (length >= path.size()) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+        std::wstring location(path.data(), length);
+        location.resize(location.find_last_of(L'\\') + 1);
+        location += L"LocalMorph.App.exe,0";
+        return CopyText(location.c_str(), icon);
+    }
     IFACEMETHODIMP GetToolTip(IShellItemArray*, PWSTR* tip) override { return CopyText(L"Add files to LocalMorph. Conversion starts only when you choose Convert.", tip); }
     IFACEMETHODIMP GetCanonicalName(GUID* id) override { if (!id) return E_POINTER; *id = commandId; return S_OK; }
     IFACEMETHODIMP GetState(IShellItemArray* selection, BOOL, EXPCMDSTATE* state) override
