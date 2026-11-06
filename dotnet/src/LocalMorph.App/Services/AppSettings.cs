@@ -9,6 +9,12 @@ public sealed class AppSettings
 
     public AppSettings(IPreferences preferences) => this.preferences = preferences;
 
+    public bool HasSeenFileDefaultsSetup
+    {
+        get => preferences.Get("file-defaults-setup-seen", false);
+        set => preferences.Set("file-defaults-setup-seen", value);
+    }
+
     public string OutputDirectory
     {
         get => preferences.Get("output-directory", string.Empty);
