@@ -888,6 +888,13 @@ public partial class MainViewModel : ObservableObject
 
     private void OnFilesChanged()
     {
+        IsConverting = Files.Any(file => file.IsRunning || file.IsQueued);
+        if (!HasFiles && !IsImporting)
+        {
+            ImportSummary = IdleImportSummary;
+            ValidationMessage = null;
+            Toast = null;
+        }
         PruneWorkspaceAccess();
         InvalidatePreflight();
         for (var index = 0; index < Files.Count; index++) { Files[index].QueueIndex = index; Files[index].QueueCount = Files.Count; }

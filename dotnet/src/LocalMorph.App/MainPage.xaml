@@ -338,7 +338,7 @@
                         </Button>
                         <Label Grid.Column="2" Text="{Binding FilesSummary}" Style="{StaticResource Muted}" VerticalOptions="Center" Margin="8,0,0,0" LineBreakMode="TailTruncation" AutomationId="FilesSummary" />
                         <Button Grid.Column="3" Style="{StaticResource GhostButton}" Text="Clear done" Command="{Binding ClearCompletedCommand}" IsVisible="{Binding HasFiles}" />
-                        <Button Grid.Column="4" Style="{StaticResource GhostButton}" Text="Clear all" Command="{Binding ClearAllCommand}" IsVisible="{Binding HasFiles}" TextColor="{StaticResource Danger}" AutomationId="ClearAllButton" />
+                        <Button Grid.Column="4" Style="{StaticResource GhostButton}" Text="Clear queue" Command="{Binding ClearAllCommand}" IsVisible="{Binding HasFiles}" ToolTipProperties.Text="Remove all queued files. Original files, results, and history are kept." AutomationId="ClearAllButton" />
                     </Grid>
 
                     <!-- Empty state / drop zone -->
@@ -933,6 +933,8 @@
                         <Button Grid.Column="1" Style="{StaticResource DangerButton}" HeightRequest="34" FontSize="12" Text="Cancel all" Command="{Binding CancelAllCommand}" IsVisible="{Binding CanCancelAll}" AutomationId="CancelAllButton" />
                         <Button Grid.Column="1" Style="{StaticResource GhostButton}" HeightRequest="34" FontSize="12" Text="Retry failed" Command="{Binding RetryFailedCommand}" IsVisible="{Binding HasFailed}" />
                     </Grid>
+                    <Button Style="{StaticResource SecondaryButton}" Text="Clear queue" Command="{Binding ClearAllCommand}" IsVisible="{Binding HasFiles}"
+                            ToolTipProperties.Text="Start a fresh queue. Original files, results, and history are kept." AutomationId="ClearQueueButton" />
                 </VerticalStackLayout>
             </Border>
             <!-- Format chooser: slides over the settings column so the long list is never clipped by the page scroller. -->
