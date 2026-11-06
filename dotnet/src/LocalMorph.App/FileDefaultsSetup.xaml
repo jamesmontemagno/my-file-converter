@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="LocalMorph.App.FileDefaultsSetup"
+             x:DataType="{x:Null}"
+             AutomationId="FileDefaultsSetup">
+    <Border Style="{StaticResource Card}" Margin="24" Padding="24"
+            MaximumWidthRequest="720" HorizontalOptions="Center" VerticalOptions="Center">
+        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="16">
+            <VerticalStackLayout Spacing="6">
+                <Label x:Name="StepLabel" Text="WELCOME / STEP 1 OF 2" Style="{StaticResource Eyebrow}" />
+                <Label x:Name="Heading" Text="Your files. Your choice." Style="{StaticResource Title}"
+                       SemanticProperties.HeadingLevel="Level1" />
+                <Label Text="LocalMorph can appear in Open with without replacing your favorite apps. Choosing defaults is optional, and always confirmed by you in the operating system."
+                       Style="{StaticResource Body}" />
+            </VerticalStackLayout>
+
+            <ScrollView Grid.Row="1">
+                <VerticalStackLayout Spacing="16">
+                    <VerticalStackLayout x:Name="Choices" Spacing="12">
+                        <Label Text="Which file types would you like to open with LocalMorph by default?"
+                               Style="{StaticResource SectionTitle}" SemanticProperties.HeadingLevel="Level2" />
+                        <Label Text="Nothing is selected automatically. Choose only the extensions you want, or keep your current defaults and start converting."
+                               Style="{StaticResource Muted}" />
+                        <VerticalStackLayout x:Name="FileTypes" Spacing="14" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout x:Name="Guide" Spacing="12" IsVisible="False">
+                        <Label Text="Your selected file types" Style="{StaticResource SectionTitle}"
+                               SemanticProperties.HeadingLevel="Level2" />
+                        <Label x:Name="SelectedTypes" Style="{StaticResource BodyStrong}" AutomationId="SelectedDefaultFileTypes" />
+                        <Label x:Name="Instructions" Style="{StaticResource Body}" />
+                        <Button x:Name="OpenSettingsButton" Text="Open Default Apps settings"
+                                Style="{StaticResource PrimaryButton}" HorizontalOptions="Start"
+                                Clicked="OnOpenSettings" AutomationId="OpenDefaultAppsSettings" />
+                        <Label Text="Selecting types here does not change any defaults. Only the choices you confirm in the operating system take effect. You can also keep using Add files, drag-and-drop, or Open with."
+                               Style="{StaticResource Muted}" />
+                    </VerticalStackLayout>
+
+                    <Label x:Name="Error" IsVisible="False" Style="{StaticResource Body}"
+                           TextColor="{StaticResource Danger}" AutomationId="FileDefaultsError" />
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <FlexLayout Grid.Row="2" Wrap="Wrap" JustifyContent="End">
+                <Button x:Name="SkipButton" Text="Keep my current defaults" Style="{StaticResource GhostButton}"
+                        Clicked="OnDismiss" Margin="0,0,8,0" AutomationId="SkipFileDefaultsSetup" />
+                <Button x:Name="BackButton" Text="Back" Style="{StaticResource SecondaryButton}"
+                        Clicked="OnBack" IsVisible="False" Margin="0,0,8,0" />
+                <Button x:Name="ContinueButton" Text="Continue" Style="{StaticResource PrimaryButton}"
+                        Clicked="OnContinue" IsEnabled="False" AutomationId="ContinueFileDefaultsSetup" />
+                <Button x:Name="FinishButton" Text="Finish setup" Style="{StaticResource PrimaryButton}"
+                        Clicked="OnDismiss" IsVisible="False" AutomationId="FinishFileDefaultsSetup" />
+            </FlexLayout>
+        </Grid>
+    </Border>
+</ContentView>

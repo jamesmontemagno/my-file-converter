@@ -249,6 +249,7 @@
         </DataTemplate>
     </ContentPage.Resources>
 
+    <Grid>
     <Grid x:Name="Root" RowDefinitions="Auto,*,Auto">
         <Grid.GestureRecognizers>
             <DropGestureRecognizer AllowDrop="True" DragOver="OnDragOver" DragLeave="OnDragLeave" Drop="OnDrop" />
@@ -1055,6 +1056,16 @@
                     </Grid>
                 </Border>
 
+                <Border Style="{StaticResource Card}" Padding="16,14" IsVisible="{OnPlatform Default=False, WinUI=True, MacCatalyst=True}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="Default apps" Style="{StaticResource SectionTitle}" SemanticProperties.HeadingLevel="Level2" />
+                        <Label Text="Choose which files open with LocalMorph. Your current defaults stay unchanged unless you confirm a change in the operating system."
+                               Style="{StaticResource Muted}" />
+                        <Button x:Name="FileDefaultsButton" Text="Choose default file types" Style="{StaticResource SecondaryButton}"
+                                Clicked="OnShowFileDefaults" HorizontalOptions="Start" AutomationId="ChooseDefaultFileTypes" />
+                    </VerticalStackLayout>
+                </Border>
+
                 <Border Style="{StaticResource Card}" Padding="16,14">
                     <VerticalStackLayout Spacing="12">
                         <VerticalStackLayout Spacing="4">
@@ -1126,5 +1137,7 @@
                 <Label Text="{Binding Toast}" FontSize="12" FontFamily="OpenSansSemibold" TextColor="{AppThemeBinding Light={StaticResource AccentTextLight}, Dark={StaticResource AccentTextDark}}" />
             </Border>
         </Grid>
+    </Grid>
+    <local:FileDefaultsSetup x:Name="DefaultsSetup" IsVisible="False" Dismissed="OnFileDefaultsDismissed" />
     </Grid>
 </ContentPage>

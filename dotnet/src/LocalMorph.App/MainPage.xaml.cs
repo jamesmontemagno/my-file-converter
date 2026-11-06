@@ -10,16 +10,18 @@ namespace LocalMorph.App;
 public partial class MainPage : ContentPage
 {
     private readonly MainViewModel viewModel;
+    private readonly AppSettings settings;
     private FileItemViewModel? previewed;
     private bool initialized;
     private bool startupReady;
     private bool previewExpanded;
     private IDisposable? previewAccess;
 
-    public MainPage(MainViewModel viewModel)
+    public MainPage(MainViewModel viewModel, AppSettings settings)
     {
         InitializeComponent();
         this.viewModel = viewModel;
+        this.settings = settings;
         BindingContext = viewModel;
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Unloaded += (_, _) => StopPreview();
@@ -46,6 +48,9 @@ public partial class MainPage : ContentPage
         });
         if (initialized) { UpdatePreview(); return; }
         initialized = true;
+#if WINDOWS || MACCATALYST
+        if (!settings.HasSeenFileDefaultsSetup) ShowFileDefaults();
+#endif
         try
         {
             await viewModel.InitializeAsync();
@@ -53,6 +58,23 @@ public partial class MainPage : ContentPage
             ReportWorkspaceStartup();
         }
         catch (Exception ex) { viewModel.ReportError($"Could not discover conversion tools: {ex.Message}"); }
+    }
+
+    private void OnShowFileDefaults(object? sender, EventArgs e) => ShowFileDefaults();
+
+    private void ShowFileDefaults()
+    {
+        Root.IsVisible = false;
+        DefaultsSetup.IsVisible = true;
+        DefaultsSetup.Reset();
+    }
+
+    private void OnFileDefaultsDismissed(object? sender, EventArgs e)
+    {
+        settings.HasSeenFileDefaultsSetup = true;
+        DefaultsSetup.IsVisible = false;
+        Root.IsVisible = true;
+        if (viewModel.IsAboutView) FileDefaultsButton.Focus();
     }
 
     private void ReportWorkspaceStartup()
