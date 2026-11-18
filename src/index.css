@@ -160,12 +160,6 @@
   color: var(--landing-blue);
 }
 
-.landing-copy > .landing-setup-note {
-  margin: 1.25rem 0 0;
-  font-size: 0.85rem;
-  line-height: 1.55;
-}
-
 .landing-copy > p:not(.landing-kicker) {
   max-width: 55ch;
   margin-bottom: 1.7rem;
@@ -173,6 +167,29 @@
   font-family: Aptos, ui-sans-serif, system-ui, sans-serif;
   font-size: 1.1rem;
   line-height: 1.65;
+}
+
+.landing-copy > p.landing-setup-note {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.landing-download-link,
+.landing-download-options a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  min-height: 44px;
+  color: var(--lm-blue-deep);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.landing-download-link {
+  margin-top: 0.45rem;
+  font-size: 0.9rem;
 }
 
 .landing-example {
@@ -385,9 +402,26 @@
   padding: clamp(4rem, 9vw, 8rem) 0;
 }
 
+.landing-downloads,
 .landing-launch {
   max-width: 1280px;
   margin: clamp(3rem, 7vw, 6rem) auto 0;
+}
+
+.landing-downloads {
+  scroll-margin-top: 1.5rem;
+}
+
+.landing-download-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1rem;
+}
+
+.landing-download-options article {
+  padding: clamp(1rem, 3vw, 1.75rem);
+  border: 1px solid var(--landing-line);
+  background: var(--landing-white);
 }
 
 .landing-launch-heading {
@@ -399,6 +433,7 @@
   margin-bottom: 1.5rem;
 }
 
+.landing-downloads h2,
 .landing-launch h2 {
   margin: 0 0 1rem;
   font-size: clamp(2rem, 4vw, 3.5rem);
@@ -407,6 +442,7 @@
   text-wrap: balance;
 }
 
+.landing-download-options p,
 .landing-launch p {
   max-width: 72ch;
   color: var(--landing-soft);
