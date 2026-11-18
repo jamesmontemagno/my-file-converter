@@ -9,7 +9,7 @@ LocalMorph Desktop is distributed only through the platform Stores:
 | Channel | Trigger | Workflow | Output |
 |---|---|---|---|
 | Microsoft Store | Windows tag builds, then gates Internal Testing and production; manual package/diagnose/publish modes | `.github/workflows/windows-store-publish.yml` | Unsigned x64/ARM64 `.msixupload`; two sequential submission approvals |
-| Mac App Store | Not enabled yet | Sandbox/tool/signing proof required first | Planned Apple Silicon / macOS 15+ Store package, TestFlight testing, separately approved review and manual release |
+| Mac App Store | Mac tag builds; manual package/diagnose/TestFlight modes | `.github/workflows/mac-store-publish.yml` | Apple Silicon / macOS 15+ Store package and approved TestFlight upload; App Store review and public release are manual |
 
 Direct desktop MSIX/ZIP release workflows, LocalMorph WinGet/Homebrew manifests, Sparkle/appcast
 feeds, and in-app installer downloads have been removed. Store updates do not poll localmorph.com.

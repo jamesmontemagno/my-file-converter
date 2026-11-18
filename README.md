@@ -2,9 +2,10 @@
 
 A React + TypeScript + Vite client-side file converter for GitHub Pages.
 
-[Get the official LocalMorph desktop app for Windows on the Microsoft Store](https://apps.microsoft.com/detail/9PM1NHPT1JR5).
-Convert media locally, batch files, use quick presets, and trim clips. FFmpeg and FFprobe are
-installed separately; the desktop app's Tools page provides WinGet and manual setup guidance.
+Get LocalMorph for [Windows on the Microsoft Store](https://apps.microsoft.com/detail/9PM1NHPT1JR5)
+or [Mac on the Mac App Store](https://apps.apple.com/us/app/localmorph/id6824266726).
+Convert media locally, batch files, use quick presets, and trim clips. The Mac app includes
+FFmpeg and FFprobe; on Windows, install them separately using the app's Tools page.
 The browser converter remains available at [localmorph.com](https://localmorph.com).
 
 ![alt text](image.png)
@@ -218,7 +219,7 @@ for the exact versions and scene-lifecycle/runtime gates. Intel Mac packages are
 Desktop distribution is **Store-only**:
 
 - **Windows:** [Microsoft Store](https://apps.microsoft.com/detail/9PM1NHPT1JR5).
-- **Mac:** Mac App Store delivery is being prepared; no public Mac download is available.
+- **Mac:** [Mac App Store](https://apps.apple.com/us/app/localmorph/id6824266726).
 
 There are no desktop GitHub installers, LocalMorph WinGet packages, Homebrew casks, or in-app
 download/update feeds. Installing FFmpeg with WinGet or Homebrew for Windows/development/bridge

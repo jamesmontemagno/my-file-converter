@@ -39,6 +39,7 @@ import {
 } from './bridge/client';
 import { LogoIcon } from './Logo';
 import { BridgeLaunchActions } from './components/BridgeLaunchActions';
+import { desktopDownloads, detectDesktopPlatform } from './desktop-downloads';
 import {
   ConvertingStep,
   ResultsStep,
@@ -48,7 +49,8 @@ import {
 } from './components/converter';
 
 const APP_NAME = 'LocalMorph';
-const WINDOWS_STORE_URL = 'https://apps.microsoft.com/detail/9PM1NHPT1JR5';
+const DOWNLOADS_ID = 'downloads';
+const DOWNLOADS_LINK = `#${DOWNLOADS_ID}`;
 const LAUNCH_VIDEO_URL = '/media/localmorph-windows-launch.mp4';
 const MAX_ACTIVITY_HISTORY_LENGTH = 160;
 const MAX_RAW_OUTPUT_ENTRIES = 80;
@@ -153,7 +155,7 @@ function titleForPage(page: Page) {
   if (page === 'privacy') return `Privacy Policy | ${APP_NAME}`;
   if (page === 'terms') return `Terms of Use | ${APP_NAME}`;
   if (page === 'docs') return `File Conversion Guide | ${APP_NAME}`;
-  return `LocalMorph for Windows | Local File Converter`;
+  return 'LocalMorph for Windows and Mac | Local File Converter';
 }
 
 function descriptionForPage(page: Page) {
@@ -165,7 +167,7 @@ function descriptionForPage(page: Page) {
     return 'LocalMorph terms of use. Review the conditions under which you may use this browser-based file converter.';
   if (page === 'docs')
     return 'LocalMorph documentation. Learn about supported file formats and how browser-native conversion works.';
-  return 'Meet LocalMorph for Windows. Convert video, audio, and images locally, batch files, and trim clips. Get the official desktop app from the Microsoft Store or use the browser converter.';
+  return 'Convert video, audio, and images locally with LocalMorph for Windows and Mac. Batch files and trim clips in the desktop app, or use the browser converter.';
 }
 
 function canonicalForPage(page: Page) {
@@ -502,7 +504,7 @@ function Footer() {
           <span className="footer-heading">Explore</span>
           <a href="#">Home</a>
           <a href="#/app">Converter</a>
-          <a href={WINDOWS_STORE_URL} target="_blank" rel="noreferrer">Windows app</a>
+          <a href={DOWNLOADS_LINK}>Desktop downloads</a>
           <a href="#/docs">Documentation</a>
         </div>
         <div className="footer-links">
@@ -513,9 +515,9 @@ function Footer() {
       </div>
       <div className="footer-meta">
         <p className="muted footer-note">
-          {APP_NAME} keeps conversion on your device. Get the Windows desktop app, or use browser
+          {APP_NAME} keeps conversion on your device. Get the Windows or Mac desktop app, or use browser
           tools with an optional local bridge. The website&apos;s legal pages cover the browser and
-          bridge workflows; see the Store listing for desktop-app information.
+          bridge workflows; see the store listings for desktop-app information.
         </p>
         <a
           className="footer-project-link"
@@ -712,8 +714,8 @@ function InstallSection() {
         <h2>Install the browser version</h2>
         <p className="hero-text">
           Pin the browser converter to your home screen or desktop for quick access. This is
-          separate from the <a href={WINDOWS_STORE_URL} target="_blank" rel="noreferrer">official Windows desktop app</a>,
-          which includes batch conversion and additional media tools.
+          separate from the <a href={DOWNLOADS_LINK}>Windows and Mac desktop apps</a>,
+          which include batch conversion and additional media tools.
         </p>
       </div>
       <div className="tab-bar" role="tablist">
@@ -758,7 +760,7 @@ function LaunchVideo() {
           <h2 id="launch-heading">A little less file friction.<br />A lot more desktop power.</h2>
           <p>Meet LocalMorph for Windows in 30 seconds. A quick look at the real app, with a little room to breathe.</p>
         </div>
-        <a href={WINDOWS_STORE_URL} target="_blank" rel="noreferrer">
+        <a href={desktopDownloads.windows.url} target="_blank" rel="noreferrer">
           Get it from the Microsoft Store <span aria-hidden="true">→</span>
         </a>
       </div>
@@ -801,7 +803,39 @@ function LaunchVideo() {
   );
 }
 
+function DesktopDownloads() {
+  return (
+    <section className="landing-downloads" id={DOWNLOADS_ID} tabIndex={-1} aria-labelledby="downloads-heading">
+      <h2 id="downloads-heading">Download LocalMorph</h2>
+      <div className="landing-download-options">
+        {Object.values(desktopDownloads).map(({ name, store, url, requirements, setup }) => (
+          <article key={name}>
+            <h3>LocalMorph for {name}</h3>
+            <p>{requirements} {setup}</p>
+            <a href={url} target="_blank" rel="noreferrer">
+              Get it from the {store} <span aria-hidden="true">→</span>
+            </a>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
+  const platform = detectDesktopPlatform(navigator);
+  const download = platform ? desktopDownloads[platform] : null;
+  const otherPlatform = platform === 'mac' ? desktopDownloads.windows.name : desktopDownloads.mac.name;
+
+  useEffect(() => {
+    // The browser may resolve the fragment before React mounts the landing page.
+    if (window.location.hash === DOWNLOADS_LINK) {
+      const downloads = document.getElementById(DOWNLOADS_ID);
+      downloads?.focus({ preventScroll: true });
+      downloads?.scrollIntoView();
+    }
+  }, []);
+
   return (
     <main className="landing-page">
       <header className="landing-topbar">
@@ -810,7 +844,7 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
           {APP_NAME}
         </a>
         <nav className="landing-nav" aria-label="Main navigation">
-          <a href={WINDOWS_STORE_URL} target="_blank" rel="noreferrer">Windows app</a>
+          <a href={DOWNLOADS_LINK}>Downloads</a>
           <a href="#/docs">Guide</a>
           <button className="landing-nav-action" onClick={onOpenApp}>
             Open web converter
@@ -820,23 +854,29 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
 
       <section className="landing-hero">
         <div className="landing-copy">
-          <h1>Your files.<br />Your computer.<br /><span>Now on Windows.</span></h1>
+          <h1>Your files.<br />Your computer.<br /><span>On Windows &amp; Mac.</span></h1>
           <p>
             Meet the official LocalMorph desktop app. Convert video, audio, and images, work through
-            a whole batch, and trim clips. Your files stay on your PC, not a conversion server.
+            a whole batch, and trim clips. Your files stay on your device, not a conversion server.
           </p>
           <div className="landing-actions">
-            <a className="landing-primary-action" href={WINDOWS_STORE_URL} target="_blank" rel="noreferrer">
-              Get LocalMorph for Windows
-            </a>
-            <button className="landing-browser-action" onClick={onOpenApp}>
+            {download && (
+              <a className="landing-primary-action" href={download.url} target="_blank" rel="noreferrer">
+                Get LocalMorph for {download.name}
+              </a>
+            )}
+            <button className={download ? 'landing-browser-action' : 'landing-primary-action'} onClick={onOpenApp}>
               Use in your browser <span aria-hidden="true">→</span>
             </button>
           </div>
-          <p className="landing-setup-note">
-            Available on the Microsoft Store. FFmpeg and FFprobe are installed separately;
-            the app&apos;s Tools page helps you get set up.
-          </p>
+          <a className="landing-download-link" href={DOWNLOADS_LINK}>
+            {download ? `See the ${otherPlatform} download` : 'See Windows and Mac downloads'}
+          </a>
+          {download && (
+            <p className="landing-setup-note">
+              Available on the {download.store}. {download.requirements} {download.setup}
+            </p>
+          )}
           <div className="landing-example">
             <span>PNG</span>
             <i aria-hidden="true" />
@@ -848,7 +888,7 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
         <figure className="route-board">
           <figcaption className="route-board-header">
             <span>A desktop conversion</span>
-            <b>On your PC</b>
+            <b>On your device</b>
           </figcaption>
           <dl className="route-file route-file-source">
             <dt>Input</dt>
@@ -865,8 +905,8 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
           <dl className="route-engine">
             <dt>Selected engine</dt>
             <dd>
-              <strong>LocalMorph for Windows</strong>
-              <small>Powered by your local FFmpeg installation</small>
+              <strong>{download ? `LocalMorph for ${download.name}` : 'LocalMorph desktop'}</strong>
+              <small>{download?.engine ?? 'Powered by FFmpeg'}</small>
             </dd>
           </dl>
           <dl className="route-file route-file-output">
@@ -886,7 +926,7 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
         </div>
         <div>
           <strong>Built for the whole batch</strong>
-          <p>Add files or folders, choose your output, and follow the queue in the Windows app.</p>
+          <p>Add files or folders, choose your output, and follow the queue in the desktop app.</p>
         </div>
         <div>
           <strong>More than a format change</strong>
@@ -894,13 +934,15 @@ function LandingPage({ onOpenApp }: { onOpenApp: () => void }) {
         </div>
       </section>
 
+      <DesktopDownloads />
+
       <LaunchVideo />
 
       <section className="landing-lanes">
         <div className="landing-section-intro">
           <h2>Made for the conversions that interrupt your day.</h2>
           <p>
-            The Windows app brings quick presets and hands-on media tools together, with
+            The desktop app brings quick presets and hands-on media tools together, with
             conversion that stays on your computer.
           </p>
         </div>
@@ -1306,12 +1348,12 @@ function DocsPage() {
   return (
       <LegalLayout
         title="Documentation"
-        summary={`${APP_NAME} converts images, audio, and video on your device. Choose the Windows desktop app or the browser converter.`}
+        summary={`${APP_NAME} converts images, audio, and video on your device. Choose the Windows or Mac desktop app, or use the browser converter.`}
       >
       <section>
         <h2>Get the Windows desktop app</h2>
         <p>
-          The <a href={WINDOWS_STORE_URL} target="_blank" rel="noreferrer">official LocalMorph app on the Microsoft Store</a>{' '}
+          The <a href={desktopDownloads.windows.url} target="_blank" rel="noreferrer">official LocalMorph app on the Microsoft Store</a>{' '}
           supports batch conversion, quick presets, media previews, trimming, audio extraction,
           compatible-clip joining, and video splitting. Conversion runs on your PC.
         </p>
@@ -1320,6 +1362,13 @@ function DocsPage() {
           Tools page for WinGet installation or manual setup guidance. Some formats need additional
           tools or Windows codecs. The browser and optional bridge workflow is documented below;
           installing the desktop app does not require setting up the browser bridge.
+        </p>
+      </section>
+      <section>
+        <h2>Get the Mac desktop app</h2>
+        <p>
+          Get <a href={desktopDownloads.mac.url} target="_blank" rel="noreferrer">LocalMorph from the Mac App Store</a>.{' '}
+          {desktopDownloads.mac.requirements} {desktopDownloads.mac.setup}
         </p>
       </section>
       <section>

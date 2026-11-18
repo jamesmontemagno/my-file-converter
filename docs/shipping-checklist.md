@@ -71,7 +71,7 @@ Do not use `--noCommit` as a claimed read-only diagnostic: creating/uploading a 
 
 ## Mac App Store gates
 
-Mac delivery is not yet enabled. Do not tag or advertise a public Mac release until these pass.
+Use these gates before shipping a new version of [LocalMorph on the Mac App Store](https://apps.apple.com/us/app/localmorph/id6824266726).
 
 - Confirm Apple membership, app record, effective bundle identifier, category,
   pricing/territories, agreements and required questionnaires.
